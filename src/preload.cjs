@@ -21,4 +21,9 @@ for (const name of [
   "copy",
 ])
   api[name] = (...args) => ipcRenderer.invoke(name, ...args);
+api.onShortcut = (callback) => {
+  const listener = (_event, key) => callback(key);
+  ipcRenderer.on("ui-shortcut", listener);
+  return () => ipcRenderer.removeListener("ui-shortcut", listener);
+};
 contextBridge.exposeInMainWorld("client", api);

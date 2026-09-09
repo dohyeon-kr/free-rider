@@ -120,8 +120,16 @@ test("HTTP runner handles login, authenticated follow-up, redirects and cancella
   );
 });
 
-test('sync preserves UI auth, tests, variables and renamed folders',()=>{
- const generated=operations(doc),first=synchronize([],generated).requests;
- first[0].authConfig={type:'basic',username:'{{user}}'};first[0].assertions=[{expression:'res.status',value:'200'}];first[0].vars=[{key:'x',value:'1'}];first[0].group='my/folder';
- const next=synchronize(first,generated).requests[0];assert.deepEqual(next.authConfig,first[0].authConfig);assert.deepEqual(next.assertions,first[0].assertions);assert.deepEqual(next.vars,first[0].vars);assert.equal(next.group,'my/folder');
+test("sync preserves UI auth, tests, variables and renamed folders", () => {
+  const generated = operations(doc),
+    first = synchronize([], generated).requests;
+  first[0].authConfig = { type: "basic", username: "{{user}}" };
+  first[0].assertions = [{ expression: "res.status", value: "200" }];
+  first[0].vars = [{ key: "x", value: "1" }];
+  first[0].group = "my/folder";
+  const next = synchronize(first, generated).requests[0];
+  assert.deepEqual(next.authConfig, first[0].authConfig);
+  assert.deepEqual(next.assertions, first[0].assertions);
+  assert.deepEqual(next.vars, first[0].vars);
+  assert.equal(next.group, "my/folder");
 });

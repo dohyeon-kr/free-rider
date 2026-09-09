@@ -126,7 +126,22 @@ function synchronize(old, generated) {
     if (JSON.stringify(prev.baseline) !== JSON.stringify(next))
       counts.updated++;
     const merged = { ...next, baseline: structuredClone(next) };
-    for (const k of ["url", "query", "headers", "body", "auth", "extract", "name", "group", "description", "method", "authConfig", "assertions", "vars", "bodyType"])
+    for (const k of [
+      "url",
+      "query",
+      "headers",
+      "body",
+      "auth",
+      "extract",
+      "name",
+      "group",
+      "description",
+      "method",
+      "authConfig",
+      "assertions",
+      "vars",
+      "bodyType",
+    ])
       if (JSON.stringify(prev[k]) !== JSON.stringify(prev.baseline?.[k]))
         merged[k] = prev[k];
     return merged;

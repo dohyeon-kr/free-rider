@@ -101,6 +101,7 @@ function fixture() {
 async function run(win) {
   await fs.mkdir("test-results", { recursive: true });
   const js = (code) => win.webContents.executeJavaScript(code);
+  await poll(() => js("Boolean(window.appReady)"));
   await js("window.appReady");
   await screenshot("collection");
   await js(
@@ -128,7 +129,7 @@ async function run(win) {
     throw Error("Environments missing");
   await screenshot("environments");
   await js(
-    `document.querySelector('#newRequest').click();document.querySelector('#dialogName').value='Unsaved request';document.querySelector('#dialogConfirm').click()`,
+    `document.querySelector('#newRequest').click();document.querySelector('#dialogName').value='Unsaved request';document.querySelector('#dialogName').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#dialogConfirm').click()`,
   );
   if (
     !(await js(
@@ -137,9 +138,23 @@ async function run(win) {
   )
     throw Error("Request creation/dirty tracking failed");
   await js(`window.client['clear-tokens']()`);
+  win.webContents.sendInputEvent({
+    type: "keyDown",
+    keyCode: "W",
+    modifiers: ["meta"],
+  });
+  win.webContents.sendInputEvent({
+    type: "keyUp",
+    keyCode: "W",
+    modifiers: ["meta"],
+  });
+  await poll(() => js(`!document.querySelector('#requestUrl')`));
   server.close();
   return "Native tabs, runner login chain, inherited auth, assertions, environments and IPC passed";
   async function screenshot(name) {
+    await js(
+      "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+    );
     await fs.writeFile(
       path.join("test-results", name + ".png"),
       (await win.webContents.capturePage()).toPNG(),

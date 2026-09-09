@@ -1703,6 +1703,18 @@ $("shortcuts").onclick = () =>
     () => true,
     "Close",
   );
+api.onShortcut((key) => {
+  if ($("dialog").open) return;
+  if (key === "s") save();
+  if (key === "n") newRequest();
+  if (key === "w" && active()) closeTab(active());
+  if (key === "k") $("search").focus();
+  if (key === "enter" && active()?.kind === "request")
+    sendRequest(
+      c(),
+      c().requests.find((r) => r.id === active().id),
+    );
+});
 document.addEventListener("keydown", (e) => {
   if (!(e.metaKey || e.ctrlKey) || $("dialog").open) return;
   const k = e.key.toLowerCase();

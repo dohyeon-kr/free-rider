@@ -205,6 +205,17 @@ function createWindow() {
       if (answer === 0) event.preventDefault();
     }
   });
+  win.webContents.on("before-input-event", (event, input) => {
+    const shortcut = input.key.toLowerCase();
+    if (
+      input.type === "keyDown" &&
+      (input.meta || input.control) &&
+      ["s", "n", "w", "k", "enter"].includes(shortcut)
+    ) {
+      event.preventDefault();
+      win.webContents.send("ui-shortcut", shortcut);
+    }
+  });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (e) => e.preventDefault());
   win
