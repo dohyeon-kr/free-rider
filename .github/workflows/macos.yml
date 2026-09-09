@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: macos-${{ github.ref }}
-  cancel-in-progress: true
 jobs:
   test:
+    concurrency:
+      group: macos-test-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +21,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
   build:
+    concurrency:
+      group: macos-build-${{ matrix.arch }}-${{ github.ref }}
+      cancel-in-progress: true
     needs: test
     strategy:
       fail-fast: false
