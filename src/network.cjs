@@ -1,1 +1,1 @@
-module.exports=require('./modules/runner/index.cjs');
+module.exports = require("./modules/runner/index.cjs");

@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm test
@@ -35,9 +35,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
           cache: npm
       - run: npm ci
+      - name: Test native Electron window and IPC
+        run: npm run test:electron
+        timeout-minutes: 2
       - name: Choose signing mode
         id: signing
         env:
