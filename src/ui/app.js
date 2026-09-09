@@ -1,3 +1,4 @@
+import { isCurl, parseCurl } from "../modules/curl/index.mjs";
 import { $, el, button, input, select, textarea, field, table } from "./dom.js";
 import { collection, request, normalize, rowList } from "./model.js";
 const api = window.client;
@@ -750,7 +751,23 @@ function requestView(col, r) {
         r.url = v;
         mark(col);
       },
-      { id: "requestUrl", placeholder: "Enter request URL" },
+      {
+        id: "requestUrl", placeholder: "Enter URL or paste cURL",
+        onPaste: (event) => {
+          const text = event.clipboardData?.getData("text/plain") || "";
+          if (!isCurl(text)) return;
+          event.preventDefault();
+          action(() => {
+            const imported = parseCurl(text);
+            Object.assign(r, imported);
+            subtabs.set(id, imported.bodyType === "none" ? "headers" : "body");
+            responses.delete(id);
+            mark(col);
+            render();
+            status("cURL을 가져왔습니다. 요청 설정을 확인하고 Send를 누르세요.");
+          });
+        },
+      },
     ),
     button(
       busy ? "Cancel" : "Send",

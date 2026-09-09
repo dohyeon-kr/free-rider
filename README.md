@@ -85,3 +85,12 @@ Bruno documentation used for interaction design:
 Implemented: multi-collection workspace, folders, tabs, request editing, shared settings, environment management, Basic/Bearer/no-auth, extraction, assertions, selected sequential runs, response history in-session, Git save/diff/commit and repeatable OpenAPI sync.
 
 Not yet implemented: arbitrary JavaScript pre/post scripts, full Bruno script API, `.bru` import, OAuth browser flows, auto token refresh, cookie jar, multipart file upload, GraphQL/gRPC/WebSocket, proxy/client certificate configuration, Git network operations and full Markdown rendering. These are not presented as functional tabs. Documentation editing is plain text. Only OpenAPI 3.x and internal `$ref` are supported; bundle external refs first. Responses are text-only, redirects are not followed automatically, and requests have a 30-second / 10MB limit.
+
+### cURL 붙여넣기
+
+요청 주소창에 `curl ...`을 붙여넣으면 메서드, URL(쿼리 포함), 헤더, 본문, Basic 인증을 자동으로 채웁니다. 일반 URL은 그대로 입력됩니다. 가져온 요청은 미저장 상태이며 Send를 눌러야 전송됩니다.
+
+- bash의 작은/큰따옴표, 여러 줄 명령, `-X`, `-H`, `-u`, `-b`, `-d`, `--data-raw`, `--data-binary`, `--data-urlencode`, `--json`, `-G`, `-I`, `--compressed` 지원
+- URL 쿼리는 중복 키·빈 값·인코딩을 보존하며 주소창에서 편집합니다.
+- 가져오면 기존 요청의 헤더·본문·인증·별도 Params를 교체합니다. 이름·폴더·검증 설정은 유지하고 컬렉션/폴더의 헤더 상속은 계속 적용됩니다.
+- 셸 실행, 파일 읽기, multipart 파일 업로드, PowerShell/CMD 문법, 기타 미지원 옵션은 변환하지 않습니다. 실패하면 기존 요청을 유지합니다.

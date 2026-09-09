@@ -138,6 +138,27 @@ async function run(win) {
     ))
   )
     throw Error("Request creation/dirty tracking failed");
+  const curlCommand = `curl '${baseUrl}/me?empty=&a=1&a=2' -H 'Authorization: Bearer test-token' --json '{"hello":"world"}'`;
+  await js(`(() => {
+    const data = new DataTransfer();
+    data.setData('text/plain', ${JSON.stringify(curlCommand)});
+    document.querySelector('#requestUrl').dispatchEvent(new ClipboardEvent('paste', {clipboardData: data, bubbles: true, cancelable: true}));
+  })()`);
+  if (!(await js(`document.querySelector('#requestUrl').value.endsWith('/me?empty=&a=1&a=2') && document.querySelector('.urlbar select').value === 'POST' && document.querySelector('.request-content textarea').value === '{"hello":"world"}'`)))
+    throw Error('cURL paste did not populate request');
+  await js(`document.querySelector('#sendRequest').click()`);
+  await poll(() => js(`document.querySelector('#sendRequest')?.textContent === 'Send'`));
+  if (!(await js(`document.querySelector('.response')?.textContent.includes('200') || document.querySelector('.response-pane')?.textContent.includes('200')`))) {
+    // Check the visible response status without relying on panel layout.
+    if (!(await js(`document.body.textContent.includes('200 OK')`))) throw Error('Imported cURL request failed');
+  }
+  const importedUrl = await js(`document.querySelector('#requestUrl').value`);
+  await js(`(() => {
+    const data = new DataTransfer(); data.setData('text/plain', "curl 'broken");
+    document.querySelector('#requestUrl').dispatchEvent(new ClipboardEvent('paste', {clipboardData: data, bubbles: true, cancelable: true}));
+  })()`);
+  if (await js(`document.querySelector('#requestUrl').value`) !== importedUrl)
+    throw Error('Failed cURL import changed request');
   await js(`window.client['clear-tokens']()`);
   win.webContents.sendInputEvent({
     type: "keyDown",
