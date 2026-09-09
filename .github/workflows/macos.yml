@@ -1,0 +1,94 @@
+name: macOS artifacts
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            os: macos-15
+          - arch: x64
+            os: macos-15-intel
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Choose signing mode
+        id: signing
+        env:
+          CERTIFICATE: ${{ secrets.CSC_LINK }}
+          CERT_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          if [[ -n "$CERTIFICATE" && -n "$CERT_PASSWORD" && -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$TEAM_ID" ]]; then
+            echo 'mode=developer-id' >> "$GITHUB_OUTPUT"
+          elif [[ -n "$CERTIFICATE$CERT_PASSWORD$APPLE_ID$APPLE_PASSWORD$TEAM_ID" ]]; then
+            echo 'Apple signing secrets are incomplete. Configure all five secrets.' >&2
+            exit 1
+          else
+            echo 'mode=adhoc' >> "$GITHUB_OUTPUT"
+            echo '### Ad-hoc signed test build — not Apple notarized' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Developer ID signed and notarized build
+        if: steps.signing.outputs.mode == 'developer-id'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run dist:mac -- --${{ matrix.arch }} -c.forceCodeSigning=true -c.mac.notarize=true
+      - name: Ad-hoc signed test build
+        if: steps.signing.outputs.mode == 'adhoc'
+        run: npm run dist:mac -- --${{ matrix.arch }} -c.mac.identity=- -c.mac.notarize=false
+      - name: Verify application signature
+        env:
+          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
+        shell: bash
+        run: |
+          APP_PATH=$(find dist -maxdepth 2 -name '*.app' -type d -print -quit)
+          test -n "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+          codesign --display --verbose=4 "$APP_PATH"
+          if [[ "$SIGNING_MODE" == 'developer-id' ]]; then
+            xcrun stapler validate "$APP_PATH"
+            spctl --assess --type execute --verbose=2 "$APP_PATH"
+          fi
+          shasum -a 256 dist/*.dmg dist/*.zip > dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Open-API-Client-macOS-${{ matrix.arch }}-${{ steps.signing.outputs.mode }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
