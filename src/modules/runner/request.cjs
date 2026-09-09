@@ -1,3 +1,4 @@
+const { rows } = require("./context.cjs");
 const METHODS = [
   "get",
   "post",
@@ -21,13 +22,10 @@ function prepare(request, variables) {
     throw Error("HTTP/HTTPS URL만 사용할 수 있습니다.");
   if (url.username || url.password)
     throw Error("URL 대신 Authorization 헤더를 사용하세요.");
-  for (const [k, v] of Object.entries(request.query || {}))
-    if (v !== "") url.searchParams.set(k, interpolate(v, variables));
+  for (const [k, v] of rows(request.query))
+    if (v !== "") url.searchParams.append(k, interpolate(v, variables));
   const headers = Object.fromEntries(
-    Object.entries(request.headers || {}).map(([k, v]) => [
-      k,
-      interpolate(v, variables),
-    ]),
+    rows(request.headers).map(([k, v]) => [k, interpolate(v, variables)]),
   );
   if (
     request.auth &&
@@ -39,6 +37,18 @@ function prepare(request, variables) {
       );
     headers.Authorization = `Bearer ${variables.token}`;
   }
+  const auth = request.authConfig;
+  if (auth?.type === "bearer")
+    headers.Authorization =
+      "Bearer " + interpolate(auth.token || "{{token}}", variables);
+  if (auth?.type === "basic")
+    headers.Authorization =
+      "Basic " +
+      Buffer.from(
+        interpolate(auth.username || "", variables) +
+          ":" +
+          interpolate(auth.password || "", variables),
+      ).toString("base64");
   const method = String(request.method).toUpperCase();
   if (!METHODS.includes(method.toLowerCase()))
     throw Error("지원하지 않는 HTTP 메서드입니다.");

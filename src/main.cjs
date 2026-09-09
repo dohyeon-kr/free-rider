@@ -1,4 +1,12 @@
-const { app, BrowserWindow, ipcMain, dialog, session } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  session,
+  safeStorage,
+  clipboard,
+} = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -8,10 +16,22 @@ const {
   EnvironmentStore,
   shareableEnvironments,
 } = require("./modules/env/index.cjs");
+const { WorkspaceStore } = require("./modules/workspace/index.cjs");
+const {
+  effectiveRequest,
+  assertions,
+} = require("./modules/runner/context.cjs");
 const { GitWorkspace } = require("./modules/git/index.cjs");
-let win, controller;
+let win,
+  controller,
+  workspace,
+  dirty = false;
 const runtime = new EnvironmentStore(),
-  git = new GitWorkspace();
+  git = new Map();
+function gitFor(id) {
+  if (!git.has(id)) git.set(id, new GitWorkspace());
+  return git.get(id);
+}
 const page = pathToFileURL(path.join(__dirname, "index.html")).href;
 function handle(name, fn) {
   ipcMain.handle(name, async (event, ...args) => {
@@ -58,14 +78,24 @@ handle("sync-spec", async (source, old) => {
   };
 });
 handle("merge-spec", async (old, generated) => synchronize(old, generated));
-handle("send", async (request, environment) => {
+handle("send", async (request, environment, collection) => {
   if (controller) throw Error("요청이 실행 중입니다.");
   controller = new AbortController();
   try {
-    const vars = runtime.resolve(environment);
-    const r = await execute(request, vars, controller.signal);
-    runtime.capture(environment.id, r.variables);
-    return { ...r, variables: Object.keys(r.variables) };
+    const context = effectiveRequest(collection || {}, request);
+    const scope = {
+      ...environment,
+      values: { ...context.vars, ...environment.values, ...context.scopedVars },
+      id: (collection?.id || "default") + ":" + environment.id,
+    };
+    const vars = runtime.resolve(scope);
+    const r = await execute(context.request, vars, controller.signal);
+    runtime.capture(scope.id, r.variables);
+    return {
+      ...r,
+      variables: Object.keys(r.variables),
+      tests: assertions(r, request.assertions),
+    };
   } finally {
     controller = null;
   }
@@ -100,7 +130,6 @@ handle("open-collection", async () => {
     value.requests.some((r) => !r.id || !r.method || !r.url)
   )
     throw Error("올바른 Open API Client 컬렉션이 아닙니다.");
-  runtime.clear();
   return value;
 });
 handle("save-collection", async (value) => {
@@ -119,26 +148,42 @@ handle("save-collection", async (value) => {
   );
   return true;
 });
-handle("git-open", async () => {
+handle("git-open", async (id) => {
   const r = await dialog.showOpenDialog(win, { properties: ["openDirectory"] });
-  return r.canceled ? null : git.open(r.filePaths[0]);
+  return r.canceled ? null : gitFor(id).open(r.filePaths[0]);
 });
-handle("git-status", () => git.status());
+handle("git-status", (id) => gitFor(id).status());
 handle("git-save", (value) =>
-  git.save({
+  gitFor(value.id).save({
     ...value,
     environments: shareableEnvironments(value.environments),
   }),
 );
-handle("git-diff", () => git.diff());
-handle("git-commit", (message) => git.commit(message));
+handle("git-diff", (id) => gitFor(id).diff());
+handle("git-commit", (id, message) => gitFor(id).commit(message));
+handle("workspace-load", () =>
+  process.argv.includes("--smoke-test")
+    ? require("./smoke.cjs").fixture()
+    : workspace.load(),
+);
+handle("workspace-save", async (value) => {
+  if (!process.argv.includes("--smoke-test")) await workspace.save(value);
+  dirty = false;
+  return true;
+});
+handle("set-dirty", (value) => {
+  dirty = !!value;
+  win.setDocumentEdited(dirty);
+});
+handle("copy", (text) => clipboard.writeText(String(text)));
 function createWindow() {
   win = new BrowserWindow({
-    width: 1320,
-    height: 900,
+    width: 1440,
+    height: 940,
     minWidth: 950,
     minHeight: 650,
-    backgroundColor: "#101315",
+    backgroundColor: "#1b1b1b",
+    titleBarStyle: "hiddenInset",
     title: "Open API Client",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
@@ -147,6 +192,19 @@ function createWindow() {
       sandbox: true,
     },
   });
+  win.on("close", (event) => {
+    if (dirty && !process.argv.includes("--smoke-test")) {
+      const answer = dialog.showMessageBoxSync(win, {
+        type: "question",
+        buttons: ["Keep editing", "Discard changes"],
+        defaultId: 0,
+        cancelId: 0,
+        message: "Unsaved workspace changes",
+        detail: "Save the workspace before closing to keep your changes.",
+      });
+      if (answer === 0) event.preventDefault();
+    }
+  });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (e) => e.preventDefault());
   win
@@ -154,16 +212,7 @@ function createWindow() {
     .then(async () => {
       if (!process.argv.includes("--smoke-test")) return;
       try {
-        const result = await win.webContents.executeJavaScript(`(async()=>{
-   if(document.querySelector('#name').value!=='New request') throw Error('Renderer failed to initialize');
-   document.querySelector('[data-tab="auth"]').click();
-   if(document.querySelector('#authPanel').hidden) throw Error('Auth tab failed');
-   document.querySelector('#envButton').click();
-   if(!document.querySelector('#environments').open) throw Error('Environment dialog failed');
-   document.querySelector('#closeEnv').click();
-   await window.client['clear-tokens']();
-   return 'Electron renderer, preload IPC and interactions passed';
-  })()`);
+        const result = await require("./smoke.cjs").run(win);
         console.log(result);
         app.exit(0);
       } catch (error) {
@@ -176,8 +225,14 @@ function createWindow() {
       if (process.argv.includes("--smoke-test")) app.exit(1);
     });
 }
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (process.argv.includes("--smoke-test"))
+    await require("./smoke.cjs").start();
   session.defaultSession.setPermissionRequestHandler((_w, _p, cb) => cb(false));
+  workspace = new WorkspaceStore(
+    path.join(app.getPath("userData"), "workspace.enc"),
+    safeStorage,
+  );
   createWindow();
   app.on("activate", () => {
     if (!BrowserWindow.getAllWindows().length) createWindow();

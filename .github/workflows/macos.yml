@@ -41,6 +41,13 @@ jobs:
       - name: Test native Electron window and IPC
         run: npm run test:electron
         timeout-minutes: 2
+      - name: Upload native UI screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: UI-screenshots-${{ matrix.arch }}
+          path: test-results/*.png
+          if-no-files-found: warn
       - name: Choose signing mode
         id: signing
         env:

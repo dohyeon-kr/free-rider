@@ -15,6 +15,10 @@ for (const name of [
   "git-save",
   "git-diff",
   "git-commit",
+  "workspace-load",
+  "workspace-save",
+  "set-dirty",
+  "copy",
 ])
   api[name] = (...args) => ipcRenderer.invoke(name, ...args);
 contextBridge.exposeInMainWorld("client", api);

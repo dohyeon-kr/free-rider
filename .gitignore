@@ -6,3 +6,4 @@ dist/
 !.env.example
 *.p12
 *.p8
+test-results/
