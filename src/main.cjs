@@ -169,6 +169,7 @@ handle("workspace-load", () =>
 handle("workspace-save", async (value) => {
   if (!process.argv.includes("--smoke-test")) await workspace.save(value);
   dirty = false;
+  win.setDocumentEdited(false);
   return true;
 });
 handle("set-dirty", (value) => {

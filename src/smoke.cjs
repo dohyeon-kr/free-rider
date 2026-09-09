@@ -103,6 +103,7 @@ async function run(win) {
   const js = (code) => win.webContents.executeJavaScript(code);
   await poll(() => js("Boolean(window.appReady)"));
   await js("window.appReady");
+  if(!await js(`!!document.querySelector("[data-view=overview]")&&document.querySelector("#activeTitle").textContent==="Workspace API"`))throw Error("Overview did not initialize");
   await screenshot("collection");
   await js(
     `document.querySelector('#runnerButton').click(); document.querySelectorAll('.run-item input[type=checkbox]')[0].click(); document.querySelectorAll('.run-item input[type=checkbox]')[1].click();document.querySelector('#runSelected').click();`,
@@ -149,12 +150,15 @@ async function run(win) {
     modifiers: ["meta"],
   });
   await poll(() => js(`!document.querySelector('#requestUrl')`));
+  await js(`document.querySelector("#collectionHome").click()`);
+  await screenshot("collection");
   server.close();
   return "Native tabs, runner login chain, inherited auth, assertions, environments and IPC passed";
   async function screenshot(name) {
     await js(
       "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
     );
+    await new Promise(resolve=>setTimeout(resolve,250));
     await fs.writeFile(
       path.join("test-results", name + ".png"),
       (await win.webContents.capturePage()).toPNG(),
