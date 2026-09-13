@@ -5,6 +5,7 @@ export function el(tag, attrs = {}, ...children) {
     if (k.startsWith("on")) n.addEventListener(k.slice(2).toLowerCase(), v);
     else if (k === "class") n.className = v;
     else if (k === "text") n.textContent = v;
+    else if (k === "list") n.setAttribute(k, v);
     else if (k in n) n[k] = v;
     else n.setAttribute(k, v);
   }

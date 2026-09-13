@@ -1,14 +1,5 @@
 const { rows } = require("./context.cjs");
-const METHODS = [
-  "get",
-  "post",
-  "put",
-  "patch",
-  "delete",
-  "head",
-  "options",
-  "trace",
-];
+
 function interpolate(value, variables) {
   return String(value).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_, key) => {
     if (!Object.hasOwn(variables, key))
@@ -17,7 +8,10 @@ function interpolate(value, variables) {
   });
 }
 function prepare(request, variables) {
-  const url = new URL(interpolate(request.url, variables));
+  const resolvedUrl = interpolate(request.url, variables);
+  let url;
+  try { url = new URL(resolvedUrl); }
+  catch { throw Error("요청 URL이 올바르지 않습니다. URL 또는 baseUrl 환경변수를 https://호스트 형태의 절대 주소로 설정하세요."); }
   if (!["http:", "https:"].includes(url.protocol))
     throw Error("HTTP/HTTPS URL만 사용할 수 있습니다.");
   if (url.username || url.password)
@@ -50,8 +44,10 @@ function prepare(request, variables) {
           interpolate(auth.password || "", variables),
       ).toString("base64");
   const method = String(request.method).toUpperCase();
-  if (!METHODS.includes(method.toLowerCase()))
-    throw Error("지원하지 않는 HTTP 메서드입니다.");
+  if (!/^[!#$%&'*+.^_`|~0-9A-Z-]+$/.test(method))
+    throw Error("올바른 HTTP 메서드를 입력하세요.");
+  if (["CONNECT", "TRACE", "TRACK"].includes(method))
+    throw Error(method + "는 현재 전송 엔진에서 지원하지 않습니다.");
   return {
     url: url.toString(),
     method,

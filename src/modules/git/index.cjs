@@ -29,6 +29,7 @@ class GitWorkspace {
       root: this.#root,
       status: await this.command(["status", "--short"]),
       branch: (await this.command(["branch", "--show-current"])).trim(),
+      commits: await this.history(),
     };
   }
   async save(collection) {
@@ -44,8 +45,27 @@ class GitWorkspace {
     await fs.writeFile(target, JSON.stringify(collection, null, 2) + "\n");
     return this.status();
   }
+  async history() {
+    try { await this.command(["rev-parse", "--verify", "HEAD"]); }
+    catch { return []; }
+    const text = await this.command(["log", "-10", "--format=%h%x09%s", "--", "open-api.collection.json"]);
+    return text.trim().split("\n").filter(Boolean).map(line => {
+      const split = line.indexOf("\t");
+      return {hash:line.slice(0,split), message:line.slice(split+1)};
+    });
+  }
   async diff() {
-    return this.command(["diff", "HEAD", "--", "open-api.collection.json"]);
+    let tracked = false;
+    try { await this.command(["ls-files", "--error-unmatch", "--", "open-api.collection.json"]); tracked=true; } catch {}
+    let head = false;
+    try { await this.command(["rev-parse", "--verify", "HEAD"]); head=true; } catch {}
+    if (head && tracked) return this.command(["diff", "HEAD", "--", "open-api.collection.json"]);
+    const target = path.join(this.#root, "open-api.collection.json");
+    try {
+      if ((await fs.lstat(target)).isSymbolicLink()) throw Error("컬렉션 파일이 심볼릭 링크입니다.");
+      const content = await fs.readFile(target, "utf8");
+      return "--- /dev/null\n+++ open-api.collection.json\n" + content.split("\n").map(line=>"+"+line).join("\n");
+    } catch (error) { if(error.code==="ENOENT") return ""; throw error; }
   }
   async commit(message) {
     if (!message?.trim()) throw Error("커밋 메시지를 입력하세요.");

@@ -23,7 +23,8 @@ function parseEnv(text) {
 }
 function shareableEnvironments(environments) {
   return environments.map((e) => ({
-    ...e,
+    id:e.id,
+    name:e.name,
     values: Object.fromEntries(
       Object.keys(e.values)
         .sort()
@@ -39,6 +40,7 @@ class EnvironmentStore {
   capture(id, values) {
     this.#tokens.set(id, { ...this.#tokens.get(id), ...values });
   }
+  remove(id,keys) {const values=this.#tokens.get(id);if(values)for(const key of keys)delete values[key];}
   clear() {
     this.#tokens.clear();
   }

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,33 +7,38 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
-    <title>Open API Client</title>
+    <title>Free Rider</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <header class="titlebar">
-      <span class="workspace-title">⌂　 My Workspace</span
-      ><strong>◈　Open API Client</strong
+      <span class="workspace-title">⌂　 내 워크스페이스</span
+      ><strong>◈　Free Rider</strong
       ><span class="title-end">LOCAL WORKSPACE</span>
     </header>
     <div class="workspace">
       <aside>
         <div class="sidebar-heading">
-          <strong>⌄ Collections</strong
+          <strong>컬렉션</strong
           ><button id="searchButton" title="Search requests · ⌘K">⌕</button
           ><button id="newCollection" title="New collection">＋</button
-          ><button id="openCollection" title="Open collection file">⋯</button>
+          ><button id="openCollection" title="컬렉션 메뉴" aria-label="컬렉션 메뉴" aria-expanded="false" popovertarget="collectionActions">⋯</button>
+          <div id="collectionActions" popover aria-label="컬렉션 작업">
+            <button id="importCollectionFile">컬렉션 파일 가져오기</button>
+            <button id="exportActiveCollection">현재 컬렉션 내보내기</button>
+          </div>
         </div>
         <div class="search-box">
           <input
             id="search"
-            placeholder="Search collections and requests"
-            aria-label="Search collections and requests"
+            placeholder="컬렉션·요청 검색"
+            aria-label="컬렉션·요청 검색"
           />
         </div>
         <nav id="tree" aria-label="Collections"></nav>
+        <button id="scriptsButton" class="sidebar-bottom">전역 전후처리</button>
         <button id="specButton" class="sidebar-bottom">
-          ♧　API Specs <span>＋</span>
+          명세 연결 <span>＋</span>
         </button>
       </aside>
       <div
@@ -45,14 +50,18 @@
       ></div>
       <main>
         <div class="collection-toolbar">
-          <button id="collectionHome" class="collection-title">
-            ⬡　<span id="activeTitle"></span>　⌄
-          </button>
+          <div class="collection-switcher">
+            <button id="collectionHome" class="collection-title">
+              ⬡　<span id="activeTitle"></span>
+            </button>
+            <button id="collectionSwitch" aria-label="컬렉션 선택" aria-expanded="false" popovertarget="collectionPicker">⌄</button>
+            <div id="collectionPicker" popover aria-label="컬렉션 목록"></div>
+          </div>
           <div class="toolbar-actions">
-            <button id="saveWorkspace" title="Save workspace · ⌘S">Save</button
+            <button id="saveWorkspace" title="Save workspace · ⌘S">저장</button
             ><button id="gitButton">⑂ Git</button
-            ><button id="runnerButton" title="Collection Runner">▷ Run</button
-            ><button id="newRequest" title="New request · ⌘N">＋ Request</button
+            ><button id="runnerButton" title="Collection Runner">컬렉션 실행</button
+            ><button id="newRequest" title="New request · ⌘N">＋ 요청</button
             ><button id="envButton" title="Configure environments">▤</button
             ><select
               id="environmentSelect"
@@ -65,7 +74,7 @@
       </main>
     </div>
     <footer>
-      <span id="status" role="status">Ready</span>
+      <span id="status" role="status">준비됨</span>
       <div>
         <span id="branchStatus"></span
         ><button id="shortcuts">⌘ Shortcuts</button><span>v0.2.0</span>
@@ -76,7 +85,7 @@
         <h2 id="dialogTitle"></h2>
         <div id="dialogContent"></div>
         <div class="dialog-actions">
-          <button id="dialogCancel" value="cancel">Cancel</button
+          <button id="dialogCancel" value="cancel" formnovalidate>취소</button
           ><button id="dialogConfirm" type="button" class="primary">
             Create
           </button>

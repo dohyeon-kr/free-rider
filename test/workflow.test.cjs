@@ -86,7 +86,11 @@ test("encrypted workspace writes are serialized and round trip", async (t) => {
   const store = new WorkspaceStore(path.join(dir, "workspace.enc"), codec);
   assert.equal(await store.load(), null);
   await Promise.all([store.save({ id: 1 }), store.save({ id: 2 })]);
-  assert.deepEqual(await store.load(), { id: 2 });
+  assert.deepEqual(await store.load(), { id: 2, formatVersion: 2 });
+  const old=codec.encryptString(JSON.stringify({collections:[],id:"legacy"}));
+  await fs.writeFile(store.filename,old);
+  assert.deepEqual(await store.load(),{collections:[],id:"legacy",formatVersion:2});
+  assert.deepEqual(await fs.readFile(store.filename+".v1.bak"),old);
   const denied = new WorkspaceStore(path.join(dir, "denied.enc"), {
     isEncryptionAvailable: () => false,
   });

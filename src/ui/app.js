@@ -1,3 +1,9 @@
+import { preview, applyReview } from "../modules/sync/review.mjs";
+import { reviewView } from "./sync-review.js";
+const syncReviews = new Map();
+import { runPlan, addToRun, executionRequests } from "./run-plan.mjs";
+import { RequestDrafts } from "./drafts.mjs";
+const drafts = new RequestDrafts();
 import { isCurl, parseCurl } from "../modules/curl/index.mjs";
 import { $, el, button, input, select, textarea, field, table } from "./dom.js";
 import { collection, request, normalize, rowList } from "./model.js";
@@ -13,11 +19,11 @@ let state = {
   dirty = new Set(),
   collapsed = new Set(),
   responses = new Map(),
+  executionLogs = new Map(),
   history = [],
   busy = false,
   stopRun = false,
   runnerResults = new Map(),
-  runnerSelection = new Set(),
   gitInfo = new Map(),
   subtabs = new Map();
 const key = (t) => `${t.cid}|${t.kind}|${t.id || ""}`;
@@ -53,6 +59,27 @@ function open(kind, id = null, col = c()) {
   render();
 }
 function closeTab(t) {
+  const col = state.collections.find(c => c.id === t.cid);
+  const request = col?.requests.find(r => r.id === t.id);
+  if (t.kind === "request" && request && drafts.changed(t.cid, request)) {
+    modal("요청 변경 저장", el("div", {},
+      el("p", { text: request.name + "의 변경 내용을 저장할까요?" }),
+      button("버리고 닫기", () => {
+        drafts.discard(t.cid, t.id);
+        $("dialog").close();
+        finishCloseTab(t);
+      }, { id: "discardRequest", class: "danger" })
+    ), async () => {
+      await persist(t);
+      drafts.discard(t.cid, t.id);
+      finishCloseTab(t);
+    }, "저장하고 닫기");
+    return;
+  }
+  if (t.kind === "request") drafts.discard(t.cid, t.id);
+  finishCloseTab(t);
+}
+function finishCloseTab(t) {
   const i = state.tabs.findIndex((x) => key(x) === key(t));
   state.tabs.splice(i, 1);
   if (state.activeTab === key(t)) {
@@ -298,6 +325,7 @@ function tabTitle(t) {
     spec: "♧ API Specs",
     runner: "▷ Runner",
     git: "⑂ Git",
+    scripts: "전역 전후처리",
     folder: "▱ " + t.id,
   }[t.kind];
 }
@@ -330,12 +358,12 @@ function renderTabs() {
       tab.append(el("span", { class: "method " + r?.method, text: r?.method }));
     }
     tab.append(el("span", { class: "label", text: tabTitle(t) }));
-    if (dirty.has(t.cid))
+    if (t.kind === "request" ? col.requests.some(r => r.id === t.id && drafts.changed(t.cid, r)) : dirty.has(t.cid))
       tab.append(
         el("span", {
           class: "dirty-dot",
           text: "●",
-          title: "Unsaved collection changes",
+          title: "저장하지 않은 변경",
         }),
       );
     tab.append(
@@ -352,8 +380,9 @@ function renderTabs() {
   }
   root.append(
     button("＋", () => newRequest(), {
-      class: "text-button",
-      title: "New request",
+      class: "new-request-tab",
+      title: "새 요청",
+      "aria-label": "새 요청 탭 추가",
     }),
   );
 }
@@ -391,6 +420,7 @@ function render() {
     spec: () => specView(col),
     runner: () => runnerView(col),
     git: () => gitView(col),
+    scripts: () => scriptsView(),
     folder: () => folderView(col, t.id),
   }[t.kind];
   $("view").replaceChildren(view());
@@ -716,6 +746,7 @@ function folderView(col, path) {
 }
 function requestView(col, r) {
   if (!r) return el("p", { text: "Request no longer exists." });
+  r = drafts.get(col.id, r);
   const id = col.id + r.id,
     current = subtabs.get(id) || "params";
   const root = el("div", { class: "request-view", "data-view": "request" });
@@ -734,17 +765,15 @@ function requestView(col, r) {
   const urlbar = el(
     "div",
     { class: "urlbar" },
-    select(
-      r.method,
-      ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE"].map(
-        (m) => [m, m],
-      ),
-      (v) => {
-        r.method = v;
-        mark(col);
-        renderTree();
-      },
-    ),
+    input(r.method, (v) => {
+      r.method = v;
+      mark(col);
+      renderTree();
+    }, { id: "httpMethod", list: "httpMethods", "aria-label": "HTTP 메서드",
+      spellcheck: false, autocomplete: "off", placeholder: "메서드" }),
+    el("datalist", { id: "httpMethods" },
+      ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "QUERY", "TRACE"]
+        .map(value => el("option", { value }))),
     input(
       r.url,
       (v) => {
@@ -787,11 +816,11 @@ function requestView(col, r) {
     tabs(
       [
         ["params", "Params"],
-        ["body", "Body"],
         ["headers", "Headers"],
+        ["body", "Body"],
         ["auth", "Auth"],
         ["vars", "Vars"],
-        ["assert", "Assert"],
+        ["assert", "Tests"],
         ["docs", "Docs"],
       ],
       current,
@@ -1010,7 +1039,8 @@ function requestMenu(col, r) {
             "Delete Request",
             el("p", { text: "Delete " + r.name + " from this collection?" }),
             () => {
-              col.requests = col.requests.filter((x) => x !== r);
+              col.requests = col.requests.filter((x) => x.id !== r.id);
+              drafts.discard(col.id, r.id);
               state.tabs = state.tabs.filter(
                 (t) => !(t.cid === col.id && t.id === r.id),
               );
@@ -1026,6 +1056,11 @@ function requestMenu(col, r) {
     () => true,
     "Close",
   );
+}
+function logExecution(id, level, message) {
+  const entries = executionLogs.get(id) || [];
+  entries.push({at:new Date().toLocaleTimeString(), level, message});
+  executionLogs.set(id, entries.slice(-100));
 }
 function responseView(col, r) {
   const id = col.id + r.id,
@@ -1063,6 +1098,7 @@ function responseView(col, r) {
           ["headers", "Headers"],
           ["tests", "Tests"],
           ["history", "History"],
+          ["console", "콘솔"],
         ],
         tab,
         (v) => {
@@ -1073,6 +1109,16 @@ function responseView(col, r) {
       tools,
     ),
   );
+  if (tab === "console") {
+    const entries = executionLogs.get(id) || [];
+    root.append(button("콘솔 지우기", () => {executionLogs.delete(id); render();}, {class:"clear-console"}));
+    if (!entries.length) root.append(el("p",{class:"hint",text:"실행 로그가 없습니다."}));
+    root.append(...entries.map(entry => el("div", {
+      class:"execution-log " + entry.level,
+      text:entry.at + "  " + entry.level.toUpperCase() + "  " + entry.message
+    })));
+    return root;
+  }
   if (tab === "history") {
     const entries = history.filter((h) => h.id === id);
     root.append(
@@ -1099,6 +1145,10 @@ function responseView(col, r) {
         text: "Send a request to view the response　⌘ ↵",
       }),
     );
+    return root;
+  }
+  if (res.error && (tab === "body" || tab === "headers")) {
+    root.append(el("div", {class:"empty-response",text:"수신한 응답이 없습니다. 콘솔에서 실행 오류를 확인하세요."}));
     return root;
   }
   if (tab === "tests") {
@@ -1138,13 +1188,16 @@ async function sendRequest(
   r,
   fromRunner = false,
   fixedEnvironment = null,
+  fixedScripts = null,
 ) {
   if (busy && !fromRunner) return;
+  if (!fromRunner) r = drafts.get(col.id, r);
   const environment = structuredClone(fixedEnvironment || env(col));
   if (!fromRunner) {
     busy = true;
     render();
   }
+  logExecution(col.id + r.id, "info", r.method + " 요청 시작 · 환경 " + environment.name);
   status("Sending " + r.name + "…");
   let result;
   try {
@@ -1162,13 +1215,20 @@ async function sendRequest(
         { key: "Content-Type", value: "application/json", enabled: true },
       ];
     }
-    result = await api.send(ready, environment, col);
+    result = await api.send(ready, environment, col, structuredClone(fixedScripts || state.globalScripts || {}));
+    for(const line of result.logs || []) logExecution(col.id+r.id,"info",line);
+    if(result.scriptError) {logExecution(col.id+r.id,"error",result.scriptError);subtabs.set(col.id+r.id+"response","console");}
+    logExecution(col.id + r.id, "info", "HTTP " + result.status + " · " + result.elapsed + " ms");
+
     status(
       `${r.name}: ${result.status}${result.variables.length ? " · Captured " + result.variables.join(", ") : ""}`,
     );
   } catch (e) {
-    result = { status: 0, body: e.message, headers: {}, tests: [], elapsed: 0 };
-    status(e.message);
+    const message = e.message.replace(/^Error invoking remote method '[^']+':\s*(?:Error|TypeError):\s*/, "");
+    result = { status: 0, body: "", error: message, headers: {}, tests: [], elapsed: 0 };
+    logExecution(col.id + r.id, "error", message);
+    subtabs.set(col.id + r.id + "response", "console");
+    status("요청 실행 실패 · 콘솔을 확인하세요.");
   }
   responses.set(col.id + r.id, result);
   history.unshift({
@@ -1183,6 +1243,24 @@ async function sendRequest(
   render();
   return result;
 }
+function scriptsView() {
+  const scripts=state.globalScripts ||= {enabled:false,before:"",after:""};
+  const root=el("div",{class:"view-inner","data-view":"scripts"});
+  root.append(el("h2",{text:"전역 전후처리"}),
+    el("p",{class:"muted",text:"모든 컬렉션의 단일 요청과 순차 실행에 적용합니다. 변경한 요청은 이번 전송에만 사용합니다."}),
+    el("label",{},el("input",{type:"checkbox",checked:scripts.enabled,onChange:e=>{scripts.enabled=e.target.checked;mark();}})," 활성화"),
+    field("전처리 · req, ctx",textarea(scripts.before,v=>{scripts.before=v;mark();},{"aria-label":"전역 전처리",placeholder:'req.headers.set("Authorization", "Bearer " + ctx.vars.get("accessToken"));'})),
+    field("후처리 · req, res, ctx",textarea(scripts.after,v=>{scripts.after=v;mark();},{"aria-label":"전역 후처리",placeholder:'if (res.status === 200) ctx.vars.set("accessToken", res.json().accessToken);'})),
+    el("pre",{class:"code-block",text:`req.method / req.url / req.body
+req.headers.get / set / delete
+res.status / res.headers.get / res.text() / res.json()
+ctx.env.get("KEY")
+ctx.vars.get / set / delete
+ctx.log("실행 로그")`}),
+    button("저장",()=>save(),{class:"primary"}),
+    el("p",{class:"hint",text:"실행 로그는 요청의 콘솔에서 확인합니다. 파일·셸·직접 네트워크 API는 제공하지 않습니다."}));
+  return root;
+}
 function environments(col) {
   const root = el("div", { class: "view-inner", "data-view": "environments" }),
     current = env(col);
@@ -1190,7 +1268,16 @@ function environments(col) {
     el(
       "div",
       { class: "page-heading" },
-      el("h2", { text: "Environments" }),
+      el("h2", { text: "환경변수" }),
+      button(".env 파일 연결", () => action(async () => {
+        const file=await api["env-connect"](); if(!file) return;
+        let linked=col.environments.find(e=>e.file?.path===file.path);
+        if(!linked) {
+          linked={id:crypto.randomUUID(),name:file.name,values:file.values,file};
+          col.environments.push(linked);
+        }
+        state.selectedEnvironments[col.id]=linked.id; mark(col); render();
+      }),{id:"connectEnvFile"}),
       el(
         "div",
         { class: "actions" },
@@ -1251,6 +1338,7 @@ function environments(col) {
           const copy = structuredClone(current);
           copy.id = crypto.randomUUID();
           copy.name += " copy";
+          delete copy.file;
           col.environments.push(copy);
           state.selectedEnvironments[col.id] = copy.id;
           mark(col);
@@ -1281,6 +1369,24 @@ function environments(col) {
       ),
     ),
   );
+  if(current.file) {
+    details.append(el("p",{class:"muted",text:current.file.path}),
+      textarea(current.file.text,text=>{current.file.text=text;mark(col);},{"aria-label":"환경 파일 내용"}),
+      el("div",{class:"actions"},
+        button("편집 내용 적용",()=>action(async()=>{
+          current.values=await api["env-parse"](current.file.text); mark(col);render();
+          status("선택 환경에 적용했습니다. 파일 저장은 별도입니다.");
+        })),
+        button("파일 저장",()=>action(async()=>{
+          const file=await api["env-write"](current.file.path,current.file.text,current.file.revision);
+          current.file=file;current.values=file.values;mark(col);render();
+        })),
+        button("다시 읽기",()=>modal("환경 파일 다시 읽기",
+          el("p",{text:"편집 중인 내용을 파일의 최신 내용으로 바꿉니다."}),
+          async()=>{const file=await api["env-read"](current.file.path);current.file=file;current.values=file.values;mark(col);render();},
+          "다시 읽기"))
+      ));
+  }
   let revealed = false;
   const rows = Object.entries(current.values).map(([key, value]) => ({
       key,
@@ -1304,6 +1410,7 @@ function environments(col) {
         { secrets: !revealed },
       ),
     );
+    if(current.file) area.querySelectorAll("input,button,select").forEach(node=>node.disabled=true);
   }
   details.append(
     el(
@@ -1331,6 +1438,7 @@ function environments(col) {
     ),
   );
   redraw();
+  if(current.file) area.querySelectorAll("input,button,select").forEach(node=>node.disabled=true);
   root.append(el("div", { class: "env-layout" }, list, details));
   return root;
 }
@@ -1345,11 +1453,8 @@ function specView(col) {
         action(async () => {
           const imported = await api["import-spec"]();
           if (!imported) return;
-          const result = await api["merge-spec"](
-            col.requests,
-            imported.requests,
-          );
-          applySync(col, { ...result, ...imported, requests: result.requests });
+          col.sourceFile=imported.sourceFile;mark(col);
+          beginSyncReview(col, {...imported, generated:imported.requests});
         }),
       ),
     ),
@@ -1357,7 +1462,7 @@ function specView(col) {
   root.append(
     el("p", {
       class: "muted",
-      text: "Keep your request collection up to date with an OpenAPI 3.x JSON or YAML specification.",
+      text: "OpenAPI 3.x 파일 또는 URL을 연결하고 변경을 검토합니다.",
     }),
     field(
       "Specification URL",
@@ -1377,7 +1482,7 @@ function specView(col) {
           if (!col.source) throw Error("Enter an OpenAPI URL.");
           status("Synchronizing specification…");
           const result = await api["sync-spec"](col.source, col.requests);
-          applySync(col, result);
+          beginSyncReview(col, result);
         }),
       { class: "primary" },
     ),
@@ -1386,159 +1491,170 @@ function specView(col) {
       class: "muted",
       text: col.lastSync || "No specification synchronized yet.",
     }),
-    el("h3", { text: "Your edits stay intact" }),
-    el("p", {
-      class: "muted",
-      text: "New operations are added. Unedited generated fields follow the latest specification; fields you changed are kept. Removed operations remain visible with a warning.",
-    }),
+
   );
+  if(col.syncUndo) root.append(button("직전 명세 반영 복원", () => modal(
+    "직전 명세 반영 복원", el("p",{text:"요청과 실행 목록을 직전 반영 전 상태로 되돌립니다. 반영 이후의 요청 수정도 되돌아갑니다."}),
+    async () => {
+      if(col.requests.some(r=>drafts.changed(col.id,r))) throw Error("요청 편집을 먼저 저장하거나 버려주세요.");
+      const restored=structuredClone(col);Object.assign(restored,col.syncUndo);delete restored.syncUndo;
+      await saveCollectionTransaction(col,restored);
+      col.requests.forEach(r=>drafts.discard(col.id,r.id));syncReviews.delete(col.id);render();
+      status("직전 명세 반영을 복원했습니다.");
+    }, "복원"), {id:"undoSync"}));
+  if(col.sourceFile) root.append(el("div",{class:"actions"},
+    el("span",{class:"muted",text:col.sourceFile}),
+    button("연결한 명세 파일 다시 읽기",()=>action(async()=>{
+      const result=await api["sync-spec-file"](col.sourceFile);
+      beginSyncReview(col,{...result,generated:result.requests});
+    }),{id:"reloadSpecFile"}),
+    button("파일 연결 해제",()=>{delete col.sourceFile;mark(col);render();})));
+  const pending = syncReviews.get(col.id);
+  if (pending) root.append(reviewView(pending.review, (selected, choices) => action(async () => {
+    if (col.requests.some(r => selected.includes(r.id) && drafts.changed(col.id,r)))
+      throw Error("선택한 요청에 저장하지 않은 편집이 있습니다. 먼저 저장하거나 버린 후 다시 검토하세요.");
+    const requests = applyReview(col.requests, pending.review, selected, choices);
+    await applySync(col, {...pending.result,requests,counts:{
+      added:pending.review.changes.filter(c=>selected.includes(c.id)&&c.type==="added").length,
+      updated:pending.review.changes.filter(c=>selected.includes(c.id)&&c.type==="updated").length,
+      removed:pending.review.changes.filter(c=>selected.includes(c.id)&&c.type==="removed").length
+    }}, selected);
+  })));
   return root;
 }
-function applySync(col, result) {
-  const empty = !col.requests.length;
-  col.requests = result.requests;
-  if (empty) {
-    col.title = result.title;
-    if (result.baseUrl) env(col).values.baseUrl = result.baseUrl;
-  }
-  const n = result.counts || {
-    added: result.requests.length,
-    updated: 0,
-    removed: 0,
-  };
-  col.lastSync = `${new Date().toLocaleString()} · ${n.added} added · ${n.updated} changed · ${n.removed} removed`;
-  mark(col);
+function beginSyncReview(col, result) {
+  syncReviews.set(col.id,{result,review:preview(col.requests,result.generated)});
   render();
-  status(col.lastSync);
+  status("변경 검토 후 반영할 엔드포인트를 선택하세요.");
+}
+async function saveCollectionTransaction(col,next) {
+  const snapshot=structuredClone(state);
+  snapshot.collections=snapshot.collections.map(c=>c.id===col.id?next:c);
+  snapshot.collapsed=[...collapsed];
+  snapshot.tabs=snapshot.tabs.filter(t=>t.cid!==col.id || t.kind!=="request" || next.requests.some(r=>r.id===t.id));
+  const workspace=document.querySelector(".workspace");workspace.inert=true;
+  try {await api["workspace-save"](snapshot);}
+  finally {workspace.inert=false;}
+  for(const key of Object.keys(col)) delete col[key];
+  Object.assign(col,next);state.tabs=snapshot.tabs;
+  dirty.clear();
+  await api["set-dirty"](state.collections.some(c=>c.requests.some(r=>drafts.changed(c.id,r))));
+}
+async function applySync(col, result, selected) {
+  const next=structuredClone(col);
+  next.syncUndo={requests:structuredClone(col.requests),runPlan:structuredClone(col.runPlan || []),title:col.title,lastSync:col.lastSync || ""};
+  next.requests=result.requests;
+  if(!col.requests.length) next.title=result.title || col.title;
+  if(next.runPlan) next.runPlan=next.runPlan.filter(item=>next.requests.some(r=>r.id===item.id));
+  const n=result.counts;
+  next.lastSync=new Date().toLocaleString()+" · "+n.added+" 추가 · "+n.updated+" 수정 · "+n.removed+" 삭제";
+  await saveCollectionTransaction(col,next);
+  selected.forEach(id=>drafts.discard(col.id,id));
+  syncReviews.delete(col.id);render();status(col.lastSync);
+  const target = env(col);
+  if (!String(target.values.baseUrl || "").trim() && result.baseUrl) {
+    let proposed = result.baseUrl;
+    modal("baseUrl 등록", el("div", {},
+      el("p", {text:target.name + " 환경에 baseUrl이 없습니다. 명세의 서버 주소를 등록할까요?"}),
+      field("baseUrl", input(proposed, value => proposed = value, {id:"suggestedBaseUrl"})),
+      el("p", {class:"hint",text:"취소하면 명세 변경만 유지하고 환경변수는 등록하지 않습니다."})
+    ), () => {
+      let parsed;
+      try { parsed = new URL(proposed); } catch { throw Error("절대 URL을 입력하세요."); }
+      if (!["http:", "https:"].includes(parsed.protocol)) throw Error("HTTP/HTTPS 주소를 입력하세요.");
+      target.values.baseUrl = proposed;
+      mark(col); render();
+      status(target.name + " 환경에 baseUrl을 등록했습니다. 저장 버튼으로 보관하세요.");
+    }, "등록");
+  }
+}
+function endpointPicker(col) {
+  const chosen = new Set(), existing = new Set(runPlan(col).map(x => x.id));
+  const list = el("div", { class: "endpoint-picker" });
+  function draw(query = "") {
+    list.replaceChildren();
+    const matches = col.requests.filter(r => (r.name + " " + r.method + " " + r.url + " " + r.group).toLowerCase().includes(query.toLowerCase()));
+    for (const r of matches) list.append(el("label", {class:"run-item"},
+      el("input", {type:"checkbox", checked:existing.has(r.id) || chosen.has(r.id), disabled:existing.has(r.id),
+        onChange:e => e.target.checked ? chosen.add(r.id) : chosen.delete(r.id)}),
+      el("span", {class:"method", text:r.method}),
+      el("span", {text:(r.group ? r.group + " / " : "") + r.name}),
+      el("small", {text:existing.has(r.id) ? "추가됨" : r.url})));
+    if (!matches.length) list.append(el("p",{class:"muted",text:"일치하는 저장 요청이 없습니다."}));
+  }
+  draw();
+  modal("엔드포인트 추가", el("div", {},
+    input("", draw, {placeholder:"이름·메서드·URL 검색", "aria-label":"엔드포인트 검색"}), list
+  ), () => { addToRun(col, chosen); mark(col); render(); }, "선택한 요청 추가");
 }
 function runnerView(col) {
-  const root = el("div", { class: "view-inner", "data-view": "runner" });
-  root.append(
-    el(
-      "div",
-      { class: "page-heading" },
-      el("h2", { text: "Collection Runner" }),
-      button(
-        busy ? "Stop" : "Run Selected Requests",
-        () =>
-          busy
-            ? action(() => {
-                stopRun = true;
-                return api.cancel();
-              })
-            : runCollection(col),
-        { class: "primary", id: "runSelected" },
-      ),
-    ),
-    el("p", {
-      class: "muted",
-      text:
-        "Requests run in the displayed order using " +
-        env(col).name +
-        ". Captured variables are available to the next request.",
-    }),
-    el(
-      "div",
-      { class: "actions" },
-      button("Select all", () => {
-        col.requests
-          .filter((r) => !r.removed)
-          .forEach((r) => runnerSelection.add(col.id + r.id));
-        render();
-      }),
-      button("Clear selection", () => {
-        col.requests.forEach((r) => runnerSelection.delete(col.id + r.id));
-        render();
-      }),
-    ),
-  );
-  col.requests.forEach((r, i) => {
-    const result = runnerResults.get(col.id + r.id);
-    root.append(
-      el(
-        "div",
-        { class: "run-item" },
-        el("input", {
-          type: "checkbox",
-          checked: runnerSelection.has(col.id + r.id),
-          disabled: busy,
-          "aria-label": "Select " + r.name,
-          onChange: (e) =>
-            e.target.checked
-              ? runnerSelection.add(col.id + r.id)
-              : runnerSelection.delete(col.id + r.id),
-        }),
-        el("span", { class: "method " + r.method, text: r.method }),
-        button(r.name, () => open("request", r.id, col), {
-          class: "text-button",
-        }),
-        button(
-          "↑",
-          () => {
-            if (i) {
-              [col.requests[i - 1], col.requests[i]] = [r, col.requests[i - 1]];
-              mark(col);
-              render();
-            }
-          },
-          { disabled: busy || i === 0, title: "Move earlier" },
-        ),
-        button(
-          "↓",
-          () => {
-            if (i < col.requests.length - 1) {
-              [col.requests[i + 1], col.requests[i]] = [
-                col.requests[i],
-                col.requests[i + 1],
-              ];
-              mark(col);
-              render();
-            }
-          },
-          {
-            disabled: busy || i === col.requests.length - 1,
-            title: "Move later",
-          },
-        ),
-        el("span", {
-          class:
-            "result " +
-            (result?.status >= 200 &&
-            result?.status < 400 &&
-            !result?.tests?.some((t) => !t.passed)
-              ? "metrics"
-              : "error"),
-          text: result
-            ? `${result.status || "Error"} · ${result.elapsed} ms${result.tests?.length ? " · " + result.tests.filter((t) => t.passed).length + "/" + result.tests.length + " assertions" : ""}`
-            : "",
-        }),
-      ),
-    );
+  const root = el("div", {class:"view-inner", "data-view":"runner"});
+  const plan = runPlan(col);
+  root.append(el("div", {class:"page-heading"},
+    el("h2", {text:"컬렉션 실행"}),
+    button(busy ? "중지" : "선택한 요청 실행", () => busy
+      ? action(() => { stopRun = true; return api.cancel(); })
+      : runCollection(col), {class:"primary",id:"runSelected"})),
+    el("p", {class:"muted",text:env(col).name + " 환경에서 저장된 요청을 순서대로 실행합니다."}),
+    el("div", {class:"actions"},
+      button("+ 엔드포인트 추가", () => endpointPicker(col), {id:"addEndpoints",disabled:busy}),
+      button("전체 선택", () => { plan.forEach(x => x.enabled = true); mark(col); render(); }, {disabled:busy}),
+      button("선택 해제", () => { plan.forEach(x => x.enabled = false); mark(col); render(); }, {disabled:busy}),
+      el("label", {}, el("input", {type:"checkbox",checked:!!col.stopOnFailure,disabled:busy,
+        onChange:e => {col.stopOnFailure = e.target.checked; mark(col);}}), " 실패 시 중단")));
+  if (!plan.length) root.append(el("p",{class:"hint",text:"엔드포인트 추가에서 실행할 저장 요청을 선택하세요."}));
+  plan.forEach((item, i) => {
+    const r = col.requests.find(r => r.id === item.id), result = runnerResults.get(col.id + r.id);
+    const move = offset => {
+      [plan[i], plan[i+offset]] = [plan[i+offset], plan[i]];
+      mark(col); render();
+    };
+    root.append(el("div", {class:"run-item"},
+      el("input", {type:"checkbox",checked:item.enabled,disabled:busy,"aria-label":r.name + " 실행",
+        onChange:e => {item.enabled=e.target.checked; mark(col);}}),
+      el("span", {class:"method " + r.method,text:r.method}),
+      button(r.name, () => open("request",r.id,col), {class:"text-button"}),
+      button("↑", () => move(-1), {disabled:busy || i===0,title:"위로"}),
+      button("↓", () => move(1), {disabled:busy || i===plan.length-1,title:"아래로"}),
+      button("제외", () => {col.runPlan=plan.filter(x => x.id!==item.id); mark(col); render();},{disabled:busy,"data-exclude":r.id}),
+      el("span", {class:"result " + (result && !runFailed(result) ? "metrics":"error"),
+        text:result ? (result.status || "오류") + " · " + (result.elapsed || 0) + " ms" : "대기"}),
+      result ? button("결과", () => modal(r.name + " 실행 결과", el("div", {},
+        el("p",{text:result.error || ("HTTP " + result.status)}),
+        ...(result.tests || []).map(t => el("p",{text:JSON.stringify(t)})),
+        el("pre",{class:"response-body",text:result.body || ""})), () => true, "닫기")) : null));
   });
   return root;
+}
+function runFailed(result) {
+  return !result || result.scriptError || !result.status || result.status >= 400 || result.tests?.some(t => !t.passed);
 }
 async function runCollection(col) {
   if (busy) return;
   const selected = structuredClone(
-      col.requests.filter((r) => runnerSelection.has(col.id + r.id)),
+      executionRequests(col),
     ),
     runEnvironment = structuredClone(env(col)),
-    runContext = structuredClone(col);
+    runContext = structuredClone(col),
+    stopOnFailure = !!col.stopOnFailure,
+    runScripts = structuredClone(state.globalScripts || {});
   if (!selected.length) {
     status("Select requests to run.");
     return;
   }
   busy = true;
   stopRun = false;
+  selected.forEach(r => runnerResults.delete(col.id + r.id));
   render();
   let count = 0;
   try {
     for (const r of selected) {
       if (stopRun) break;
-      const result = await sendRequest(runContext, r, true, runEnvironment);
+      const result = await sendRequest(runContext, r, true, runEnvironment, runScripts);
       runnerResults.set(col.id + r.id, result);
       count++;
       render();
+      if (stopOnFailure && runFailed(result)) { stopRun = true; break; }
     }
   } finally {
     busy = false;
@@ -1576,6 +1692,9 @@ function gitView(col) {
     }),
   );
   if (!info) return root;
+  root.append(el("h3",{text:"최근 컬렉션 커밋"}),
+    ...(info.commits?.length ? info.commits.map(commit => el("p", {text:commit.hash + " · " + commit.message})) : [el("p",{class:"muted",text:"아직 커밋이 없습니다."})]));
+
   root.append(
     el("p", { text: "Branch: " + info.branch }),
     el("pre", {
@@ -1644,12 +1763,31 @@ function gitView(col) {
   );
   return root;
 }
+async function persist(only = null) {
+  const snapshot = drafts.snapshot(state, only);
+  snapshot.collapsed = [...collapsed];
+  const workspace=document.querySelector(".workspace");workspace.inert=true;
+  try {await api["workspace-save"](snapshot);} finally {workspace.inert=false;}
+  // Commit only after durable storage succeeds; preserve object references used by views.
+  for (const col of state.collections) {
+    const saved = snapshot.collections.find(c => c.id === col.id);
+    for (const request of col.requests) {
+      if (only && (only.cid !== col.id || only.id !== request.id)) continue;
+      const next = saved.requests.find(r => r.id === request.id);
+      for (const name of Object.keys(request)) delete request[name];
+      Object.assign(request, next);
+    }
+  }
+  dirty.clear();
+  const pending = state.collections.some(col => col.requests.some(r => drafts.changed(col.id, r)));
+  await api["set-dirty"](pending);
+  renderTabs();
+}
 async function save() {
   await action(async () => {
-    await api["workspace-save"](state);
-    dirty.clear();
-    renderTabs();
-    status("Workspace saved locally.");
+    await persist();
+    render();
+    status("워크스페이스를 저장했습니다.");
   });
 }
 async function exportCollection(col) {
@@ -1673,8 +1811,9 @@ $("newCollection").onclick = () =>
     mark(col);
     open("overview", null, col);
   });
-$("openCollection").onclick = () =>
+$("importCollectionFile").onclick = () =>
   action(async () => {
+    $("collectionActions").hidePopover();
     const value = await api["open-collection"]();
     if (value) {
       const col = normalize(value);
@@ -1685,8 +1824,37 @@ $("openCollection").onclick = () =>
       open("overview", null, col);
     }
   });
+$("openCollection").addEventListener("click", () => {
+  const rect = $("openCollection").getBoundingClientRect();
+  $("collectionActions").style.top = rect.bottom + 6 + "px";
+  $("collectionActions").style.left = "10px";
+});
+$("collectionActions").addEventListener("toggle", event => {
+  $("openCollection").setAttribute("aria-expanded", String(event.newState === "open"));
+});
+$("exportActiveCollection").onclick = () => {
+  $("collectionActions").hidePopover();
+  exportCollection(c());
+};
+$("scriptsButton").onclick = () => open("scripts");
 $("newRequest").onclick = () => newRequest();
 $("collectionHome").onclick = () => open("overview");
+$("collectionSwitch").addEventListener("click", () => {
+  const picker = $("collectionPicker");
+  picker.replaceChildren(...state.collections.map(col =>
+    button(col.title + (col.id === c().id ? " ✓" : ""), () => {
+      picker.hidePopover();
+      open("overview", null, col);
+    }, {"aria-current": col.id === c().id ? "true" : "false"})
+  ));
+  const rect = $("collectionSwitch").getBoundingClientRect();
+  picker.style.top = rect.bottom + 6 + "px";
+  picker.style.left = Math.max(8, rect.right - 240) + "px";
+});
+$("collectionPicker").addEventListener("toggle", event => {
+  $("collectionSwitch").setAttribute("aria-expanded", String(event.newState === "open"));
+});
+
 $("envButton").onclick = () => open("environments");
 $("specButton").onclick = () => open("spec");
 $("gitButton").onclick = () => open("git");
@@ -1777,6 +1945,7 @@ window.appReady = (async () => {
     state.selectedEnvironments ||= {};
     state.tabs ||= [];
     state.layout ||= "vertical";
+    collapsed = new Set(state.collapsed || []);
   }
   state.activeCollection ||= state.collections[0].id;
   if (!state.activeTab) open("overview");

@@ -19,7 +19,7 @@ function effectiveRequest(collection, request) {
   for (const scope of scopes) {
     for (const [key, value] of rows(scope.headers))
       headers.set(key.toLowerCase(), [key, value]);
-    Object.assign(vars, Object.fromEntries(rows(scope.vars)));
+    if(scope!==request) Object.assign(vars, Object.fromEntries(rows(scope.vars)));
     let auth = scope.authConfig;
     if (!auth && scope === request && request.auth === true)
       auth = { type: "bearer", token: "{{token}}" };
@@ -35,7 +35,7 @@ function effectiveRequest(collection, request) {
     vars,
     scopedVars: Object.assign(
       {},
-      ...[...folders, request].map((s) => Object.fromEntries(rows(s.vars))),
+      Object.fromEntries(rows(request.vars)),
     ),
   };
 }

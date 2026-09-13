@@ -1,7 +1,7 @@
 export function collection(title = "Untitled Collection") {
   return {
     id: crypto.randomUUID(),
-    version: 1,
+    version: 2,
     title,
     source: "",
     description: "",
@@ -38,6 +38,7 @@ export function request(group = "") {
   };
 }
 export function normalize(c) {
+  c.version=2;
   c.id ||= crypto.randomUUID();
   c.folders ||= [];
   c.vars ||= [];

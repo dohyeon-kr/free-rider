@@ -2,14 +2,26 @@
 const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
-let server, baseUrl;
+let server, baseUrl, workspacePath, envPath, specPath, gitPath;
 async function start() {
+  workspacePath=path.join(await fs.mkdtemp(path.join(require("node:os").tmpdir(),"free-rider-smoke-")),"workspace.enc");
+  gitPath=path.join(path.dirname(workspacePath),"repo");
+  await fs.mkdir(gitPath);
+  require("node:child_process").execFileSync("git",["init","-q",gitPath]);
+  envPath=path.join(path.dirname(workspacePath),".env.dev");
+  specPath=path.join(path.dirname(workspacePath),"openapi.json");
+  await fs.writeFile(envPath,"BASE_URL=https://example.com\n");
+  await fs.writeFile(specPath,JSON.stringify({openapi:"3.0.3",info:{title:"File fixture",version:"1"},paths:{"/file-test":{get:{summary:"File endpoint",responses:{"200":{description:"OK"}}}}}}));
   server = http.createServer((req, res) => {
     res.setHeader("Content-Type", "application/json");
+    if (req.url === "/spec") return res.end(JSON.stringify({
+      openapi:"3.0.3",info:{title:"Fixture",version:"1"},
+      servers:[{url:"/api"}],paths:{"/review-test":{get:{summary:"Review fixture",responses:{"200":{description:"OK"}}}}}
+    }));
     if (req.url === "/login") res.end('{"token":"test-token"}');
     else {
       res.statusCode =
-        req.headers.authorization === "Bearer test-token" ? 200 : 401;
+        req.headers.authorization === "Bearer test-token" && req.headers["x-global"] === "active" ? 200 : 401;
       res.end(
         JSON.stringify({
           id: 1,
@@ -100,21 +112,45 @@ function fixture() {
 }
 async function run(win) {
   await fs.mkdir("test-results", { recursive: true });
-  const js = (code) => win.webContents.executeJavaScript(code);
+  const js = async (code) => {
+    try { return await win.webContents.executeJavaScript(code); }
+    catch (error) { throw new Error("Renderer check failed: " + code + "\n" + error.message); }
+  };
   await poll(() => js("Boolean(window.appReady)"));
   await js("window.appReady");
   if(!await js(`!!document.querySelector("[data-view=overview]")&&document.querySelector("#activeTitle").textContent==="Workspace API"`))throw Error("Overview did not initialize");
+  await js(`document.querySelector('#newCollection').click(); document.querySelector('#dialogCancel').click()`);
+  if (await js(`document.querySelector('#dialog').open`))
+    throw Error("Empty collection name prevented cancellation");
+  await js(`document.querySelector('#openCollection').click()`);
+  if (!(await js(`document.querySelector('#collectionActions').matches(':popover-open') && !!document.querySelector('#importCollectionFile')`)))
+    throw Error("Collection actions menu did not open");
+  await js(`document.querySelector('#exportActiveCollection').click()`);
+  if (!(await js(`document.querySelector('#dialog').open && document.querySelector('#dialogTitle').textContent === 'Export Collection' && !document.querySelector('#collectionActions').matches(':popover-open')`)))
+    throw Error("Collection export menu action failed");
+  await js(`document.querySelector('#dialogCancel').click()`);
+  await js(`document.querySelector('#scriptsButton').click(); const view=document.querySelector('[data-view=scripts]');view.querySelector('input[type=checkbox]').click();const before=view.querySelector('[aria-label="전역 전처리"]');before.value='req.headers.set("X-Global", "active");ctx.log("global-before");';before.dispatchEvent(new Event('input',{bubbles:true}));const after=view.querySelector('[aria-label="전역 후처리"]');after.value='ctx.log("global-after");';after.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#collectionHome').click()`);
+  await js(`document.querySelector('#scriptsButton').click()`);
+  await screenshot("scripts");
+  await js(`document.querySelector('#collectionHome').click()`);
   await screenshot("collection");
+  await js(`document.querySelector('#runnerButton').click(); document.querySelector('[data-exclude="list"]').click()`);
+  if ((await js(`document.querySelectorAll('[data-view=runner] .run-item').length`)) !== 4) throw Error("Run exclude failed");
+  await js(`document.querySelector('#addEndpoints').click(); document.querySelector('.endpoint-picker input:not(:disabled)').click(); document.querySelector('#dialogConfirm').click()`);
+  await poll(() => js(`!document.querySelector('#dialog').open`));
+  if ((await js(`document.querySelectorAll('[data-view=runner] .run-item').length`)) !== 5) throw Error("Run add failed");
+  await js(`document.querySelectorAll('[data-view=runner] .run-item input[type=checkbox]')[4].click()`);
   await js(
-    `document.querySelector('#runnerButton').click(); document.querySelectorAll('.run-item input[type=checkbox]')[0].click(); document.querySelectorAll('.run-item input[type=checkbox]')[1].click();document.querySelector('#runSelected').click();`,
+    `document.querySelector('#runnerButton').click(); document.querySelectorAll('[data-view=runner] .run-item input[type=checkbox]')[0].click(); document.querySelectorAll('[data-view=runner] .run-item input[type=checkbox]')[1].click();document.querySelector('#runSelected').click();`,
   );
   await poll(() =>
     js(
       `document.querySelector('#status').textContent.includes('2/2 requests')`,
     ),
   );
+  await screenshot("runner");
   const statuses = await js(
-    `[...document.querySelectorAll('.run-item .result')].slice(0,2).map(e=>e.textContent)`,
+    `[...document.querySelectorAll('[data-view=runner] .run-item .result')].slice(0,2).map(e=>e.textContent)`,
   );
   if (!statuses.every((s) => s.startsWith("200")))
     throw Error("Login chain failed: " + statuses);
@@ -144,7 +180,7 @@ async function run(win) {
     data.setData('text/plain', ${JSON.stringify(curlCommand)});
     document.querySelector('#requestUrl').dispatchEvent(new ClipboardEvent('paste', {clipboardData: data, bubbles: true, cancelable: true}));
   })()`);
-  if (!(await js(`document.querySelector('#requestUrl').value.endsWith('/me?empty=&a=1&a=2') && document.querySelector('.urlbar select').value === 'POST' && document.querySelector('.request-content textarea').value === '{"hello":"world"}'`)))
+  if (!(await js(`document.querySelector('#requestUrl').value.endsWith('/me?empty=&a=1&a=2') && document.querySelector('#httpMethod').value === 'POST' && document.querySelector('.request-content textarea').value === '{"hello":"world"}'`)))
     throw Error('cURL paste did not populate request');
   await js(`document.querySelector('#sendRequest').click()`);
   await poll(() => js(`document.querySelector('#sendRequest')?.textContent === 'Send'`));
@@ -170,10 +206,69 @@ async function run(win) {
     keyCode: "W",
     modifiers: ["meta"],
   });
+  await poll(() => js(`document.querySelector('#dialog').open && !!document.querySelector('#discardRequest')`));
+  await js(`document.querySelector('#dialogCancel').click()`);
+  if (!(await js(`!!document.querySelector('#requestUrl')`))) throw Error("Cancel closed the request");
+  await js(`document.querySelector('.work-tab.active .close').click(); document.querySelector('#discardRequest').click()`);
   await poll(() => js(`!document.querySelector('#requestUrl')`));
+  await js(`[...document.querySelectorAll('#tree .tree-label')].find(e=>e.textContent.includes('Unsaved request')).click()`);
+  if ((await js(`document.querySelector('#requestUrl').value`)) === importedUrl)
+    throw Error("Discard retained draft changes");
+  await js(`const url = document.querySelector('#requestUrl'); url.value = 'http://localhost:3456/saved'; url.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('.work-tab.active .close').click(); document.querySelector('#dialogConfirm').click()`);
+  await poll(() => js(`!document.querySelector('#dialog').open`));
+  await js(`[...document.querySelectorAll('#tree .tree-label')].find(e=>e.textContent.includes('Unsaved request')).click()`);
+  if ((await js(`document.querySelector('#requestUrl').value`)) !== 'http://localhost:3456/saved')
+    throw Error("Save did not commit draft");
+
   await js(`document.querySelector("#collectionHome").click()`);
   await screenshot("collection");
+  await js(`[...document.querySelectorAll('#tree .tree-label')].find(e=>e.textContent.includes('Unsaved request')).click(); const invalid = document.querySelector('#requestUrl'); invalid.value='/relative'; invalid.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#sendRequest').click()`);
+  await poll(() => js(`!!document.querySelector('.execution-log.error')`));
+  if (!(await js(`document.querySelector('.execution-log.error').textContent.includes('절대 주소')`)))
+    throw Error("Console did not explain invalid URL");
+  await js(`document.querySelector('.response-pane [data-tab="body"]').click()`);
+  if (!(await js(`document.querySelector('.response-pane').textContent.includes('수신한 응답이 없습니다')`)))
+    throw Error("Execution error leaked into response body");
+  await js(`document.querySelector('#specButton').click(); const source=document.querySelector('[placeholder="https://api.example.com/openapi.json"]'); source.value=${JSON.stringify(baseUrl + "/spec")}; source.dispatchEvent(new Event('input',{bubbles:true})); [...document.querySelectorAll('button')].find(b=>b.textContent.includes('Synchronize')).click()`);
+  await poll(() => js(`!!document.querySelector('#applySyncSelection')`));
+  if (await js(`document.querySelector('#tree').textContent.includes('Review fixture')`)) throw Error("Preview modified collection");
+  await js(`document.querySelector('.sync-change summary').click(); document.querySelector('#applySyncSelection').click()`);
+  await poll(() => js(`document.querySelector('#tree').textContent.includes('Review fixture')`));
+  await js(`document.querySelector('#saveWorkspace').click()`);
+  await poll(() => js(`document.querySelector('#status').textContent.includes('워크스페이스를 저장')`));
+  await js(`document.querySelector('#undoSync').click();document.querySelector('#dialogConfirm').click()`);
+  await poll(() => js(`!document.querySelector('#dialog').open`));
+  if(await js(`document.querySelector('#tree').textContent.includes('Review fixture')`))
+    throw Error("Sync undo did not restore previous requests");
+  await js(`document.querySelector('#envButton').click();document.querySelector('#connectEnvFile').click()`);
+  await poll(()=>js(`!!document.querySelector('[aria-label="환경 파일 내용"]')`));
+  await js(`const editor=document.querySelector('[aria-label="환경 파일 내용"]');editor.value='BASE_URL=https://changed.example.com';editor.dispatchEvent(new Event('input',{bubbles:true}));[...document.querySelectorAll('button')].find(b=>b.textContent==='파일 저장').click()`);
+  await poll(async()=> (await fs.readFile(envPath,"utf8")).includes("changed.example.com"));
+  await screenshot("env-file");
+  await js(`document.querySelector('#specButton').click();[...document.querySelectorAll('button')].find(b=>b.textContent==='Import OpenAPI file').click()`);
+  await poll(()=>js(`!!document.querySelector('#reloadSpecFile')`));
+  await js(`document.querySelector('#applySyncSelection').click()`);
+  await poll(()=>js(`document.querySelector('#tree').textContent.includes('File endpoint')`));
+  await fs.writeFile(specPath,JSON.stringify({openapi:"3.0.3",info:{title:"File fixture",version:"2"},paths:{"/file-test":{get:{summary:"File endpoint changed",responses:{"200":{description:"OK"}}}}}}));
+  await js(`document.querySelector('#reloadSpecFile').click()`);
+  await poll(()=>js(`document.querySelector('.sync-review')?.textContent.includes('File endpoint changed')`));
+  await js(`document.querySelector('.sync-change summary').click()`);
+  await screenshot("sync");
+  await js(`document.querySelector('#saveWorkspace').click()`);
+  await poll(()=>js(`document.querySelector('#status').textContent.includes('워크스페이스를 저장')`));
+  await new Promise(resolve=>{win.webContents.once("did-finish-load",resolve);win.webContents.reload();});
+  await js("window.appReady");
+  await js(`document.querySelector('#scriptsButton').click()`);
+  if(!(await js(`document.querySelector('[data-view=scripts] input[type=checkbox]').checked && document.querySelector('[aria-label="전역 전처리"]').value.includes('X-Global')`)))
+    throw Error("Global scripts were not restored from disk");
+  await js(`document.querySelector('#runnerButton').click()`);
+  if((await js(`document.querySelectorAll('[data-view=runner] .run-item').length`))!==5)
+    throw Error("Execution list was not restored from disk");
+  await js(`document.querySelector('#gitButton').click();[...document.querySelectorAll('button')].find(b=>b.textContent==='Open repository folder').click()`);
+  await poll(()=>js(`document.querySelector('[data-view=git]').textContent.includes('최근 컬렉션 커밋')`));
+  await screenshot("git");
   server.close();
+  await fs.rm(path.dirname(workspacePath),{recursive:true,force:true});
   return "Native tabs, runner login chain, inherited auth, assertions, environments and IPC passed";
   async function screenshot(name) {
     await js(
@@ -193,4 +288,4 @@ async function poll(fn) {
   }
   throw Error("UI test timed out");
 }
-module.exports = { start, fixture, run };
+module.exports = { chooseFile:options=>options.title==="환경 파일 연결"?envPath:options.filters?.[0]?.name==="OpenAPI"?specPath:options.properties?.includes("openDirectory")?gitPath:null, start, fixture, run, get workspacePath(){return workspacePath;} };

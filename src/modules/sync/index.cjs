@@ -58,6 +58,16 @@ function sample(doc, schema, depth = 0) {
   if (schema.type === "boolean") return false;
   return "";
 }
+function responseContract(doc, value, seen = new Set(), depth = 0) {
+  if (!value || typeof value !== "object" || depth > 30) return value;
+  if (value.$ref) {
+    if (seen.has(value.$ref)) return {$ref:value.$ref};
+    const next = new Set(seen); next.add(value.$ref);
+    return responseContract(doc, resolve(doc,value), next, depth+1);
+  }
+  if (Array.isArray(value)) return value.map(v=>responseContract(doc,v,seen,depth+1));
+  return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,responseContract(doc,v,seen,depth+1)]));
+}
 function operations(doc) {
   const out = [];
   for (const [path, raw] of Object.entries(doc.paths)) {
@@ -108,6 +118,7 @@ function operations(doc) {
         body,
         auth: (op.security ?? doc.security)?.length ? true : false,
         extract: {},
+        responses: responseContract(doc, op.responses || {}),
       });
     }
   }

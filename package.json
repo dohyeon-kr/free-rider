@@ -13,6 +13,7 @@
     "test:electron": "electron . --smoke-test"
   },
   "dependencies": {
+    "quickjs-emscripten": "^0.32.0",
     "yaml": "2.9.0"
   },
   "devDependencies": {
@@ -21,7 +22,7 @@
   },
   "build": {
     "appId": "kr.dohyeon.openapi.client",
-    "productName": "Open API Client",
+    "productName": "Free Rider",
     "files": [
       "src/**/*",
       "package.json"
@@ -35,6 +36,6 @@
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": true
     },
-    "artifactName": "Open-API-Client-${version}-${arch}.${ext}"
+    "artifactName": "Free-Rider-${version}-${arch}.${ext}"
   }
 }
