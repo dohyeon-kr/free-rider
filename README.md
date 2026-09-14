@@ -98,7 +98,7 @@ macOS Squirrel 자동 업데이트는 Developer ID 서명이 필수이므로 ad-
 
 ## 문서 배포
 
-`docs/site/`의 정적 문서는 `.github/workflows/docs.yml`에서 `gh-pages` 브랜치로 배포합니다. GitHub Pages 저장소 설정의 Source를 `Deploy from a branch`, Branch를 `gh-pages / (root)`로 한 번 설정하면 이후 문서 변경은 자동 반영됩니다.
+`docs/site/`의 정적 문서는 `.github/workflows/docs.yml`의 GitHub Pages Actions 워크플로로 배포합니다. `actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages`를 사용하므로 별도의 `gh-pages` 브랜치는 만들지 않습니다. GitHub Pages 저장소 설정의 Source는 `GitHub Actions`로 설정합니다.
 
 ## 검증과 빌드
 
