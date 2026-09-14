@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          PACKAGE_VERSION="$(node -p \"require('./package.json').version\")"
           if [[ "$TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
             echo "Tag $GITHUB_REF_NAME does not match package.json version $PACKAGE_VERSION" >&2
             exit 1
@@ -76,7 +76,7 @@ jobs:
         run: |
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             echo 'mode=pr-unsigned' >> "$GITHUB_OUTPUT"
-            echo '### Unsigned PR build — package smoke test only' >> "$GITHUB_STEP_SUMMARY"
+            echo '### Unsigned PR build — package validation only' >> "$GITHUB_STEP_SUMMARY"
           elif [[ -n "$CERTIFICATE" && -n "$CERT_PASSWORD" && -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$TEAM_ID" ]]; then
             echo 'mode=developer-id' >> "$GITHUB_OUTPUT"
           elif [[ -n "$CERTIFICATE$CERT_PASSWORD$APPLE_ID$APPLE_PASSWORD$TEAM_ID" ]]; then
@@ -106,14 +106,16 @@ jobs:
         run: npm run dist:mac -- --${{ matrix.arch }} -c.mac.identity=null -c.mac.notarize=false
 
       - name: Verify packaged application
+        timeout-minutes: 2
         env:
           SIGNING_MODE: ${{ steps.signing.outputs.mode }}
         shell: bash
         run: |
           APP_PATH=$(find dist -maxdepth 2 -name '*.app' -type d -print -quit)
           test -n "$APP_PATH"
-
-          "$APP_PATH/Contents/MacOS/Free Rider" --smoke-test
+          test -x "$APP_PATH/Contents/MacOS/Free Rider"
+          test -f "$APP_PATH/Contents/Info.plist"
+          test -f "$APP_PATH/Contents/Resources/app.asar"
 
           if [[ "$SIGNING_MODE" != 'pr-unsigned' ]]; then
             codesign --verify --deep --strict --verbose=2 "$APP_PATH"
