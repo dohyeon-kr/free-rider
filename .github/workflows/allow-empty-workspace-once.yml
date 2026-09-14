@@ -23,175 +23,141 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
+
+          def replace_once(text, pattern, replacement, label, flags=0):
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+              assert count == 1, f"{label} target not found"
+              return updated
 
           app_path = Path("src/ui/app.js")
           app = app_path.read_text()
 
-          old_tabs = '''  root.append(
-            button("＋", () => newRequest(), {
-              class: "new-request-tab",
-              title: "새 요청",
-              "aria-label": "새 요청 탭 추가",
-            }),
-          );
-          '''
-          new_tabs = '''  root.append(
-            button("＋", () => c() ? newRequest() : $("newCollection").click(), {
-              class: "new-request-tab",
-              title: c() ? "새 요청" : "새 컬렉션",
-              "aria-label": c() ? "새 요청 탭 추가" : "새 컬렉션 만들기",
-            }),
-          );
-          '''
-          assert app.count(old_tabs) == 1, "renderTabs target not found"
-          app = app.replace(old_tabs, new_tabs)
+          app = replace_once(
+              app,
+              r'  root\.append\(\n    button\("＋", \(\) => newRequest\(\), \{\n      class: "new-request-tab",\n      title: "새 요청",\n      "aria-label": "새 요청 탭 추가",\n    \}\),\n  \);',
+              '''  root.append(
+              button("＋", () => c() ? newRequest() : $("newCollection").click(), {
+                class: "new-request-tab",
+                title: c() ? "새 요청" : "새 컬렉션",
+                "aria-label": c() ? "새 요청 탭 추가" : "새 컬렉션 만들기",
+              }),
+            );''',
+              "renderTabs",
+          )
 
-          old_render = '''function render() {
-            renderTree();
-            renderTabs();
-            $("activeTitle").textContent = c().title;
-            const es = $("environmentSelect");
-            es.replaceChildren(
-              ...c().environments.map((e) => el("option", { value: e.id, text: e.name })),
-            );
-            es.value = env(c()).id;
-            $("branchStatus").textContent = gitInfo.get(c().id)?.branch || "";
-            const t = active();
-            if (!t) {
-              $("view").replaceChildren(
-                el(
-                  "div",
-                  { class: "view-inner" },
-                  el("h2", { text: "Your workspace" }),
-                  button("Open collection overview", () => open("overview")),
-                ),
+          app = replace_once(
+              app,
+              r'function render\(\) \{\n  renderTree\(\);\n  renderTabs\(\);\n  \$\("activeTitle"\)\.textContent = c\(\)\.title;.*?\n  const view = \{\n',
+              '''function render() {
+              renderTree();
+              renderTabs();
+              const col = c();
+              for (const id of [
+                "collectionHome",
+                "collectionSwitch",
+                "newRequest",
+                "envButton",
+                "specButton",
+                "gitButton",
+                "runnerButton",
+                "scriptsButton",
+                "exportActiveCollection",
+              ]) {
+                const control = $(id);
+                if (control) control.disabled = !col;
+              }
+              $("activeTitle").textContent = col?.title || "컬렉션 없음";
+              const es = $("environmentSelect");
+              if (!col) {
+                es.replaceChildren();
+                es.disabled = true;
+                $("branchStatus").textContent = "";
+                state.activeCollection = null;
+                state.activeTab = null;
+                $("view").replaceChildren(
+                  el(
+                    "div",
+                    { class: "view-inner" },
+                    el("h2", { text: "컬렉션이 없습니다" }),
+                    el("p", {
+                      class: "muted",
+                      text: "새 컬렉션을 만들거나 기존 컬렉션 파일을 가져오세요.",
+                    }),
+                    button("새 컬렉션 만들기", () => $("newCollection").click(), {
+                      class: "primary",
+                    }),
+                  ),
+                );
+                return;
+              }
+              es.disabled = false;
+              es.replaceChildren(
+                ...col.environments.map((e) => el("option", { value: e.id, text: e.name })),
               );
-              return;
-            }
-            const col = c();
-            const view = {
-          '''
-          new_render = '''function render() {
-            renderTree();
-            renderTabs();
-            const col = c();
-            for (const id of [
-              "collectionHome",
-              "collectionSwitch",
-              "newRequest",
-              "envButton",
-              "specButton",
-              "gitButton",
-              "runnerButton",
-              "scriptsButton",
-              "exportActiveCollection",
-            ]) {
-              const control = $(id);
-              if (control) control.disabled = !col;
-            }
-            $("activeTitle").textContent = col?.title || "컬렉션 없음";
-            const es = $("environmentSelect");
-            if (!col) {
-              es.replaceChildren();
-              es.disabled = true;
-              $("branchStatus").textContent = "";
-              state.activeCollection = null;
-              state.activeTab = null;
-              $("view").replaceChildren(
-                el(
-                  "div",
-                  { class: "view-inner" },
-                  el("h2", { text: "컬렉션이 없습니다" }),
-                  el("p", {
-                    class: "muted",
-                    text: "새 컬렉션을 만들거나 기존 컬렉션 파일을 가져오세요.",
-                  }),
-                  button("새 컬렉션 만들기", () => $("newCollection").click(), {
-                    class: "primary",
-                  }),
-                ),
-              );
-              return;
-            }
-            es.disabled = false;
-            es.replaceChildren(
-              ...col.environments.map((e) => el("option", { value: e.id, text: e.name })),
-            );
-            es.value = env(col).id;
-            $("branchStatus").textContent = gitInfo.get(col.id)?.branch || "";
-            const t = active();
-            if (!t) {
-              $("view").replaceChildren(
-                el(
-                  "div",
-                  { class: "view-inner" },
-                  el("h2", { text: "Your workspace" }),
-                  button("Open collection overview", () => open("overview")),
-                ),
-              );
-              return;
-            }
-            const view = {
-          '''
-          assert app.count(old_render) == 1, "render target not found"
-          app = app.replace(old_render, new_render)
+              es.value = env(col).id;
+              $("branchStatus").textContent = gitInfo.get(col.id)?.branch || "";
+              const t = active();
+              if (!t) {
+                $("view").replaceChildren(
+                  el(
+                    "div",
+                    { class: "view-inner" },
+                    el("h2", { text: "Your workspace" }),
+                    button("Open collection overview", () => open("overview")),
+                  ),
+                );
+                return;
+              }
+              const view = {
+          ''',
+              "render",
+              re.S,
+          )
 
-          old_ready = '''window.appReady = (async () => {
-            const saved = await action(() => api["workspace-load"]());
-            if (saved?.collections?.length) {
-              state = saved;
-              state.collections.forEach(normalize);
-              state.selectedEnvironments ||= {};
-              state.tabs ||= [];
-              state.layout ||= "vertical";
-              collapsed = new Set(state.collapsed || []);
-            }
-            state.activeCollection ||= state.collections[0].id;
-            if (!state.activeTab) open("overview");
-            else render();
-          })();
-          '''
-          new_ready = '''window.appReady = (async () => {
-            const saved = await action(() => api["workspace-load"]());
-            if (saved && Array.isArray(saved.collections)) {
-              state = saved;
-              state.collections.forEach(normalize);
-              state.selectedEnvironments ||= {};
-              state.tabs ||= [];
-              state.layout ||= "vertical";
-              collapsed = new Set(state.collapsed || []);
-            }
-            if (state.collections.length) {
-              state.activeCollection ||= state.collections[0].id;
-              if (!state.activeTab) open("overview");
-              else render();
-            } else {
-              state.activeCollection = null;
-              state.activeTab = null;
-              render();
-            }
-          })();
-          '''
-          assert app.count(old_ready) == 1, "appReady target not found"
-          app = app.replace(old_ready, new_ready)
+          app = replace_once(
+              app,
+              r'window\.appReady = \(async \(\) => \{\n  const saved = await action\(\(\) => api\["workspace-load"\]\(\)\);.*?\n\}\)\(\);\s*$',
+              '''window.appReady = (async () => {
+              const saved = await action(() => api["workspace-load"]());
+              if (saved && Array.isArray(saved.collections)) {
+                state = saved;
+                state.collections.forEach(normalize);
+                state.selectedEnvironments ||= {};
+                state.tabs ||= [];
+                state.layout ||= "vertical";
+                collapsed = new Set(state.collapsed || []);
+              }
+              if (state.collections.length) {
+                state.activeCollection ||= state.collections[0].id;
+                if (!state.activeTab) open("overview");
+                else render();
+              } else {
+                state.activeCollection = null;
+                state.activeTab = null;
+                render();
+              }
+            })();
+          ''',
+              "appReady",
+              re.S,
+          )
           app_path.write_text(app)
 
           actions_path = Path("src/ui/workspace-actions.js")
           actions = actions_path.read_text()
-          old_delete = '''    if (!snapshot?.collections?.length) throw new Error("워크스페이스를 불러오지 못했습니다.");
-              if (snapshot.collections.length === 1) throw new Error("마지막 컬렉션은 삭제할 수 없습니다.");
-          '''
-          new_delete = '''    if (!snapshot || !Array.isArray(snapshot.collections)) throw new Error("워크스페이스를 불러오지 못했습니다.");
-          '''
-          assert actions.count(old_delete) == 1, "delete guard target not found"
-          actions = actions.replace(old_delete, new_delete)
-
-          old_active = '''    if (snapshot.activeCollection === cid) snapshot.activeCollection = snapshot.collections[0].id;
-          '''
-          new_active = '''    if (snapshot.activeCollection === cid) snapshot.activeCollection = snapshot.collections[0]?.id || null;
-          '''
-          assert actions.count(old_active) == 1, "active collection target not found"
-          actions = actions.replace(old_active, new_active)
+          actions = replace_once(
+              actions,
+              r'    if \(!snapshot\?\.collections\?\.length\) throw new Error\("워크스페이스를 불러오지 못했습니다\."\);\n    if \(snapshot\.collections\.length === 1\) throw new Error\("마지막 컬렉션은 삭제할 수 없습니다\."\);',
+              '    if (!snapshot || !Array.isArray(snapshot.collections)) throw new Error("워크스페이스를 불러오지 못했습니다.");',
+              "delete guard",
+          )
+          actions = replace_once(
+              actions,
+              r'    if \(snapshot\.activeCollection === cid\) snapshot\.activeCollection = snapshot\.collections\[0\]\.id;',
+              '    if (snapshot.activeCollection === cid) snapshot.activeCollection = snapshot.collections[0]?.id || null;',
+              "active collection",
+          )
           actions_path.write_text(actions)
           PY
 
