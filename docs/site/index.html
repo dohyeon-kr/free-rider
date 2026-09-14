@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Free Rider — 서버와 계정 없이 사용하는 로컬 우선 Electron API 클라이언트 문서" />
+  <title>Free Rider Docs</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top"><span class="mark">◆</span> Free Rider</a>
+    <nav>
+      <a href="#start">시작</a>
+      <a href="#requests">요청</a>
+      <a href="#variables">변수</a>
+      <a href="#openapi">OpenAPI</a>
+      <a href="#updates">업데이트</a>
+    </nav>
+    <a class="github" href="https://github.com/dohyeon-kr/free-rider">GitHub ↗</a>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <p class="eyebrow">LOCAL-FIRST API CLIENT</p>
+      <h1>API 작업을 파일과 Git 가까이에.</h1>
+      <p class="lead">Free Rider는 별도 서버와 계정 없이 요청 작성·실행, 환경변수, 컬렉션 러너, OpenAPI 동기화와 로컬 Git 작업을 제공하는 macOS Electron API 클라이언트입니다.</p>
+      <div class="hero-actions">
+        <a class="primary" href="https://github.com/dohyeon-kr/free-rider/releases/latest">최신 버전 받기</a>
+        <a class="secondary" href="#start">문서 시작하기</a>
+      </div>
+      <div class="feature-grid">
+        <article><strong>Local-first</strong><span>워크스페이스는 로컬에 암호화해 저장합니다.</span></article>
+        <article><strong>OpenAPI review</strong><span>명세 변경을 검토한 뒤 필요한 항목만 반영합니다.</span></article>
+        <article><strong>Git-friendly</strong><span>공유 컬렉션만 저장·diff·commit합니다.</span></article>
+      </div>
+    </section>
+
+    <section id="start">
+      <div class="section-title"><span>01</span><h2>시작하기</h2></div>
+      <div class="card">
+        <h3>macOS 설치</h3>
+        <p>GitHub Releases에서 자신의 Mac 아키텍처에 맞는 DMG 또는 ZIP을 받습니다.</p>
+        <div class="split">
+          <div><b>Apple Silicon</b><code>arm64</code></div>
+          <div><b>Intel Mac</b><code>x64</code></div>
+        </div>
+        <p class="note">자동 업데이트는 Developer ID로 서명·공증된 배포 빌드에서만 활성화됩니다. 검토용 ad-hoc 빌드에서는 macOS 보안 요구사항 때문에 자동 업데이트가 비활성화됩니다.</p>
+      </div>
+      <div class="card">
+        <h3>개발 실행</h3>
+        <pre><code>npm ci
+npm start</code></pre>
+        <p>전체 테스트는 <code>npm test</code>, Electron UI smoke test는 <code>npm run test:electron</code>으로 실행합니다.</p>
+      </div>
+    </section>
+
+    <section id="requests">
+      <div class="section-title"><span>02</span><h2>요청과 탭</h2></div>
+      <div class="card-grid">
+        <article class="card"><h3>요청 편집</h3><p>Params, Headers, Body, Auth, Vars, Tests, Docs 탭에서 요청을 편집합니다. URL 입력창에는 cURL을 붙여넣어 요청으로 가져올 수도 있습니다.</p></article>
+        <article class="card"><h3>탭 관리</h3><p>탭을 우클릭하면 현재 탭 닫기, 다른 탭 닫기, 저장된 탭 닫기, 모든 탭 닫기를 사용할 수 있습니다. 저장하지 않은 요청은 저장 또는 버리기를 먼저 선택합니다.</p></article>
+        <article class="card"><h3>컬렉션 관리</h3><p>컬렉션 메뉴에서 요청·폴더 생성, 이름 변경, OpenAPI, Runner, 내보내기와 컬렉션 삭제를 관리합니다.</p></article>
+      </div>
+    </section>
+
+    <section id="variables">
+      <div class="section-title"><span>03</span><h2>Environment와 Vars</h2></div>
+      <div class="card">
+        <h3>둘은 역할이 다릅니다</h3>
+        <table>
+          <thead><tr><th>종류</th><th>용도</th><th>스크립트 접근</th></tr></thead>
+          <tbody>
+            <tr><td>Environment</td><td>dev/staging/prod처럼 실행 환경별로 바뀌는 값. 읽기 전용.</td><td><code>ctx.env.get("KEY")</code></td></tr>
+            <tr><td>Vars</td><td>컬렉션·폴더·요청 범위 값과 실행 중 캡처한 값.</td><td><code>ctx.vars.get/set/delete("KEY")</code></td></tr>
+          </tbody>
+        </table>
+        <p>요청 안에서는 둘 다 <code>{{KEY}}</code> 형태로 참조합니다. 우선순위는 컬렉션·폴더 기본값 → 선택 Environment → 요청 Vars → 실행 중 Vars 순입니다.</p>
+        <p>환경 값과 Auth 비밀번호처럼 마스킹된 입력은 눈 아이콘으로 현재 화면에서 표시/숨김을 전환할 수 있습니다.</p>
+      </div>
+      <div class="card">
+        <h3>전역 전후처리</h3>
+        <pre><code>const token = ctx.vars.get("accessToken");
+if (token) req.headers.set("Authorization", "Bearer " + token);
+req.headers.set("X-Environment", ctx.env.get("ENV"));</code></pre>
+        <p>후처리에서 응답 값을 런타임 변수로 저장할 수 있습니다.</p>
+        <pre><code>if (res.status === 200) {
+  ctx.vars.set("accessToken", res.json().token);
+}</code></pre>
+      </div>
+    </section>
+
+    <section id="runner">
+      <div class="section-title"><span>04</span><h2>컬렉션 실행</h2></div>
+      <div class="card">
+        <p>저장된 요청을 실행 목록에 추가해 순서를 정하고 연속 실행합니다. 요청별 선택/제외, 실패 시 중단, 수동 중지와 결과 확인을 지원합니다.</p>
+        <p class="note">단일 Send는 현재 편집 중인 draft를 사용하지만, 컬렉션 Runner는 저장된 요청을 사용합니다.</p>
+      </div>
+    </section>
+
+    <section id="openapi">
+      <div class="section-title"><span>05</span><h2>OpenAPI 동기화</h2></div>
+      <ol class="steps">
+        <li><b>연결</b><span>OpenAPI 3.x JSON/YAML 파일 또는 URL을 연결합니다.</span></li>
+        <li><b>검토</b><span>기존 명세, 현재 요청, 새 명세의 차이를 펼쳐 확인합니다.</span></li>
+        <li><b>충돌 해결</b><span>현재 값 유지 또는 명세 값 반영을 항목별로 선택합니다.</span></li>
+        <li><b>선택 반영</b><span>체크한 엔드포인트만 저장하고, 필요하면 직전 반영 상태로 복원합니다.</span></li>
+      </ol>
+    </section>
+
+    <section id="git">
+      <div class="section-title"><span>06</span><h2>Git 공유</h2></div>
+      <div class="card">
+        <p>로컬 Git 저장소를 연결한 뒤 컬렉션 저장 → diff 확인 → commit 순서로 작업합니다. Free Rider는 <code>open-api.collection.json</code>만 커밋하므로 이미 stage된 다른 작업은 보존합니다.</p>
+        <p>환경의 실제 값, 로컬 파일 경로, 전역 스크립트와 복원 백업은 공유 컬렉션에서 제외됩니다.</p>
+      </div>
+    </section>
+
+    <section id="updates">
+      <div class="section-title"><span>07</span><h2>자동 업데이트</h2></div>
+      <div class="card">
+        <p>배포용 macOS 빌드는 Electron 공식 공개 업데이트 서비스와 GitHub Releases를 사용합니다. 앱은 실행 후 새 버전을 확인하고, 업데이트가 있으면 백그라운드에서 내려받습니다.</p>
+        <ol>
+          <li>Git tag와 package version을 맞춰 Release를 생성합니다.</li>
+          <li>GitHub Actions가 arm64/x64 ZIP·DMG를 빌드합니다.</li>
+          <li>Developer ID 서명 및 공증된 ZIP을 업데이트 서비스가 아키텍처별로 선택합니다.</li>
+          <li>다운로드 완료 후 앱 하단에서 설치 및 재시작할 수 있습니다.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="shortcuts">
+      <div class="section-title"><span>08</span><h2>단축키</h2></div>
+      <div class="shortcuts">
+        <span>요청 전송</span><kbd>⌘ / Ctrl + Enter</kbd>
+        <span>워크스페이스 저장</span><kbd>⌘ / Ctrl + S</kbd>
+        <span>새 요청</span><kbd>⌘ / Ctrl + N</kbd>
+        <span>탭 닫기</span><kbd>⌘ / Ctrl + W</kbd>
+        <span>검색</span><kbd>⌘ / Ctrl + K</kbd>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Free Rider Documentation</span>
+    <a href="https://github.com/dohyeon-kr/free-rider/releases">Releases</a>
+    <a href="https://github.com/dohyeon-kr/free-rider">Source</a>
+  </footer>
+</body>
+</html>
