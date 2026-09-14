@@ -1,12 +1,13 @@
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
-const UPDATE_BASE = "https://github.com/dohyeon-kr/free-rider/releases/latest/download";
+const UPDATE_SERVER = "https://update.electronjs.org";
 const CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 
-function feedUrlForArch(arch) {
+function feedUrlFor(platform, arch, version) {
+  if (platform !== "darwin") throw Error(`Unsupported update platform: ${platform}`);
   if (!['arm64', 'x64'].includes(arch)) throw Error(`Unsupported update architecture: ${arch}`);
-  return `${UPDATE_BASE}/update-${arch}.json`;
+  return `${UPDATE_SERVER}/dohyeon-kr/free-rider/${platform}-${arch}/${version}`;
 }
 
 function macAppBundle(execPath) {
@@ -113,8 +114,8 @@ function createUpdateController({
       return snapshot();
     }
 
-    const feedUrl = feedUrlForArch(arch);
-    autoUpdater.setFeedURL({ url: feedUrl, serverType: "json" });
+    const feedUrl = feedUrlFor(platform, arch, app.getVersion());
+    autoUpdater.setFeedURL({ url: feedUrl });
     state.enabled = true;
     state.state = "idle";
     state.feedUrl = feedUrl;
@@ -160,8 +161,9 @@ function createUpdateController({
 
 module.exports = {
   CHECK_INTERVAL,
+  UPDATE_SERVER,
   createUpdateController,
-  feedUrlForArch,
+  feedUrlFor,
   isDeveloperIdSigned,
   macAppBundle,
 };
