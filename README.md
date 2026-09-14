@@ -2,6 +2,9 @@
 
 서버·계정 없이 사용하는 Electron API 클라이언트입니다. 요청 작성과 실행, 환경별 변수, 전역 전후처리, OpenAPI 변경 검토와 선택 반영, 로컬 Git 작업을 제공합니다.
 
+- 문서: https://dohyeon-kr.github.io/free-rider/
+- 릴리즈: https://github.com/dohyeon-kr/free-rider/releases
+
 ## 실행
 
 ```sh
@@ -9,24 +12,30 @@ npm ci
 npm start
 ```
 
-macOS Apple Silicon 검토용 설치본은 `dist/Free-Rider-0.2.0-arm64.dmg`, 앱은 `dist/mac-arm64/Free Rider.app`에 생성됩니다. 배포용 서명·공증은 별도입니다.
+macOS 빌드는 Apple Silicon(`arm64`)과 Intel(`x64`) DMG/ZIP을 생성합니다. 배포용 자동 업데이트는 Developer ID 서명·공증된 빌드에서만 활성화됩니다.
 
 ## 요청과 저장
 
 - 사이드바의 +로 컬렉션을 만들고, 상단 + 요청 또는 탭의 +로 요청을 추가합니다.
 - 컬렉션·폴더는 화살표로 접고 펼칩니다. 컬렉션 제목 옆 화살표는 컬렉션 선택 메뉴입니다.
-- Params / Headers / Body / Auth / Vars / Tests에서 요청을 편집합니다.
+- Params / Headers / Body / Auth / Vars / Tests / Docs에서 요청을 편집합니다.
 - 단일 전송은 현재 편집본을 사용합니다. 컬렉션 실행은 저장된 요청을 사용합니다.
 - 탭을 닫을 때 변경이 있으면 저장·버리기·취소를 선택합니다.
+- 탭 우클릭 메뉴에서 현재 탭 닫기, 다른 탭 닫기, 저장된 탭 닫기, 모든 탭 닫기를 사용할 수 있습니다.
+- 컬렉션 메뉴에서 컬렉션 전체를 삭제할 수 있습니다. 마지막 컬렉션 하나는 유지합니다.
 - 저장 버튼 또는 Cmd/Ctrl+S로 암호화된 로컬 워크스페이스에 보관합니다.
 - 전송 오류와 실행 로그는 응답 영역의 콘솔에 표시합니다. Body에는 서버 응답만 표시합니다.
 - GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, QUERY와 사용자 메서드를 입력할 수 있습니다. CONNECT 터널과 TRACE/TRACK은 현재 전송 엔진에서 지원하지 않습니다.
 
-## 환경변수
+## 환경변수와 Vars
 
 환경 화면에서 여러 환경을 만들거나 .env 파일을 연결합니다. 요청에 `{{BASE_URL}}`, `{{accessToken}}`처럼 사용합니다. 이름은 대소문자를 구분합니다.
 
-변수 우선순위: 컬렉션·폴더 기본값 < 선택 환경 < 요청별 Vars < 실행 중 변수.
+변수 우선순위: 컬렉션·폴더 기본값 < 선택 환경 < 요청별 Vars < 실행 중 Vars.
+
+- Environment는 dev/staging/prod처럼 실행 환경에 따라 바뀌는 읽기 전용 값이며 스크립트에서 `ctx.env.get("KEY")`로 읽습니다.
+- Vars는 컬렉션·폴더·요청 범위와 실행 중 캡처 값을 포함하며 `ctx.vars.get/set/delete("KEY")`로 다룹니다.
+- Auth 비밀번호와 환경 값처럼 마스킹된 입력은 눈 아이콘으로 표시/숨김을 전환할 수 있습니다.
 
 연결된 파일은 원문을 편집하고 ‘편집 내용 적용’ 또는 ‘파일 저장’을 누릅니다. 다시 읽기는 디스크의 최신 내용을 불러옵니다. 파일이 외부에서 바뀌면 저장을 차단하므로 먼저 다시 읽어 확인하세요. 환경 표는 적용된 값의 확인용입니다.
 
@@ -80,6 +89,16 @@ API:
 로컬 저장소를 선택하고 컬렉션 파일 저장 → diff 확인 → commit 순서로 사용합니다. `open-api.collection.json`만 커밋하므로 다른 staged 파일은 포함하지 않습니다. 최근 컬렉션 커밋을 표시합니다. Push/Pull은 외부 Git 클라이언트를 사용합니다.
 
 환경 실값·파일 경로·전역 스크립트·복원 백업은 공유 파일에 포함하지 않습니다. 요청에 직접 적은 값은 포함되므로 공유할 값은 변수로 작성하세요.
+
+## 자동 업데이트
+
+배포용 macOS 앱은 Electron 공식 `update.electronjs.org`와 GitHub Releases를 사용합니다. 앱은 아키텍처(`darwin-arm64`, `darwin-x64`)에 맞는 새 버전을 확인하고 백그라운드에서 내려받습니다.
+
+macOS Squirrel 자동 업데이트는 Developer ID 서명이 필수이므로 ad-hoc/개발 빌드에서는 자동 업데이트를 비활성화합니다. 새 버전 다운로드가 끝나면 앱 하단에서 설치 및 재시작할 수 있습니다.
+
+## 문서 배포
+
+`docs/site/`의 정적 문서는 `.github/workflows/docs.yml`에서 `gh-pages` 브랜치로 배포합니다. GitHub Pages 저장소 설정의 Source를 `Deploy from a branch`, Branch를 `gh-pages / (root)`로 한 번 설정하면 이후 문서 변경은 자동 반영됩니다.
 
 ## 검증과 빌드
 
