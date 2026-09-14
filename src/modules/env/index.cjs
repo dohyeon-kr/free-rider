@@ -32,6 +32,14 @@ function shareableEnvironments(environments) {
     ),
   }));
 }
+function mergeVariableScopes(baseVars = {}, environmentValues = {}, scopedVars = {}) {
+  const values = { ...baseVars };
+  for (const [key, value] of Object.entries(environmentValues || {})) {
+    const empty = value === "" || value == null;
+    if (!empty || !Object.hasOwn(values, key)) values[key] = value ?? "";
+  }
+  return { ...values, ...scopedVars };
+}
 class EnvironmentStore {
   #tokens = new Map();
   resolve(environment) {
@@ -45,4 +53,4 @@ class EnvironmentStore {
     this.#tokens.clear();
   }
 }
-module.exports = { parseEnv, shareableEnvironments, EnvironmentStore };
+module.exports = { parseEnv, shareableEnvironments, mergeVariableScopes, EnvironmentStore };
