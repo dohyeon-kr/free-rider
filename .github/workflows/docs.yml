@@ -9,51 +9,31 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
+  id-token: write
 
 concurrency:
-  group: documentation-pages
+  group: github-pages
   cancel-in-progress: true
 
 jobs:
   deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload documentation site
+        uses: actions/upload-pages-artifact@v4
         with:
-          fetch-depth: 0
+          path: docs/site
 
-      - name: Prepare static site
-        shell: bash
-        run: |
-          rm -rf /tmp/free-rider-pages
-          mkdir -p /tmp/free-rider-pages
-          cp -R docs/site/. /tmp/free-rider-pages/
-          touch /tmp/free-rider-pages/.nojekyll
-
-      - name: Publish gh-pages branch
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout --orphan gh-pages-deploy
-          git rm -rf .
-          cp -R /tmp/free-rider-pages/. .
-          git add -A
-          git commit -m "Deploy documentation for ${GITHUB_SHA}"
-          git push --force origin HEAD:gh-pages
-
-      - name: Request GitHub Pages build
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          if gh api --method POST "repos/${GITHUB_REPOSITORY}/pages/builds" >/dev/null 2>&1; then
-            echo "### Documentation deployment requested" >> "$GITHUB_STEP_SUMMARY"
-            echo "https://dohyeon-kr.github.io/free-rider/" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "::warning::Enable GitHub Pages once: Settings → Pages → Deploy from a branch → gh-pages / (root)."
-            echo "### One-time Pages setup required" >> "$GITHUB_STEP_SUMMARY"
-            echo "Settings → Pages → Deploy from a branch → gh-pages / (root)" >> "$GITHUB_STEP_SUMMARY"
-          fi
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
