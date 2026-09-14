@@ -51,8 +51,7 @@ jobs:
             exit 0
           fi
 
-          RELEASE_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>/dev/null || true)
-          if [[ -n "$RELEASE_JSON" ]]; then
+          if RELEASE_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>/dev/null); then
             IS_DRAFT=$(printf '%s' "$RELEASE_JSON" | jq -r '.draft')
             if [[ "$IS_DRAFT" == "false" ]]; then
               echo "should_release=false" >> "$GITHUB_OUTPUT"
@@ -60,9 +59,16 @@ jobs:
               echo "Bump package.json version to create the next release." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
+          else
+            RELEASE_JSON=""
           fi
 
-          TAG_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null || true)
+          if TAG_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null); then
+            :
+          else
+            TAG_SHA=""
+          fi
+
           if [[ -n "$TAG_SHA" && "$TAG_SHA" != "$GITHUB_SHA" ]]; then
             echo "Tag $TAG already points to $TAG_SHA, not $GITHUB_SHA." >&2
             echo "Bump package.json version before releasing this commit." >&2
