@@ -22,7 +22,10 @@ async function saveWorkspace() {
   const button = $("saveWorkspace");
   if (!button) throw new Error("저장 버튼을 찾을 수 없습니다.");
   button.click();
-  await waitFor(() => $("status")?.textContent.includes("워크스페이스를 저장했습니다."));
+  await sleep(50);
+  await waitFor(
+    () => !document.querySelector(".workspace")?.inert && $("status")?.textContent.includes("워크스페이스를 저장했습니다."),
+  );
 }
 
 function requestHasUnsavedChanges(tab) {
@@ -99,26 +102,23 @@ function menuButton(label, handler) {
   button.type = "button";
   button.textContent = label;
   button.onclick = () => {
-    hideTabMenu();
     handler();
+    hideTabMenu();
   };
   return button;
 }
 
 const tabMenu = createTabMenu();
-let contextTab = null;
 
 function hideTabMenu() {
   tabMenu.hidden = true;
-  contextTab = null;
 }
 
 function openTabMenu(event, tab) {
   event.preventDefault();
-  contextTab = tab;
   const allTabs = () => [...document.querySelectorAll("#workTabs .work-tab")];
   tabMenu.replaceChildren(
-    menuButton("닫기", () => contextTab?.querySelector(".close")?.click()),
+    menuButton("닫기", () => tab.querySelector(".close")?.click()),
     menuButton("다른 탭 닫기", () => {
       const targets = allTabs().filter((item) => item !== tab);
       showBatchCloseDialog(targets, "다른 탭 닫기");
@@ -218,9 +218,9 @@ function appendCollectionDelete() {
 function installCollectionDelete() {
   const observer = new MutationObserver(appendCollectionDelete);
   observer.observe($("dialog"), { childList: true, subtree: true, characterData: true });
-  $("dialog").addEventListener("toggle", appendCollectionDelete);
 }
 
+while (!window.appReady) await sleep(0);
 await window.appReady;
 installTabMenu();
 installCollectionDelete();
