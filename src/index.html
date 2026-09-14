@@ -78,7 +78,8 @@
       <span id="status" role="status">준비됨</span>
       <div>
         <span id="branchStatus"></span
-        ><button id="shortcuts">⌘ Shortcuts</button><span>v0.2.1</span>
+        ><button id="updateButton" title="업데이트 확인">업데이트 확인</button
+        ><button id="shortcuts">⌘ Shortcuts</button><span id="appVersion">v0.2.1</span>
       </div>
     </footer>
     <dialog id="dialog">
@@ -95,5 +96,7 @@
     </dialog>
     <script type="module" src="ui/app.js"></script>
     <script type="module" src="ui/workspace-actions.js"></script>
+    <script type="module" src="ui/reveal-passwords.js"></script>
+    <script type="module" src="ui/update-ui.js"></script>
   </body>
 </html>
