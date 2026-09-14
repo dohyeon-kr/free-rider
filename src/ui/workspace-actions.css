@@ -1,0 +1,38 @@
+.tab-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 210px;
+  padding: 6px;
+  border: 1px solid #3b3b3b;
+  border-radius: 8px;
+  background: #242424;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+}
+
+.tab-context-menu[hidden] {
+  display: none;
+}
+
+.tab-context-menu button {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #f0f0f0;
+  text-align: left;
+  font: inherit;
+}
+
+.tab-context-menu button:hover,
+.tab-context-menu button:focus-visible {
+  background: #353535;
+  outline: none;
+}
+
+#dialogContent .actions > button.danger[data-delete-collection] {
+  margin-top: 6px;
+  border-top: 1px solid #3b3b3b;
+  color: #ff7777;
+}
