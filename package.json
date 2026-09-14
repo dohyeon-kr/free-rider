@@ -3,6 +3,7 @@
   "version": "0.2.1",
   "private": true,
   "description": "Git-friendly OpenAPI collaboration client",
+  "repository": "https://github.com/dohyeon-kr/free-rider",
   "author": "Ju Dohyeon",
   "license": "UNLICENSED",
   "main": "src/main.cjs",
@@ -36,6 +37,6 @@
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": true
     },
-    "artifactName": "Free-Rider-${version}-${arch}.${ext}"
+    "artifactName": "Free-Rider-${version}-mac-${arch}.${ext}"
   }
 }
