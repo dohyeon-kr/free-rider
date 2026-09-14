@@ -66,6 +66,7 @@ jobs:
       - name: Choose signing mode
         id: signing
         env:
+          EVENT_NAME: ${{ github.event_name }}
           CERTIFICATE: ${{ secrets.CSC_LINK }}
           CERT_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -73,7 +74,10 @@ jobs:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
-          if [[ -n "$CERTIFICATE" && -n "$CERT_PASSWORD" && -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$TEAM_ID" ]]; then
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            echo 'mode=pr-unsigned' >> "$GITHUB_OUTPUT"
+            echo '### Unsigned PR build — package smoke test only' >> "$GITHUB_STEP_SUMMARY"
+          elif [[ -n "$CERTIFICATE" && -n "$CERT_PASSWORD" && -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$TEAM_ID" ]]; then
             echo 'mode=developer-id' >> "$GITHUB_OUTPUT"
           elif [[ -n "$CERTIFICATE$CERT_PASSWORD$APPLE_ID$APPLE_PASSWORD$TEAM_ID" ]]; then
             echo 'Apple signing secrets are incomplete. Configure all five secrets.' >&2
@@ -97,19 +101,30 @@ jobs:
         if: steps.signing.outputs.mode == 'adhoc'
         run: npm run dist:mac -- --${{ matrix.arch }} -c.mac.identity=- -c.mac.notarize=false
 
-      - name: Verify application signature
+      - name: Unsigned PR build
+        if: steps.signing.outputs.mode == 'pr-unsigned'
+        run: npm run dist:mac -- --${{ matrix.arch }} -c.mac.identity=null -c.mac.notarize=false
+
+      - name: Verify packaged application
         env:
           SIGNING_MODE: ${{ steps.signing.outputs.mode }}
         shell: bash
         run: |
           APP_PATH=$(find dist -maxdepth 2 -name '*.app' -type d -print -quit)
           test -n "$APP_PATH"
-          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-          codesign --display --verbose=4 "$APP_PATH"
+
+          "$APP_PATH/Contents/MacOS/Free Rider" --smoke-test
+
+          if [[ "$SIGNING_MODE" != 'pr-unsigned' ]]; then
+            codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+            codesign --display --verbose=4 "$APP_PATH"
+          fi
+
           if [[ "$SIGNING_MODE" == 'developer-id' ]]; then
             xcrun stapler validate "$APP_PATH"
             spctl --assess --type execute --verbose=2 "$APP_PATH"
           fi
+
           shasum -a 256 dist/*.dmg dist/*.zip > "dist/SHA256SUMS-${{ matrix.arch }}.txt"
 
       - name: Publish tagged release assets
