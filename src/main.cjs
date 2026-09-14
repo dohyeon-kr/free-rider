@@ -1,5 +1,6 @@
 const {
   app,
+  autoUpdater,
   BrowserWindow,
   ipcMain,
   dialog,
@@ -23,6 +24,7 @@ const {
   assertions,
 } = require("./modules/runner/context.cjs");
 const { EnvironmentFiles } = require("./modules/env/files.cjs");
+const { createUpdateController } = require("./modules/update/index.cjs");
 const environmentFiles = new EnvironmentFiles();
 const specFiles = new Set();
 const { GitWorkspace } = require("./modules/git/index.cjs");
@@ -33,6 +35,7 @@ function shareCollection(value) {
 let win,
   controller,
   workspace,
+  updater,
   dirty = false;
 const runtime = new EnvironmentStore(),
   git = new Map();
@@ -208,6 +211,14 @@ handle("set-dirty", (value) => {
   win.setDocumentEdited(dirty);
 });
 handle("copy", (text) => clipboard.writeText(String(text)));
+handle("update-state", () => updater?.getState() || {
+  enabled: false,
+  state: "disabled",
+  currentVersion: app.getVersion(),
+  reason: "initializing",
+});
+handle("update-check", () => updater?.check());
+handle("update-install", () => updater?.install());
 function createWindow() {
   win = new BrowserWindow({
     show: !process.argv.includes("--smoke-test"),
@@ -270,14 +281,23 @@ function createWindow() {
     });
 }
 app.whenReady().then(async () => {
-  if (process.argv.includes("--smoke-test"))
+  const smokeTest = process.argv.includes("--smoke-test");
+  if (smokeTest)
     await require("./smoke.cjs").start();
   session.defaultSession.setPermissionRequestHandler((_w, _p, cb) => cb(false));
   workspace = new WorkspaceStore(
-    process.argv.includes("--smoke-test") ? require("./smoke.cjs").workspacePath : path.join(app.getPath("userData"), "workspace.enc"),
+    smokeTest ? require("./smoke.cjs").workspacePath : path.join(app.getPath("userData"), "workspace.enc"),
     safeStorage,
   );
   createWindow();
+  updater = createUpdateController({
+    app,
+    autoUpdater,
+    getWindow: () => win,
+    hasDirtyChanges: () => dirty,
+    smokeTest,
+  });
+  updater.init();
   app.on("activate", () => {
     if (!BrowserWindow.getAllWindows().length) createWindow();
   });
