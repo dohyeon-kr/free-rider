@@ -17,6 +17,7 @@ const { serverUrl } = require("./modules/sync/server.cjs");
 const {
   EnvironmentStore,
   shareableEnvironments,
+  mergeVariableScopes,
 } = require("./modules/env/index.cjs");
 const { WorkspaceStore } = require("./modules/workspace/index.cjs");
 const {
@@ -103,7 +104,7 @@ handle("send", async (request, environment, collection, scripts) => {
     const context = effectiveRequest(collection || {}, request);
     const scope = {
       ...environment,
-      values: { ...context.vars, ...environment.values, ...context.scopedVars },
+      values: mergeVariableScopes(context.vars, environment.values, context.scopedVars),
       id: (collection?.id || "default") + ":" + environment.id,
     };
     const vars = runtime.resolve(scope);
