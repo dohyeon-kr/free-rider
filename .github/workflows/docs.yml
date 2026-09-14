@@ -1,0 +1,44 @@
+name: Publish documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/site/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: documentation-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prepare static site
+        shell: bash
+        run: |
+          rm -rf /tmp/free-rider-pages
+          mkdir -p /tmp/free-rider-pages
+          cp -R docs/site/. /tmp/free-rider-pages/
+          touch /tmp/free-rider-pages/.nojekyll
+
+      - name: Publish gh-pages branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan gh-pages-deploy
+          git rm -rf .
+          cp -R /tmp/free-rider-pages/. .
+          git add -A
+          git commit -m "Deploy documentation for ${GITHUB_SHA}"
+          git push --force origin HEAD:gh-pages
