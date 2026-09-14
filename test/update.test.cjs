@@ -2,20 +2,21 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   createUpdateController,
-  feedUrlForArch,
+  feedUrlFor,
   macAppBundle,
 } = require("../src/modules/update/index.cjs");
 
-test("update feeds are architecture-specific GitHub release assets", () => {
+test("update feed targets the public Electron service per architecture", () => {
   assert.equal(
-    feedUrlForArch("arm64"),
-    "https://github.com/dohyeon-kr/free-rider/releases/latest/download/update-arm64.json",
+    feedUrlFor("darwin", "arm64", "0.2.2"),
+    "https://update.electronjs.org/dohyeon-kr/free-rider/darwin-arm64/0.2.2",
   );
   assert.equal(
-    feedUrlForArch("x64"),
-    "https://github.com/dohyeon-kr/free-rider/releases/latest/download/update-x64.json",
+    feedUrlFor("darwin", "x64", "0.2.2"),
+    "https://update.electronjs.org/dohyeon-kr/free-rider/darwin-x64/0.2.2",
   );
-  assert.throws(() => feedUrlForArch("ia32"), /Unsupported update architecture/);
+  assert.throws(() => feedUrlFor("linux", "x64", "0.2.2"), /Unsupported update platform/);
+  assert.throws(() => feedUrlFor("darwin", "ia32", "0.2.2"), /Unsupported update architecture/);
 });
 
 test("mac app bundle path is derived from packaged executable", () => {
@@ -52,7 +53,7 @@ test("development and ad-hoc builds do not enable auto update", () => {
   assert.equal(adhoc.init().reason, "developer-id-required");
 });
 
-test("signed mac build configures static JSON feed and can check", () => {
+test("signed mac build configures public feed and can check", () => {
   const events = new Map();
   const calls = [];
   const updater = {
@@ -76,8 +77,7 @@ test("signed mac build configures static JSON feed and can check", () => {
   assert.equal(initial.enabled, true);
   assert.equal(initial.state, "idle");
   assert.deepEqual(calls[0], ["feed", {
-    url: "https://github.com/dohyeon-kr/free-rider/releases/latest/download/update-arm64.json",
-    serverType: "json",
+    url: "https://update.electronjs.org/dohyeon-kr/free-rider/darwin-arm64/0.2.2",
   }]);
 
   controller.check();
