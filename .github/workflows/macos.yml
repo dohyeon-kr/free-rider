@@ -1,11 +1,15 @@
-name: macOS artifacts
+name: macOS build and release
+
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   test:
     concurrency:
@@ -20,11 +24,24 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm test
+      - name: Verify tag matches package version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $PACKAGE_VERSION" >&2
+            exit 1
+          fi
+
   build:
     concurrency:
       group: macos-build-${{ matrix.arch }}-${{ github.ref }}
       cancel-in-progress: true
     needs: test
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -41,19 +58,15 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
+
       - name: Test native Electron window and IPC
         run: npm run test:electron
         timeout-minutes: 2
-      - name: Upload native UI screenshots
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: UI-screenshots-${{ matrix.arch }}
-          path: test-results/*.png
-          if-no-files-found: warn
+
       - name: Choose signing mode
         id: signing
         env:
+          EVENT_NAME: ${{ github.event_name }}
           CERTIFICATE: ${{ secrets.CSC_LINK }}
           CERT_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -61,7 +74,10 @@ jobs:
           TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         shell: bash
         run: |
-          if [[ -n "$CERTIFICATE" && -n "$CERT_PASSWORD" && -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$TEAM_ID" ]]; then
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            echo 'mode=pr-unsigned' >> "$GITHUB_OUTPUT"
+            echo '### Unsigned PR build — package smoke test only' >> "$GITHUB_STEP_SUMMARY"
+          elif [[ -n "$CERTIFICATE" && -n "$CERT_PASSWORD" && -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$TEAM_ID" ]]; then
             echo 'mode=developer-id' >> "$GITHUB_OUTPUT"
           elif [[ -n "$CERTIFICATE$CERT_PASSWORD$APPLE_ID$APPLE_PASSWORD$TEAM_ID" ]]; then
             echo 'Apple signing secrets are incomplete. Configure all five secrets.' >&2
@@ -70,6 +86,7 @@ jobs:
             echo 'mode=adhoc' >> "$GITHUB_OUTPUT"
             echo '### Ad-hoc signed test build — not Apple notarized' >> "$GITHUB_STEP_SUMMARY"
           fi
+
       - name: Developer ID signed and notarized build
         if: steps.signing.outputs.mode == 'developer-id'
         env:
@@ -79,29 +96,53 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run dist:mac -- --${{ matrix.arch }} -c.forceCodeSigning=true -c.mac.notarize=true
+
       - name: Ad-hoc signed test build
         if: steps.signing.outputs.mode == 'adhoc'
         run: npm run dist:mac -- --${{ matrix.arch }} -c.mac.identity=- -c.mac.notarize=false
-      - name: Verify application signature
+
+      - name: Unsigned PR build
+        if: steps.signing.outputs.mode == 'pr-unsigned'
+        run: npm run dist:mac -- --${{ matrix.arch }} -c.mac.identity=null -c.mac.notarize=false
+
+      - name: Verify packaged application
         env:
           SIGNING_MODE: ${{ steps.signing.outputs.mode }}
         shell: bash
         run: |
           APP_PATH=$(find dist -maxdepth 2 -name '*.app' -type d -print -quit)
           test -n "$APP_PATH"
-          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
-          codesign --display --verbose=4 "$APP_PATH"
+
+          "$APP_PATH/Contents/MacOS/Free Rider" --smoke-test
+
+          if [[ "$SIGNING_MODE" != 'pr-unsigned' ]]; then
+            codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+            codesign --display --verbose=4 "$APP_PATH"
+          fi
+
           if [[ "$SIGNING_MODE" == 'developer-id' ]]; then
             xcrun stapler validate "$APP_PATH"
             spctl --assess --type execute --verbose=2 "$APP_PATH"
           fi
-          shasum -a 256 dist/*.dmg dist/*.zip > dist/SHA256SUMS.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Open-API-Client-macOS-${{ matrix.arch }}-${{ steps.signing.outputs.mode }}
-          path: |
-            dist/*.dmg
-            dist/*.zip
-            dist/SHA256SUMS.txt
-          if-no-files-found: error
-          retention-days: 30
+
+          shasum -a 256 dist/*.dmg dist/*.zip > "dist/SHA256SUMS-${{ matrix.arch }}.txt"
+
+      - name: Publish tagged release assets
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --title "Free Rider $GITHUB_REF_NAME" \
+              --notes "Automated macOS release for $GITHUB_REF_NAME." \
+              || gh release view "$GITHUB_REF_NAME" >/dev/null
+          fi
+
+          gh release upload "$GITHUB_REF_NAME" \
+            dist/*.dmg \
+            dist/*.zip \
+            "dist/SHA256SUMS-${{ matrix.arch }}.txt" \
+            --clobber
