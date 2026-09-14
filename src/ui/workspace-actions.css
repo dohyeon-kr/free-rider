@@ -36,3 +36,46 @@
   border-top: 1px solid #3b3b3b;
   color: #ff7777;
 }
+
+.secret-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.secret-input > input {
+  width: 100%;
+  min-width: 0;
+  padding-right: 38px !important;
+}
+
+.secret-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  opacity: 0.72;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.secret-toggle:hover,
+.secret-toggle:focus-visible {
+  opacity: 1;
+  background: transparent;
+}
+
+#updateButton[data-state="ready"] {
+  font-weight: 700;
+}
+
+#updateButton:disabled {
+  opacity: 0.65;
+}
