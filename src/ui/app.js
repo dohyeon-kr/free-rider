@@ -126,6 +126,10 @@ function askName(title, initial, fn) {
 }
 function newRequest(group = "") {
   const col = c();
+  if (!col) {
+    $("newCollection").click();
+    return;
+  }
   askName("New HTTP Request", "", (name) => {
     const r = request(group);
     r.name = name;
