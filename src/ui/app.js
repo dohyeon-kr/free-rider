@@ -379,37 +379,74 @@ function renderTabs() {
     root.append(tab);
   }
   root.append(
-    button("＋", () => newRequest(), {
+    button("＋", () => c() ? newRequest() : $("newCollection").click(), {
       class: "new-request-tab",
-      title: "새 요청",
-      "aria-label": "새 요청 탭 추가",
+      title: c() ? "새 요청" : "새 컬렉션",
+      "aria-label": c() ? "새 요청 탭 추가" : "새 컬렉션 만들기",
     }),
   );
 }
 function render() {
-  renderTree();
-  renderTabs();
-  $("activeTitle").textContent = c().title;
-  const es = $("environmentSelect");
-  es.replaceChildren(
-    ...c().environments.map((e) => el("option", { value: e.id, text: e.name })),
-  );
-  es.value = env(c()).id;
-  $("branchStatus").textContent = gitInfo.get(c().id)?.branch || "";
-  const t = active();
-  if (!t) {
-    $("view").replaceChildren(
-      el(
-        "div",
-        { class: "view-inner" },
-        el("h2", { text: "Your workspace" }),
-        button("Open collection overview", () => open("overview")),
-      ),
+    renderTree();
+    renderTabs();
+    const col = c();
+    for (const id of [
+      "collectionHome",
+      "collectionSwitch",
+      "newRequest",
+      "envButton",
+      "specButton",
+      "gitButton",
+      "runnerButton",
+      "scriptsButton",
+      "exportActiveCollection",
+    ]) {
+      const control = $(id);
+      if (control) control.disabled = !col;
+    }
+    $("activeTitle").textContent = col?.title || "컬렉션 없음";
+    const es = $("environmentSelect");
+    if (!col) {
+      es.replaceChildren();
+      es.disabled = true;
+      $("branchStatus").textContent = "";
+      state.activeCollection = null;
+      state.activeTab = null;
+      $("view").replaceChildren(
+        el(
+          "div",
+          { class: "view-inner" },
+          el("h2", { text: "컬렉션이 없습니다" }),
+          el("p", {
+            class: "muted",
+            text: "새 컬렉션을 만들거나 기존 컬렉션 파일을 가져오세요.",
+          }),
+          button("새 컬렉션 만들기", () => $("newCollection").click(), {
+            class: "primary",
+          }),
+        ),
+      );
+      return;
+    }
+    es.disabled = false;
+    es.replaceChildren(
+      ...col.environments.map((e) => el("option", { value: e.id, text: e.name })),
     );
-    return;
-  }
-  const col = c();
-  const view = {
+    es.value = env(col).id;
+    $("branchStatus").textContent = gitInfo.get(col.id)?.branch || "";
+    const t = active();
+    if (!t) {
+      $("view").replaceChildren(
+        el(
+          "div",
+          { class: "view-inner" },
+          el("h2", { text: "Your workspace" }),
+          button("Open collection overview", () => open("overview")),
+        ),
+      );
+      return;
+    }
+    const view = {
     overview: () => overview(col),
     request: () =>
       requestView(
@@ -1938,16 +1975,22 @@ resize.onkeydown = (e) => {
   }
 };
 window.appReady = (async () => {
-  const saved = await action(() => api["workspace-load"]());
-  if (saved?.collections?.length) {
-    state = saved;
-    state.collections.forEach(normalize);
-    state.selectedEnvironments ||= {};
-    state.tabs ||= [];
-    state.layout ||= "vertical";
-    collapsed = new Set(state.collapsed || []);
-  }
-  state.activeCollection ||= state.collections[0].id;
-  if (!state.activeTab) open("overview");
-  else render();
-})();
+    const saved = await action(() => api["workspace-load"]());
+    if (saved && Array.isArray(saved.collections)) {
+      state = saved;
+      state.collections.forEach(normalize);
+      state.selectedEnvironments ||= {};
+      state.tabs ||= [];
+      state.layout ||= "vertical";
+      collapsed = new Set(state.collapsed || []);
+    }
+    if (state.collections.length) {
+      state.activeCollection ||= state.collections[0].id;
+      if (!state.activeTab) open("overview");
+      else render();
+    } else {
+      state.activeCollection = null;
+      state.activeTab = null;
+      render();
+    }
+  })();

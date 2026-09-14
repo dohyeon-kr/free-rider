@@ -171,8 +171,7 @@ async function deleteCurrentCollection(title) {
   try {
     await saveWorkspace();
     const snapshot = await api["workspace-load"]();
-    if (!snapshot?.collections?.length) throw new Error("워크스페이스를 불러오지 못했습니다.");
-    if (snapshot.collections.length === 1) throw new Error("마지막 컬렉션은 삭제할 수 없습니다.");
+    if (!snapshot || !Array.isArray(snapshot.collections)) throw new Error("워크스페이스를 불러오지 못했습니다.");
 
     const cid = snapshot.activeCollection;
     const target = snapshot.collections.find((collection) => collection.id === cid);
@@ -183,7 +182,7 @@ async function deleteCurrentCollection(title) {
     delete snapshot.selectedEnvironments?.[cid];
     snapshot.collapsed = (snapshot.collapsed || []).filter((value) => value !== cid && !String(value).startsWith(cid + ":"));
 
-    if (snapshot.activeCollection === cid) snapshot.activeCollection = snapshot.collections[0].id;
+    if (snapshot.activeCollection === cid) snapshot.activeCollection = snapshot.collections[0]?.id || null;
     if (!snapshot.tabs.some((tab) => `${tab.cid}|${tab.kind}|${tab.id || ""}` === snapshot.activeTab)) snapshot.activeTab = null;
 
     await api["workspace-save"](snapshot);
