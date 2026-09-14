@@ -1,3 +1,4 @@
+import { methodPicker } from "./method-picker.js";
 import { preview, applyReview } from "../modules/sync/review.mjs";
 import { reviewView } from "./sync-review.js";
 const syncReviews = new Map();
@@ -806,15 +807,11 @@ function requestView(col, r) {
   const urlbar = el(
     "div",
     { class: "urlbar" },
-    input(r.method, (v) => {
+    methodPicker(r.method, (v) => {
       r.method = v;
       mark(col);
       renderTree();
-    }, { id: "httpMethod", list: "httpMethods", "aria-label": "HTTP 메서드",
-      spellcheck: false, autocomplete: "off", placeholder: "메서드" }),
-    el("datalist", { id: "httpMethods" },
-      ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "QUERY", "TRACE"]
-        .map(value => el("option", { value }))),
+    }),
     input(
       r.url,
       (v) => {

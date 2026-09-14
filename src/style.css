@@ -885,6 +885,12 @@ main, .work-tab.active { background:#202124; }
 .urlbar { border:0; padding:0; gap:8px; height:40px; }
 .urlbar input { border:1px solid var(--line); border-radius:5px; background:#1b1c1f; }
 .urlbar #httpMethod { flex:0 0 110px; width:110px; color:#7dcea0; font-weight:700; }
+.method-picker { position:relative; flex:0 0 110px; }
+.method-options { position:absolute; top:calc(100% + 5px); left:0; z-index:20; min-width:140px; max-height:300px; overflow:auto; padding:5px; border:1px solid var(--line); border-radius:6px; background:#25262a; box-shadow:0 8px 24px #0006; }
+.method-option { padding:7px 10px; border-radius:3px; color:#d4d4d8; cursor:pointer; font:12px/1.4 ui-monospace,Menlo,monospace; }
+.method-option.is-match { color:#aff0c5; background:#2a3930; font-weight:700; }
+.method-option.is-muted { color:#92949c; }
+.method-option:hover, .method-option[aria-selected="true"] { outline:1px solid var(--gold); outline-offset:-1px; background:#3b3c40; color:#fff; }
 .urlbar button { background:var(--gold); color:#201d17; border-radius:5px; font-weight:600; }
 .subtabs { min-height:45px; }
 .subtabs button { padding:13px 0; }
