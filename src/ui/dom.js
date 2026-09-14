@@ -27,6 +27,22 @@ export function input(value, onChange, attrs = {}) {
     ...attrs,
   });
 }
+export function secretInput(value, onChange, attrs = {}) {
+  const control = input(value, onChange, { ...attrs, type: "password" });
+  const toggle = button("👁", () => {
+    const revealing = control.type === "password";
+    control.type = revealing ? "text" : "password";
+    toggle.setAttribute("aria-pressed", String(revealing));
+    toggle.title = revealing ? "값 가리기" : "값 보기";
+    toggle.setAttribute("aria-label", revealing ? "값 가리기" : "값 보기");
+  }, {
+    class: "secret-toggle",
+    title: "값 보기",
+    "aria-label": "값 보기",
+    "aria-pressed": "false",
+  });
+  return el("div", { class: "secret-input" }, control, toggle);
+}
 export function select(value, options, onChange, attrs = {}) {
   const n = el(
     "select",
@@ -75,22 +91,22 @@ export function table(rows, columns, onChange, { secrets = false } = {}) {
               onChange(rows);
             }),
           );
-        else
+        else {
+          const attrs = {
+            placeholder: col.placeholder || col.label,
+            "aria-label": col.label,
+            spellcheck: false,
+          };
+          const onValue = (v) => {
+            row[col.key] = v;
+            onChange(rows);
+          };
           cell.append(
-            input(
-              row[col.key],
-              (v) => {
-                row[col.key] = v;
-                onChange(rows);
-              },
-              {
-                placeholder: col.placeholder || col.label,
-                "aria-label": col.label,
-                type: secrets && col.key === "value" ? "password" : "text",
-                spellcheck: false,
-              },
-            ),
+            secrets && col.key === "value"
+              ? secretInput(row[col.key], onValue, attrs)
+              : input(row[col.key], onValue, { ...attrs, type: "text" }),
           );
+        }
         tr.append(cell);
       }
       tr.append(
