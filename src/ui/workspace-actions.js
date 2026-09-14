@@ -1,6 +1,7 @@
 const api = window.client;
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const allTabs = () => [...document.querySelectorAll("#workTabs .work-tab")];
 
 function waitFor(predicate, timeout = 5000) {
   return new Promise((resolve, reject) => {
@@ -32,6 +33,16 @@ function requestHasUnsavedChanges(tab) {
   return !!tab.querySelector(".method") && !!tab.querySelector(".dirty-dot");
 }
 
+function tabIndexes(tabs) {
+  const current = allTabs();
+  return tabs.map((tab) => current.indexOf(tab)).filter((index) => index >= 0);
+}
+
+function tabsAt(indexes) {
+  const current = allTabs();
+  return indexes.map((index) => current[index]).filter(Boolean);
+}
+
 async function forceDiscardAndClose(tab) {
   if (!tab?.isConnected) return;
   tab.querySelector(".close")?.click();
@@ -53,6 +64,7 @@ async function closeTabs(tabs, { discard = false } = {}) {
 }
 
 function showBatchCloseDialog(tabs, title) {
+  const indexes = tabIndexes(tabs);
   const dirtyCount = tabs.filter(requestHasUnsavedChanges).length;
   if (!dirtyCount) return closeTabs(tabs);
 
@@ -71,7 +83,7 @@ function showBatchCloseDialog(tabs, title) {
   discard.textContent = "변경 버리고 닫기";
   discard.onclick = async () => {
     dialog.close();
-    await closeTabs(tabs, { discard: true });
+    await closeTabs(tabsAt(indexes), { discard: true });
   };
   content.append(description, hint, discard);
   $("dialogContent").replaceChildren(content);
@@ -80,7 +92,7 @@ function showBatchCloseDialog(tabs, title) {
     try {
       await saveWorkspace();
       dialog.close();
-      await closeTabs(tabs);
+      await closeTabs(tabsAt(indexes));
     } catch (error) {
       setStatus(error.message);
     }
@@ -116,7 +128,6 @@ function hideTabMenu() {
 
 function openTabMenu(event, tab) {
   event.preventDefault();
-  const allTabs = () => [...document.querySelectorAll("#workTabs .work-tab")];
   tabMenu.replaceChildren(
     menuButton("닫기", () => tab.querySelector(".close")?.click()),
     menuButton("다른 탭 닫기", () => {
