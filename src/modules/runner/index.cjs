@@ -1,16 +1,18 @@
 const {runScript}=require("../scripts/index.cjs");
 const { prepare, extract, MULTIPART_MARKER } = require("./request.cjs");
-async function fetchText(url, options = {}) {
+async function fetchText(url, options = {}, fetcher = fetch) {
   const parsed = new URL(url);
   if (!["http:", "https:"].includes(parsed.protocol))
     throw Error("HTTP/HTTPS만 지원합니다.");
-  const response = await fetch(url, {
+  const started = performance.now();
+  const response = await fetcher(url, {
     ...options,
     redirect: "error",
     signal: options.signal
       ? AbortSignal.any([options.signal, AbortSignal.timeout(30000)])
       : AbortSignal.timeout(30000),
   });
+  const headersAt = performance.now();
   const chunks = [];
   let bytes = 0;
   for await (const chunk of response.body || []) {
@@ -18,12 +20,22 @@ async function fetchText(url, options = {}) {
     if (bytes > 10 * 1024 * 1024) throw Error("응답이 10MB 제한을 넘었습니다.");
     chunks.push(chunk);
   }
+  const finishedAt = performance.now();
   return {
     status: response.status,
     statusText: response.statusText,
     headers: Object.fromEntries(response.headers),
+    setCookies:
+      typeof response.headers.getSetCookie === "function"
+        ? response.headers.getSetCookie()
+        : [],
     body: Buffer.concat(chunks).toString("utf8"),
     bytes,
+    timing: {
+      waiting: Math.round(headersAt - started),
+      download: Math.round(finishedAt - headersAt),
+      total: Math.round(finishedAt - started),
+    },
   };
 }
 function isMultipartBody(body) {
@@ -65,7 +77,7 @@ function fetchHeaders(headers, body) {
       if (key.toLowerCase() === "content-type") delete next[key];
   return next;
 }
-async function execute(request, variables, signal, scripts = {}, environment = variables, resolveFile) {
+async function execute(request, variables, signal, scripts = {}, environment = variables, resolveFile, fetcher = fetch) {
   let p = prepare(request, variables);
   const
     start = performance.now();
@@ -87,12 +99,13 @@ async function execute(request, variables, signal, scripts = {}, environment = v
       capture(before);
     } catch(error) {throw Error("전처리: "+error.message);}
   }
+  const requestHeaders = fetchHeaders(p.headers, p.body);
   const response = await fetchText(p.url, {
     method: p.method,
-    headers: fetchHeaders(p.headers, p.body),
+    headers: requestHeaders,
     body: await multipartForm(p.body, resolveFile),
     signal,
-  });
+  }, fetcher);
   let scriptError;
   let values={};
   try { values =
@@ -112,6 +125,12 @@ async function execute(request, variables, signal, scripts = {}, environment = v
   }
   return {
     ...response,
+    request: {
+      url: p.url,
+      method: p.method,
+      headers: requestHeaders,
+      body: p.body,
+    },
     scriptError,logs,deleted:[...deleted],
     elapsed: Math.round(performance.now() - start),
     variables: Object.fromEntries(Object.entries({...values,...changes}).filter(([key])=>!deleted.has(key))),
