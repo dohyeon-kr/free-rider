@@ -1,0 +1,99 @@
+.sidebar-compact {
+  display: none;
+}
+body.sidebar-collapsed aside > :not(.sidebar-compact) {
+  display: none !important;
+}
+body.sidebar-collapsed .sidebar-compact {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 6px 8px;
+}
+.sidebar-compact button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  font-size: 18px;
+  line-height: 38px;
+}
+.sidebar-compact-spacer {
+  flex: 1;
+}
+body.sidebar-collapsed .sidebar-resizer {
+  border-left-color: #2b2b2b;
+}
+body.sidebar-collapsed .sidebar-resizer:hover,
+body.sidebar-collapsed .sidebar-resizer:focus-visible {
+  background: var(--gold);
+}
+
+.multipart-editor {
+  padding: 10px 0 4px;
+}
+.multipart-hint {
+  margin: 0 0 10px;
+}
+.multipart-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.multipart-row {
+  display: grid;
+  grid-template-columns: 24px 92px minmax(120px, 0.7fr) minmax(180px, 1.3fr) 30px;
+  align-items: center;
+  gap: 7px;
+}
+.multipart-row > input[type="checkbox"] {
+  justify-self: center;
+}
+.multipart-row input,
+.multipart-row select {
+  width: 100%;
+  min-width: 0;
+}
+.multipart-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.multipart-value input {
+  flex: 1;
+}
+.multipart-file-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.multipart-file-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #aaa;
+  font-size: 11px;
+}
+.multipart-file-meta.missing {
+  color: #e38784;
+}
+.multipart-remove {
+  width: 30px;
+  padding: 5px 0;
+  border: 0;
+}
+.multipart-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+@media (max-width: 1050px) {
+  .multipart-row {
+    grid-template-columns: 24px 86px minmax(100px, 0.6fr) minmax(140px, 1fr) 30px;
+  }
+}

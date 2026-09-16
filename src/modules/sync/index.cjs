@@ -9,6 +9,7 @@ const METHODS = [
   "options",
   "trace",
 ];
+const MULTIPART_MARKER = "__freeRiderMultipart";
 function parseSpec(text) {
   const doc = YAML.parse(text, { maxAliasCount: 50 });
   if (!/^3\./.test(doc?.openapi || "") || !doc.paths)
@@ -58,6 +59,41 @@ function sample(doc, schema, depth = 0) {
   if (schema.type === "boolean") return false;
   return "";
 }
+function multipartConfig(doc, schema, seed) {
+  schema = resolve(doc, schema) || {};
+  const properties = schema.properties || {};
+  const safeSeed = String(seed).replace(/[^A-Za-z0-9:_-]/g, "_").slice(0, 120);
+  return {
+    [MULTIPART_MARKER]: 1,
+    parts: Object.entries(properties).map(([key, raw], index) => {
+      const value = resolve(doc, raw) || {};
+      const id = `${safeSeed}:${index}`;
+      if (value.type === "string" && value.format === "binary")
+        return {
+          id,
+          kind: "file",
+          key,
+          enabled: true,
+          file: {
+            name: "",
+            size: 0,
+            type: value.contentMediaType || "application/octet-stream",
+          },
+        };
+      const example = sample(doc, value);
+      return {
+        id,
+        kind: "text",
+        key,
+        value:
+          example !== null && typeof example === "object"
+            ? JSON.stringify(example)
+            : String(example ?? ""),
+        enabled: true,
+      };
+    }),
+  };
+}
 function responseContract(doc, value, seen = new Set(), depth = 0) {
   if (!value || typeof value !== "object" || depth > 30) return value;
   if (value.$ref) {
@@ -97,8 +133,16 @@ function operations(doc) {
       const mime =
         Object.keys(content).find((k) => k.includes("json")) ||
         Object.keys(content)[0];
-      let body = "";
-      if (mime) {
+      let body = "",
+        bodyType;
+      if (mime === "multipart/form-data") {
+        bodyType = "multipart";
+        body = JSON.stringify(
+          multipartConfig(doc, content[mime].schema, `${method}:${path}`),
+          null,
+          2,
+        );
+      } else if (mime) {
         headers["Content-Type"] = mime;
         body = JSON.stringify(
           content[mime].example ?? sample(doc, content[mime].schema),
@@ -116,6 +160,7 @@ function operations(doc) {
         query,
         headers,
         body,
+        ...(bodyType ? { bodyType } : {}),
         auth: (op.security ?? doc.security)?.length ? true : false,
         extract: {},
         responses: responseContract(doc, op.responses || {}),

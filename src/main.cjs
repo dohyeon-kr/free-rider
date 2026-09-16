@@ -28,6 +28,8 @@ const { EnvironmentFiles } = require("./modules/env/files.cjs");
 const { createUpdateController } = require("./modules/update/index.cjs");
 const environmentFiles = new EnvironmentFiles();
 const specFiles = new Set();
+const requestFiles = new Map();
+const MAX_REQUEST_FILE_BYTES = 25 * 1024 * 1024;
 const { GitWorkspace } = require("./modules/git/index.cjs");
 function shareCollection(value) {
   const {syncUndo, sourceFile, ...shared}=value;
@@ -73,6 +75,48 @@ async function readChosen(filters) {
   if (stat.size > 10 * 1024 * 1024) throw Error("파일은 10MB 이하여야 합니다.");
   return fs.readFile(r.filePaths[0], "utf8");
 }
+function requestFileId(value) {
+  const id = String(value || "");
+  if (!id || id.length > 240 || /[\u0000-\u001f]/.test(id))
+    throw Error("올바르지 않은 파일 슬롯입니다.");
+  return id;
+}
+function requestFileType(filename) {
+  return ({
+    ".json": "application/json",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".zip": "application/zip",
+  })[path.extname(filename).toLowerCase()] || "application/octet-stream";
+}
+async function resolveRequestFile(id, part = {}) {
+  const key = requestFileId(id);
+  const file = requestFiles.get(key);
+  if (!file)
+    throw Error(`${part.name || part.key || "업로드"} 파일을 다시 선택하세요.`);
+  let stat;
+  try {
+    stat = await fs.stat(file.path);
+  } catch {
+    requestFiles.delete(key);
+    throw Error(`${file.name} 파일을 다시 선택하세요.`);
+  }
+  if (!stat.isFile()) throw Error(`${file.name}은 파일이 아닙니다.`);
+  if (stat.size > MAX_REQUEST_FILE_BYTES)
+    throw Error("첨부 파일은 각각 25MB 이하여야 합니다.");
+  return {
+    data: await fs.readFile(file.path),
+    name: file.name,
+    type: file.type,
+  };
+}
 async function readSpecFile(filename) {
   if(!specFiles.has(filename)) throw Error("명세 파일을 먼저 연결하세요.");
   const stat=await fs.stat(filename);
@@ -108,7 +152,14 @@ handle("send", async (request, environment, collection, scripts) => {
       id: (collection?.id || "default") + ":" + environment.id,
     };
     const vars = runtime.resolve(scope);
-    const r = await execute(context.request, vars, controller.signal, scripts, environment.values);
+    const r = await execute(
+      context.request,
+      vars,
+      controller.signal,
+      scripts,
+      environment.values,
+      resolveRequestFile,
+    );
     runtime.remove(scope.id,r.deleted || []);
     runtime.capture(scope.id, r.variables);
     return {
@@ -125,6 +176,38 @@ handle("clear-tokens", () => {
   runtime.clear();
   return true;
 });
+handle("request-file-select", async (slot) => {
+  const id = requestFileId(slot);
+  const result = await chooseOpen({
+    properties: ["openFile"],
+    title: "요청에 첨부할 파일 선택",
+  });
+  if (result.canceled) return null;
+  const filename = result.filePaths[0];
+  const stat = await fs.stat(filename);
+  if (!stat.isFile()) throw Error("파일을 선택하세요.");
+  if (stat.size > MAX_REQUEST_FILE_BYTES)
+    throw Error("첨부 파일은 각각 25MB 이하여야 합니다.");
+  const file = {
+    path: filename,
+    name: path.basename(filename),
+    size: stat.size,
+    type: requestFileType(filename),
+  };
+  requestFiles.set(id, file);
+  return { name: file.name, size: file.size, type: file.type };
+});
+handle("request-file-status", (slots) => {
+  if (!Array.isArray(slots) || slots.length > 100)
+    throw Error("파일 슬롯 목록이 올바르지 않습니다.");
+  return Object.fromEntries(
+    slots.map((slot) => {
+      const id = requestFileId(slot);
+      return [id, requestFiles.has(id)];
+    }),
+  );
+});
+handle("request-file-release", (slot) => requestFiles.delete(requestFileId(slot)));
 handle("env-connect", async () => {
   const result=await chooseOpen({properties:["openFile"],title:"환경 파일 연결"});
   if(result.canceled) return null;
@@ -305,5 +388,6 @@ app.whenReady().then(async () => {
 });
 app.on("window-all-closed", () => {
   runtime.clear();
+  requestFiles.clear();
   if (process.platform !== "darwin") app.quit();
 });
