@@ -24,82 +24,63 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
 
-  release-plan:
+  release:
+    if: ${{ github.event_name != 'pull_request' }}
     needs: test
+    concurrency:
+      group: semantic-release-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
+      pull-requests: write
     outputs:
-      tag: ${{ steps.plan.outputs.tag }}
-      should_release: ${{ steps.plan.outputs.should_release }}
+      released: ${{ steps.semantic.outputs.released }}
+      tag: ${{ steps.semantic.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-      - name: Plan package.json release
-        id: plan
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Run semantic-release
+        id: semantic
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
-          EVENT_NAME: ${{ github.event_name }}
         shell: bash
         run: |
-          VERSION=$(node -p 'require("./package.json").version')
-          TAG="v${VERSION}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          rm -f .semantic-release-tag
+          npx --yes \
+            --package=semantic-release@25.0.9 \
+            --package=@semantic-release/commit-analyzer@13.0.1 \
+            --package=@semantic-release/release-notes-generator@14.1.1 \
+            --package=@semantic-release/github@12.0.9 \
+            --package=@semantic-release/git@11.0.1 \
+            --package=@semantic-release/exec@7.1.0 \
+            semantic-release
 
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            echo "### PR build — release disabled" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-
-          if RELEASE_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" 2>/dev/null); then
-            IS_DRAFT=$(printf '%s' "$RELEASE_JSON" | jq -r '.draft')
-            if [[ "$IS_DRAFT" == "false" ]]; then
-              echo "should_release=false" >> "$GITHUB_OUTPUT"
-              echo "### ${TAG} is already published" >> "$GITHUB_STEP_SUMMARY"
-              echo "Bump package.json version to create the next release." >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
+          if [[ -s .semantic-release-tag ]]; then
+            TAG=$(cat .semantic-release-tag)
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "### Semantic release $TAG prepared" >> "$GITHUB_STEP_SUMMARY"
           else
-            RELEASE_JSON=""
+            echo "released=false" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
+            echo "### No release-worthy commits" >> "$GITHUB_STEP_SUMMARY"
           fi
-
-          if TAG_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq '.object.sha' 2>/dev/null); then
-            :
-          else
-            TAG_SHA=""
-          fi
-
-          if [[ -n "$TAG_SHA" && "$TAG_SHA" != "$GITHUB_SHA" ]]; then
-            echo "Tag $TAG already points to $TAG_SHA, not $GITHUB_SHA." >&2
-            echo "Bump package.json version before releasing this commit." >&2
-            exit 1
-          fi
-
-          if [[ -z "$RELEASE_JSON" ]]; then
-            if [[ -n "$TAG_SHA" ]]; then
-              gh release create "$TAG" \
-                --verify-tag \
-                --title "Free Rider $TAG" \
-                --generate-notes \
-                --draft
-            else
-              gh release create "$TAG" \
-                --target "$GITHUB_SHA" \
-                --title "Free Rider $TAG" \
-                --generate-notes \
-                --draft
-            fi
-          fi
-
-          echo "should_release=true" >> "$GITHUB_OUTPUT"
-          echo "### Preparing $TAG" >> "$GITHUB_STEP_SUMMARY"
-          echo "The release stays draft until both macOS architectures finish successfully." >> "$GITHUB_STEP_SUMMARY"
 
   build:
+    if: ${{ always() && needs.test.result == 'success' && (github.event_name == 'pull_request' || needs.release.outputs.released == 'true') }}
+    needs: [test, release]
     concurrency:
-      group: macos-build-${{ matrix.arch }}-${{ github.ref }}
+      group: macos-build-${{ matrix.arch }}-${{ github.event_name == 'pull_request' && github.ref || needs.release.outputs.tag }}
       cancel-in-progress: true
-    needs: [test, release-plan]
     permissions:
       contents: write
     strategy:
@@ -113,6 +94,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.release.outputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -190,10 +173,10 @@ jobs:
           shasum -a 256 dist/*.dmg dist/*.zip > "dist/SHA256SUMS-${{ matrix.arch }}.txt"
 
       - name: Upload draft release assets
-        if: needs.release-plan.outputs.should_release == 'true'
+        if: ${{ github.event_name != 'pull_request' && needs.release.outputs.released == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.release-plan.outputs.tag }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
         shell: bash
         run: |
           gh release upload "$RELEASE_TAG" \
@@ -204,8 +187,8 @@ jobs:
             --clobber
 
   publish-release:
-    needs: [release-plan, build]
-    if: needs.release-plan.outputs.should_release == 'true'
+    needs: [release, build]
+    if: ${{ needs.release.outputs.released == 'true' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -213,7 +196,7 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.release-plan.outputs.tag }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
         shell: bash
         run: |
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
