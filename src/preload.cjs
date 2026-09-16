@@ -6,6 +6,11 @@ for (const name of [
   "sync-spec-file",
   "merge-spec",
   "send",
+  "network-replay",
+  "network-history",
+  "network-clear",
+  "cookie-jar",
+  "cookie-clear",
   "cancel",
   "clear-tokens",
   "request-file-select",
@@ -41,5 +46,10 @@ api.onUpdateStatus = (callback) => {
   const listener = (_event, value) => callback(value);
   ipcRenderer.on("update-status", listener);
   return () => ipcRenderer.removeListener("update-status", listener);
+};
+api.onNetworkEntry = (callback) => {
+  const listener = (_event, value) => callback(value);
+  ipcRenderer.on("network-entry", listener);
+  return () => ipcRenderer.removeListener("network-entry", listener);
 };
 contextBridge.exposeInMainWorld("client", api);
