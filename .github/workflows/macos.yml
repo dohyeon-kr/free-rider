@@ -200,6 +200,7 @@ jobs:
             dist/*.dmg \
             dist/*.zip \
             "dist/SHA256SUMS-${{ matrix.arch }}.txt" \
+            --repo "$GITHUB_REPOSITORY" \
             --clobber
 
   publish-release:
@@ -215,5 +216,5 @@ jobs:
           RELEASE_TAG: ${{ needs.release-plan.outputs.tag }}
         shell: bash
         run: |
-          gh release edit "$RELEASE_TAG" --draft=false --latest
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
           echo "### Published $RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
