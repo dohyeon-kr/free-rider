@@ -1,5 +1,5 @@
 const {runScript}=require("../scripts/index.cjs");
-const { prepare, extract } = require("./request.cjs");
+const { prepare, extract, MULTIPART_MARKER } = require("./request.cjs");
 async function fetchText(url, options = {}) {
   const parsed = new URL(url);
   if (!["http:", "https:"].includes(parsed.protocol))
@@ -26,7 +26,46 @@ async function fetchText(url, options = {}) {
     bytes,
   };
 }
-async function execute(request, variables, signal, scripts = {}, environment = variables) {
+function isMultipartBody(body) {
+  return body?.[MULTIPART_MARKER] === 1 && Array.isArray(body.parts);
+}
+async function multipartForm(body, resolveFile) {
+  if (!isMultipartBody(body)) return body;
+  const form = new FormData();
+  let totalBytes = 0;
+  for (const part of body.parts) {
+    if (part.kind !== "file") {
+      form.append(part.key, String(part.value ?? ""));
+      continue;
+    }
+    if (typeof resolveFile !== "function")
+      throw Error(`${part.name || part.key} 파일을 다시 선택하세요.`);
+    const file = await resolveFile(part.id, part);
+    if (!file?.data)
+      throw Error(`${part.name || part.key} 파일을 다시 선택하세요.`);
+    const data =
+      file.data instanceof Uint8Array ? file.data : new Uint8Array(file.data);
+    totalBytes += data.byteLength;
+    if (totalBytes > 50 * 1024 * 1024)
+      throw Error("한 요청에 첨부할 수 있는 파일은 합계 50MB 이하여야 합니다.");
+    form.append(
+      part.key,
+      new Blob([data], {
+        type: file.type || part.type || "application/octet-stream",
+      }),
+      file.name || part.name || "file",
+    );
+  }
+  return form;
+}
+function fetchHeaders(headers, body) {
+  const next = { ...(headers || {}) };
+  if (isMultipartBody(body))
+    for (const key of Object.keys(next))
+      if (key.toLowerCase() === "content-type") delete next[key];
+  return next;
+}
+async function execute(request, variables, signal, scripts = {}, environment = variables, resolveFile) {
   let p = prepare(request, variables);
   const
     start = performance.now();
@@ -50,8 +89,8 @@ async function execute(request, variables, signal, scripts = {}, environment = v
   }
   const response = await fetchText(p.url, {
     method: p.method,
-    headers: p.headers,
-    body: p.body,
+    headers: fetchHeaders(p.headers, p.body),
+    body: await multipartForm(p.body, resolveFile),
     signal,
   });
   let scriptError;
@@ -78,4 +117,4 @@ async function execute(request, variables, signal, scripts = {}, environment = v
     variables: Object.fromEntries(Object.entries({...values,...changes}).filter(([key])=>!deleted.has(key))),
   };
 }
-module.exports = { fetchText, execute };
+module.exports = { fetchText, execute, multipartForm, isMultipartBody };

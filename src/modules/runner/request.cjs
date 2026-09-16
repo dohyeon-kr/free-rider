@@ -1,4 +1,5 @@
 const { rows } = require("./context.cjs");
+const MULTIPART_MARKER = "__freeRiderMultipart";
 
 function interpolate(value, variables) {
   return String(value).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_, key) => {
@@ -6,6 +7,42 @@ function interpolate(value, variables) {
       throw Error(`환경변수 ${key}를 설정하세요.`);
     return String(variables[key]);
   });
+}
+function prepareMultipart(body, variables) {
+  let config;
+  try {
+    config = JSON.parse(body || "{}");
+  } catch {
+    throw Error("multipart 본문 설정을 읽을 수 없습니다.");
+  }
+  if (config?.[MULTIPART_MARKER] !== 1 || !Array.isArray(config.parts))
+    throw Error("multipart 본문 설정이 올바르지 않습니다.");
+  return {
+    [MULTIPART_MARKER]: 1,
+    parts: config.parts
+      .filter((part) => part?.enabled !== false)
+      .map((part) => {
+        const key = interpolate(part.key ?? "", variables).trim();
+        if (!key) throw Error("multipart 필드 이름을 입력하세요.");
+        if (part.kind === "file") {
+          if (!part.id) throw Error(`${key} 파일 슬롯이 올바르지 않습니다.`);
+          return {
+            kind: "file",
+            key,
+            id: String(part.id),
+            name: String(part.file?.name || part.name || "file"),
+            type: String(
+              part.file?.type || part.type || "application/octet-stream",
+            ),
+          };
+        }
+        return {
+          kind: "text",
+          key,
+          value: interpolate(part.value ?? "", variables),
+        };
+      }),
+  };
 }
 function prepare(request, variables) {
   const resolvedUrl = interpolate(request.url, variables);
@@ -54,7 +91,9 @@ function prepare(request, variables) {
     headers,
     body: ["GET", "HEAD"].includes(method)
       ? undefined
-      : interpolate(request.body || "", variables),
+      : request.bodyType === "multipart"
+        ? prepareMultipart(request.body, variables)
+        : interpolate(request.body || "", variables),
   };
 }
 function extract(body, mapping) {
@@ -72,4 +111,4 @@ function extract(body, mapping) {
   }
   return result;
 }
-module.exports = { interpolate, prepare, extract };
+module.exports = { interpolate, prepare, prepareMultipart, extract, MULTIPART_MARKER };
