@@ -10,6 +10,7 @@ const {
 } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const { randomUUID } = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const { parseSpec, operations, synchronize, parseEnv } = require("./core.cjs");
 const { execute, fetchText } = require("./network.cjs");
@@ -30,6 +31,8 @@ const environmentFiles = new EnvironmentFiles();
 const specFiles = new Set();
 const requestFiles = new Map();
 const MAX_REQUEST_FILE_BYTES = 25 * 1024 * 1024;
+const NETWORK_HISTORY_LIMIT = 200;
+const NETWORK_BODY_LIMIT = 512 * 1024;
 const { GitWorkspace } = require("./modules/git/index.cjs");
 function shareCollection(value) {
   const {syncUndo, sourceFile, ...shared}=value;
@@ -38,10 +41,14 @@ function shareCollection(value) {
 let win,
   controller,
   workspace,
+  networkStore,
+  apiSession,
   updater,
-  dirty = false;
+  dirty = false,
+  networkEntries = [];
 const runtime = new EnvironmentStore(),
-  git = new Map();
+  git = new Map(),
+  replayRequests = new Map();
 function gitFor(id) {
   if (!git.has(id)) git.set(id, new GitWorkspace());
   return git.get(id);
@@ -117,6 +124,141 @@ async function resolveRequestFile(id, part = {}) {
     type: file.type,
   };
 }
+function bodyForHistory(body) {
+  if (body === undefined || body === null) return "";
+  if (typeof body === "string")
+    return body.length > NETWORK_BODY_LIMIT
+      ? body.slice(0, NETWORK_BODY_LIMIT)
+      : body;
+  return body;
+}
+function responseForHistory(result) {
+  const body = String(result.body || "");
+  return {
+    status: result.status || 0,
+    statusText: result.statusText || "",
+    headers: result.headers || {},
+    body:
+      body.length > NETWORK_BODY_LIMIT
+        ? body.slice(0, NETWORK_BODY_LIMIT)
+        : body,
+    bodyTruncated: body.length > NETWORK_BODY_LIMIT,
+    bytes: result.bytes || 0,
+    elapsed: result.elapsed || 0,
+    error: result.error || "",
+  };
+}
+function persistNetworkHistory() {
+  if (!networkStore) return;
+  networkStore.save({ entries: networkEntries }).catch((error) =>
+    console.error("network history save failed", error),
+  );
+}
+function publishNetworkEntry(entry, replay = null) {
+  networkEntries.unshift(entry);
+  networkEntries = networkEntries.slice(0, NETWORK_HISTORY_LIMIT);
+  if (replay) replayRequests.set(entry.id, replay);
+  const keep = new Set(networkEntries.map((item) => item.id));
+  for (const id of replayRequests.keys())
+    if (!keep.has(id)) replayRequests.delete(id);
+  persistNetworkHistory();
+  if (win && !win.isDestroyed()) win.webContents.send("network-entry", entry);
+}
+async function runRequest(request, environment, collection, scripts) {
+  if (controller) throw Error("요청이 실행 중입니다.");
+  controller = new AbortController();
+  const startedAt = Date.now();
+  let requestCookies = [];
+  let preparedRequest = {
+    url: request?.url || "",
+    method: request?.method || "GET",
+    headers: {},
+    body: request?.body || "",
+  };
+  try {
+    const context = effectiveRequest(collection || {}, request);
+    const scope = {
+      ...environment,
+      values: mergeVariableScopes(context.vars, environment.values, context.scopedVars),
+      id: (collection?.id || "default") + ":" + environment.id,
+    };
+    const vars = runtime.resolve(scope);
+    const fetcher = async (url, options) => {
+      requestCookies = await apiSession.cookies.get({ url });
+      return apiSession.fetch(url, { ...options, credentials: "include" });
+    };
+    const r = await execute(
+      context.request,
+      vars,
+      controller.signal,
+      scripts,
+      environment.values,
+      resolveRequestFile,
+      fetcher,
+    );
+    preparedRequest = r.request || preparedRequest;
+    runtime.remove(scope.id,r.deleted || []);
+    runtime.capture(scope.id, r.variables);
+    const result = {
+      ...r,
+      variables: Object.keys(r.variables),
+      tests: assertions(r, request.assertions),
+    };
+    const currentCookies = await apiSession.cookies.get({ url: preparedRequest.url });
+    const entry = {
+      id: randomUUID(),
+      at: startedAt,
+      collectionId: collection?.id || "",
+      collectionTitle: collection?.title || "",
+      requestId: request?.id || "",
+      name: request?.name || preparedRequest.url,
+      replayable: true,
+      request: {
+        ...preparedRequest,
+        body: bodyForHistory(preparedRequest.body),
+      },
+      response: responseForHistory(result),
+      cookies: {
+        request: requestCookies,
+        current: currentCookies,
+        setCookie: result.setCookies || [],
+      },
+      timing: result.timing || { waiting: 0, download: 0, total: result.elapsed || 0 },
+    };
+    publishNetworkEntry(entry, structuredClone({ request, environment, collection, scripts }));
+    return result;
+  } catch (error) {
+    const entry = {
+      id: randomUUID(),
+      at: startedAt,
+      collectionId: collection?.id || "",
+      collectionTitle: collection?.title || "",
+      requestId: request?.id || "",
+      name: request?.name || preparedRequest.url || "Request",
+      replayable: true,
+      request: {
+        ...preparedRequest,
+        body: bodyForHistory(preparedRequest.body),
+      },
+      response: {
+        status: 0,
+        statusText: "",
+        headers: {},
+        body: "",
+        bodyTruncated: false,
+        bytes: 0,
+        elapsed: Date.now() - startedAt,
+        error: error.message,
+      },
+      cookies: { request: requestCookies, current: [], setCookie: [] },
+      timing: { waiting: 0, download: 0, total: Date.now() - startedAt },
+    };
+    publishNetworkEntry(entry, structuredClone({ request, environment, collection, scripts }));
+    throw error;
+  } finally {
+    controller = null;
+  }
+}
 async function readSpecFile(filename) {
   if(!specFiles.has(filename)) throw Error("명세 파일을 먼저 연결하세요.");
   const stat=await fs.stat(filename);
@@ -141,35 +283,32 @@ handle("sync-spec", async (source, old) => {
   };
 });
 handle("merge-spec", async (old, generated) => synchronize(old, generated));
-handle("send", async (request, environment, collection, scripts) => {
-  if (controller) throw Error("요청이 실행 중입니다.");
-  controller = new AbortController();
-  try {
-    const context = effectiveRequest(collection || {}, request);
-    const scope = {
-      ...environment,
-      values: mergeVariableScopes(context.vars, environment.values, context.scopedVars),
-      id: (collection?.id || "default") + ":" + environment.id,
-    };
-    const vars = runtime.resolve(scope);
-    const r = await execute(
-      context.request,
-      vars,
-      controller.signal,
-      scripts,
-      environment.values,
-      resolveRequestFile,
-    );
-    runtime.remove(scope.id,r.deleted || []);
-    runtime.capture(scope.id, r.variables);
-    return {
-      ...r,
-      variables: Object.keys(r.variables),
-      tests: assertions(r, request.assertions),
-    };
-  } finally {
-    controller = null;
-  }
+handle("send", (request, environment, collection, scripts) =>
+  runRequest(request, environment, collection, scripts),
+);
+handle("network-replay", async (id) => {
+  const replay = replayRequests.get(String(id));
+  if (!replay) throw Error("이 기록은 앱을 다시 연 뒤에는 재실행할 수 없습니다.");
+  return runRequest(
+    structuredClone(replay.request),
+    structuredClone(replay.environment),
+    structuredClone(replay.collection),
+    structuredClone(replay.scripts),
+  );
+});
+handle("network-history", () => networkEntries);
+handle("network-clear", async () => {
+  networkEntries = [];
+  replayRequests.clear();
+  if (networkStore) await networkStore.save({ entries: [] });
+  return true;
+});
+handle("cookie-jar", (url) =>
+  apiSession.cookies.get(url ? { url: String(url) } : {}),
+);
+handle("cookie-clear", async () => {
+  await apiSession.clearStorageData({ dataTypes: ["cookies"] });
+  return true;
 });
 handle("cancel", () => controller?.abort());
 handle("clear-tokens", () => {
@@ -369,10 +508,26 @@ app.whenReady().then(async () => {
   if (smokeTest)
     await require("./smoke.cjs").start();
   session.defaultSession.setPermissionRequestHandler((_w, _p, cb) => cb(false));
+  apiSession = session.fromPartition(smokeTest ? "free-rider-api-smoke" : "persist:free-rider-api");
   workspace = new WorkspaceStore(
     smokeTest ? require("./smoke.cjs").workspacePath : path.join(app.getPath("userData"), "workspace.enc"),
     safeStorage,
   );
+  networkStore = new WorkspaceStore(
+    smokeTest
+      ? require("./smoke.cjs").workspacePath + ".network"
+      : path.join(app.getPath("userData"), "network-history.enc"),
+    safeStorage,
+  );
+  try {
+    const stored = await networkStore.load();
+    networkEntries = (stored?.entries || [])
+      .slice(0, NETWORK_HISTORY_LIMIT)
+      .map((entry) => ({ ...entry, replayable: false }));
+  } catch (error) {
+    console.error("network history load failed", error);
+    networkEntries = [];
+  }
   createWindow();
   updater = createUpdateController({
     app,
@@ -389,5 +544,6 @@ app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
   runtime.clear();
   requestFiles.clear();
+  replayRequests.clear();
   if (process.platform !== "darwin") app.quit();
 });
