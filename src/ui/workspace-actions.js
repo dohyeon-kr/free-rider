@@ -1,3 +1,5 @@
+import { closeOrder, getTabTargetIndexes } from "./tab-actions.mjs";
+
 const api = window.client;
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -52,8 +54,10 @@ async function forceDiscardAndClose(tab) {
 }
 
 async function closeTabs(tabs, { discard = false } = {}) {
-  for (const tab of tabs) {
-    if (!tab?.isConnected) continue;
+  const indexes = closeOrder(tabIndexes(tabs));
+  for (const index of indexes) {
+    const tab = allTabs()[index];
+    if (!tab) continue;
     if (discard && requestHasUnsavedChanges(tab)) await forceDiscardAndClose(tab);
     else {
       tab.querySelector(".close")?.click();
@@ -109,10 +113,11 @@ function createTabMenu() {
   return menu;
 }
 
-function menuButton(label, handler) {
+function menuButton(label, handler, { disabled = false } = {}) {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = label;
+  button.disabled = disabled;
   button.onclick = () => {
     handler();
     hideTabMenu();
@@ -128,15 +133,27 @@ function hideTabMenu() {
 
 function openTabMenu(event, tab) {
   event.preventDefault();
+  const tabs = allTabs();
+  const selectedIndex = tabs.indexOf(tab);
+  const targets = getTabTargetIndexes(tabs.length, selectedIndex);
+  const others = tabsAt(targets.others);
+  const left = tabsAt(targets.left);
+  const right = tabsAt(targets.right);
+
   tabMenu.replaceChildren(
     menuButton("닫기", () => tab.querySelector(".close")?.click()),
-    menuButton("다른 탭 닫기", () => {
-      const targets = allTabs().filter((item) => item !== tab);
-      showBatchCloseDialog(targets, "다른 탭 닫기");
+    menuButton("다른 탭 닫기", () => showBatchCloseDialog(others, "다른 탭 닫기"), {
+      disabled: !others.length,
+    }),
+    menuButton("왼쪽 탭 닫기", () => showBatchCloseDialog(left, "왼쪽 탭 닫기"), {
+      disabled: !left.length,
+    }),
+    menuButton("오른쪽 탭 닫기", () => showBatchCloseDialog(right, "오른쪽 탭 닫기"), {
+      disabled: !right.length,
     }),
     menuButton("저장된 탭 닫기", () => {
-      const targets = allTabs().filter((item) => !requestHasUnsavedChanges(item));
-      closeTabs(targets);
+      const saved = allTabs().filter((item) => !requestHasUnsavedChanges(item));
+      closeTabs(saved);
     }),
     menuButton("모든 탭 닫기", () => showBatchCloseDialog(allTabs(), "모든 탭 닫기")),
   );
