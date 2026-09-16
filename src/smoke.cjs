@@ -159,6 +159,16 @@ async function run(win) {
   );
   if (!statuses.every((s) => s.startsWith("200")))
     throw Error("Login chain failed: " + statuses);
+  if (!(await js(`document.querySelector('#networkButton')?.textContent.includes('2')`)))
+    throw Error("Network history did not receive runner requests");
+  await js(`document.querySelector('#networkButton').click()`);
+  if (!(await js(`!document.querySelector('#networkDrawer').hidden && document.querySelectorAll('#networkDrawer .network-entry').length >= 2`)))
+    throw Error("Network panel did not render request history");
+  await js(`[...document.querySelectorAll('#networkDrawer .network-detail-tabs button')].find(b=>b.textContent==='Cookies').click()`);
+  if (!(await js(`document.querySelector('#networkDrawer').textContent.includes('smoke_session')`)))
+    throw Error("Network panel did not expose Cookie Jar state");
+  await screenshot("network");
+  await js(`document.querySelector('#networkDrawer .network-close').click()`);
   await js(
     `[...document.querySelectorAll('#tree .tree-label')].find(e=>e.textContent.includes('Current user')).click()`,
   );
@@ -274,7 +284,7 @@ async function run(win) {
   await screenshot("git");
   server.close();
   await fs.rm(path.dirname(workspacePath),{recursive:true,force:true});
-  return "Native tabs, runner login chain with Cookie Jar, inherited auth, assertions, environments and IPC passed";
+  return "Native tabs, Network panel, runner login chain with Cookie Jar, inherited auth, assertions, environments and IPC passed";
   async function screenshot(name) {
     await js(
       "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
