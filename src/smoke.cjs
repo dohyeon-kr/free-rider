@@ -18,10 +18,15 @@ async function start() {
       openapi:"3.0.3",info:{title:"Fixture",version:"1"},
       servers:[{url:"/api"}],paths:{"/review-test":{get:{summary:"Review fixture",responses:{"200":{description:"OK"}}}}}
     }));
-    if (req.url === "/login") res.end('{"token":"test-token"}');
+    if (req.url === "/login") {
+      res.setHeader("Set-Cookie", "smoke_session=active; Path=/; HttpOnly; SameSite=Lax");
+      res.end('{"token":"test-token"}');
+    }
     else {
       res.statusCode =
-        req.headers.authorization === "Bearer test-token" && req.headers["x-global"] === "active" ? 200 : 401;
+        req.headers.authorization === "Bearer test-token" &&
+        req.headers["x-global"] === "active" &&
+        String(req.headers.cookie || "").includes("smoke_session=active") ? 200 : 401;
       res.end(
         JSON.stringify({
           id: 1,
@@ -269,7 +274,7 @@ async function run(win) {
   await screenshot("git");
   server.close();
   await fs.rm(path.dirname(workspacePath),{recursive:true,force:true});
-  return "Native tabs, runner login chain, inherited auth, assertions, environments and IPC passed";
+  return "Native tabs, runner login chain with Cookie Jar, inherited auth, assertions, environments and IPC passed";
   async function screenshot(name) {
     await js(
       "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
