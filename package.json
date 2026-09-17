@@ -6,7 +6,7 @@
   "repository": "https://github.com/dohyeon-kr/free-rider",
   "author": "Ju Dohyeon",
   "license": "UNLICENSED",
-  "main": "src/main.cjs",
+  "main": "src/entry.cjs",
   "scripts": {
     "start": "electron .",
     "test": "node --test",
