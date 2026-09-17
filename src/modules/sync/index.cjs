@@ -196,6 +196,12 @@ function operations(doc) {
         );
       }
       const requestBody = requestBodyContract(doc, op.requestBody, mime);
+      // Operation security overrides the root; any empty requirement allows
+      // anonymous access, even alongside authenticated alternatives.
+      const security = op.security ?? doc.security ?? [];
+      const auth =
+        security.length > 0 &&
+        !security.some((requirement) => Object.keys(requirement).length === 0);
       out.push({
         id: method.toUpperCase() + " " + path,
         name: op.summary || op.operationId || path,
@@ -207,7 +213,8 @@ function operations(doc) {
         headers,
         body,
         ...(bodyType ? { bodyType } : {}),
-        auth: (op.security ?? doc.security)?.length ? true : false,
+        auth,
+        ...(auth ? {} : { authConfig: { type: "none" } }),
         extract: {},
         openapi: {
           source: "openapi",
