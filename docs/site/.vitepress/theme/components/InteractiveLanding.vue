@@ -98,6 +98,7 @@ onBeforeUnmount(() => {
 .interactive-landing :deep(.product-stage > [hidden]),
 .interactive-landing :deep(.mcp-demo .terminal > div > [hidden]) { display: none !important; }
 .interactive-landing :deep(.product-stage:has(.renderer-demo)) { perspective: none; }
+.interactive-landing :deep(.hero > .orb) { display: none !important; }
 
 /* Embossed dot field + a cursor-local light, inspired by machined/perforated surfaces. */
 .interactive-landing :deep(.hero) {
