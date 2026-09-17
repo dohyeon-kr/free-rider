@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitepress'
 import { BRAND_ICON_PATH, prepareBrandAssets } from './brand.mjs'
+import { outlineLifecycleGuard } from './outline-lifecycle.mjs'
 
 const base = '/free-rider/'
 prepareBrandAssets()
@@ -10,6 +11,7 @@ export default defineConfig({
   lastUpdated: true,
   appearance: 'dark',
   cleanUrls: true,
+  vite: { plugins: [outlineLifecycleGuard()] },
   head: [
     ['link', { rel: 'icon', type: 'image/png', href: `${base}${BRAND_ICON_PATH.slice(1)}` }],
     ['meta', { name: 'theme-color', content: '#0d0f10' }],
