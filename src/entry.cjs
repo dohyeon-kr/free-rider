@@ -13,6 +13,7 @@ const {
   loadScriptReference,
   SCRIPT_REFERENCE_PAGE,
 } = require("./modules/docs-reference.cjs");
+const { createRealtimeManager } = require("./modules/realtime/index.cjs");
 
 const capturedHandlers = new Map();
 const registerHandle = ipcMain.handle.bind(ipcMain);
@@ -160,6 +161,33 @@ registerHandle("docs-reference-open", async (event) => {
   return true;
 });
 
+const realtime = createRealtimeManager({
+  emit(value) {
+    const win = BrowserWindow.getAllWindows()[0];
+    if (win && !win.isDestroyed()) win.webContents.send("realtime-event", value);
+  },
+  fetcher(url, options) {
+    return appWindow().webContents.session.fetch(url, {
+      ...options,
+      credentials: "include",
+    });
+  },
+});
+
+registerHandle("realtime-open", async (event, config) => {
+  validateRenderer(event);
+  return realtime.open(config);
+});
+registerHandle("realtime-send", async (event, id, data) => {
+  validateRenderer(event);
+  return realtime.send(id, data);
+});
+registerHandle("realtime-close", async (event, id) => {
+  validateRenderer(event);
+  return realtime.close(id);
+});
+
 app.on("before-quit", () => {
+  realtime.closeAll();
   mcp.stop().catch((error) => console.error("MCP server shutdown failed", error));
 });
