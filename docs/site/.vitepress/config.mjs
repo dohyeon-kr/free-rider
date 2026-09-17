@@ -7,15 +7,15 @@ export default defineConfig({
   appearance: 'dark',
   cleanUrls: true,
   head: [
-    ['meta', { name: 'theme-color', content: '#151515' }],
-    ['meta', { property: 'og:title', content: 'Free Rider Docs' }],
-    ['meta', { property: 'og:description', content: 'Local-first, Git-friendly API client documentation' }]
+    ['meta', { name: 'theme-color', content: '#0d0f10' }],
+    ['meta', { property: 'og:title', content: 'Free Rider — All-free Open Source API Client' }],
+    ['meta', { property: 'og:description', content: 'All-free, open-source, local-first API client for requests, OpenAPI, Git and MCP.' }]
   ],
   locales: {
     root: {
       label: '한국어',
       lang: 'ko-KR',
-      description: '서버와 계정 없이 사용하는 로컬 우선 API 클라이언트',
+      description: '모든 기능을 무료로 공개하는 오픈소스 로컬 우선 API 클라이언트',
       themeConfig: {
         nav: [
           { text: '사용 방법', link: '/guide/getting-started' },
@@ -77,7 +77,7 @@ export default defineConfig({
       label: 'English',
       lang: 'en-US',
       link: '/en/',
-      description: 'A local-first API client that works without a server or account',
+      description: 'An all-free, open-source, local-first API client that works without a server or account',
       themeConfig: {
         nav: [
           { text: 'Guide', link: '/en/guide/getting-started' },
@@ -135,7 +135,7 @@ export default defineConfig({
     ],
     outline: [2, 3],
     footer: {
-      message: 'Local-first. Git-friendly. No account required.',
+      message: 'All free. Open source. Local-first.',
       copyright: 'Free Rider'
     }
   }
