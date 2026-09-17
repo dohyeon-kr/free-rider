@@ -24,6 +24,8 @@ for (const name of [
   "open-collection",
   "save-collection",
   "git-open",
+  "git-create-parent",
+  "git-create",
   "git-status",
   "git-save",
   "git-diff",
