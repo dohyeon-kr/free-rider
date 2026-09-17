@@ -1,0 +1,50 @@
+.realtime-dialog {
+  width: min(920px, calc(100vw - 48px));
+  max-width: 920px;
+  height: min(760px, calc(100vh - 56px));
+  padding: 0;
+  border: 1px solid var(--border, #d9d9d9);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  color: var(--text, #1f2328);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 22%);
+}
+.realtime-dialog::backdrop { background: rgb(18 20 24 / 42%); backdrop-filter: blur(2px); }
+.realtime-shell { display: grid; grid-template-rows: auto auto auto minmax(180px, 1fr) auto; height: 100%; }
+.realtime-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 22px 24px 16px; border-bottom: 1px solid var(--border, #e5e7eb); }
+.realtime-heading h2 { margin: 2px 0 4px; font-size: 20px; }
+.realtime-heading p { margin: 0; color: var(--muted, #667085); font-size: 13px; }
+.realtime-heading .eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .14em; color: var(--muted, #667085); }
+.realtime-close { font-size: 22px; line-height: 1; }
+.realtime-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; padding: 18px 24px; border-bottom: 1px solid var(--border, #e5e7eb); }
+.realtime-kind, .realtime-url-field, .realtime-connect-row, .realtime-note { grid-column: 1 / -1; }
+.realtime-kind { display: inline-flex; width: max-content; padding: 3px; border: 1px solid var(--border, #d9d9d9); border-radius: 9px; background: var(--subtle, #f6f7f8); }
+.realtime-kind button { min-width: 108px; border: 0; background: transparent; }
+.realtime-kind button.active { background: var(--surface, #fff); box-shadow: 0 1px 4px rgb(0 0 0 / 10%); font-weight: 700; }
+.realtime-field { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
+.realtime-field small { margin-left: 6px; color: var(--muted, #667085); font-weight: 500; }
+.realtime-field input, .realtime-field textarea, .realtime-composer textarea { width: 100%; box-sizing: border-box; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.realtime-url-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.realtime-note { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--subtle, #f6f7f8); color: var(--muted, #667085); font-size: 12px; line-height: 1.5; }
+.realtime-connect-row { display: flex; align-items: center; gap: 10px; }
+.realtime-connect-row .primary { margin-left: auto; }
+.realtime-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.realtime-state { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border-radius: 999px; background: var(--subtle, #f2f4f7); color: var(--muted, #667085); font-size: 11px; font-weight: 700; }
+.realtime-state.ok { background: color-mix(in srgb, #18a957 12%, transparent); color: #168445; }
+.realtime-state.pending { background: color-mix(in srgb, #f5a623 14%, transparent); color: #99630b; }
+.realtime-state.error { background: color-mix(in srgb, #d92d20 12%, transparent); color: #b42318; }
+.realtime-stream-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 24px; border-bottom: 1px solid var(--border, #e5e7eb); font-size: 12px; }
+.realtime-log { min-height: 0; overflow: auto; list-style: none; margin: 0; padding: 8px 24px 18px; }
+.realtime-event { padding: 10px 0; border-bottom: 1px solid var(--border, #eceef0); }
+.realtime-event-meta { display: flex; align-items: center; gap: 8px; color: var(--muted, #667085); font-size: 10px; }
+.realtime-event-type { padding: 2px 6px; border-radius: 999px; background: var(--subtle, #f2f4f7); color: inherit; font-weight: 800; text-transform: uppercase; }
+.realtime-event.type-message .realtime-event-type { color: #175cd3; background: color-mix(in srgb, #2e90fa 12%, transparent); }
+.realtime-event.type-error .realtime-event-type { color: #b42318; background: color-mix(in srgb, #d92d20 12%, transparent); }
+.realtime-event.type-sent .realtime-event-type { color: #6941c6; background: color-mix(in srgb, #7f56d9 12%, transparent); }
+.realtime-event pre { margin: 7px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.realtime-composer { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px; padding: 14px 24px 20px; border-top: 1px solid var(--border, #e5e7eb); }
+@media (max-width: 700px) {
+  .realtime-dialog { width: calc(100vw - 20px); height: calc(100vh - 20px); }
+  .realtime-controls { grid-template-columns: 1fr; }
+  .realtime-field { grid-column: 1 / -1; }
+}
