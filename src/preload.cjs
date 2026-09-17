@@ -36,6 +36,8 @@ for (const name of [
   "mcp-toggle",
   "announcement-list",
   "announcement-open",
+  "docs-reference-get",
+  "docs-reference-open",
   "update-state",
   "update-check",
   "update-install",

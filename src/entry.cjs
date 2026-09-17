@@ -9,6 +9,10 @@ const {
   loadAnnouncements,
   isAllowedAnnouncementUrl,
 } = require("./modules/announcements.cjs");
+const {
+  loadScriptReference,
+  SCRIPT_REFERENCE_PAGE,
+} = require("./modules/docs-reference.cjs");
 
 const capturedHandlers = new Map();
 const registerHandle = ipcMain.handle.bind(ipcMain);
@@ -105,6 +109,27 @@ registerHandle("announcement-open", async (event, url) => {
   validateRenderer(event);
   if (!isAllowedAnnouncementUrl(url)) throw Error("허용되지 않은 공지 링크입니다.");
   await shell.openExternal(String(url));
+  return true;
+});
+
+const DOC_REFERENCE_CACHE_MS = 5 * 60 * 1000;
+let docReferenceCache = { at: 0, value: null };
+
+registerHandle("docs-reference-get", async (event) => {
+  validateRenderer(event);
+  if (
+    docReferenceCache.value &&
+    Date.now() - docReferenceCache.at < DOC_REFERENCE_CACHE_MS
+  )
+    return docReferenceCache.value;
+  const value = await loadScriptReference((url, options) => net.fetch(url, options));
+  docReferenceCache = { at: Date.now(), value };
+  return value;
+});
+
+registerHandle("docs-reference-open", async (event) => {
+  validateRenderer(event);
+  await shell.openExternal(SCRIPT_REFERENCE_PAGE);
   return true;
 });
 
