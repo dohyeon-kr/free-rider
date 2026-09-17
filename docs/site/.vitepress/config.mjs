@@ -19,7 +19,7 @@ export default defineConfig({
     ['meta', { property: 'og:url', content: 'https://dohyeon-kr.github.io/free-rider/' }],
     ['meta', { property: 'og:title', content: 'Free Rider — All-free Open Source API Client' }],
     ['meta', { property: 'og:description', content: 'All-free, open-source, local-first API client for requests, OpenAPI, Git and MCP.' }],
-    ['meta', { property: 'og:image', content: 'https://dohyeon-kr.github.io/free-rider/free-rider-og.jpg' }],
+    ['meta', { property: 'og:image', content: 'https://dohyeon-kr.github.io/free-rider/free-rider-og.png' }],
     ['meta', { property: 'og:image:width', content: '1200' }],
     ['meta', { property: 'og:image:height', content: '630' }],
     ['meta', { property: 'og:image:type', content: 'image/jpeg' }],
