@@ -936,3 +936,17 @@ button:disabled { cursor:not-allowed; }
 .sync-values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:12px; }
 .sync-review pre { white-space:pre-wrap; overflow-wrap:anywhere; max-height:280px; overflow:auto; font:12px/1.6 ui-monospace,Menlo,monospace; }
 .sync-values > div { background:#1b1c1f; padding:12px; }
+
+.git-create-form {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.git-create-form p,
+.git-create-form .field,
+.git-create-form .actions { margin: 0; }
+.git-create-form .field { min-width: 0; }
+.git-create-path { display: grid; gap: 6px; min-width: 0; }
+.git-create-path code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-all; }

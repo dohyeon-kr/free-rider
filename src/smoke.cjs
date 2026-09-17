@@ -283,6 +283,7 @@ async function run(win) {
   await js(`document.querySelector('#gitButton').click();[...document.querySelectorAll('button')].find(b=>b.textContent==='Open repository folder').click()`);
   await poll(()=>js(`document.querySelector('[data-view=git]').textContent.includes('최근 컬렉션 커밋')`));
   await screenshot("git");
+  await require("./git-create-smoke.cjs").run({ js, poll, win, gitPath });
   await require("./spec-auth-smoke.cjs").run({ js, poll, baseUrl, win });
   server.close();
   await fs.rm(path.dirname(workspacePath),{recursive:true,force:true});

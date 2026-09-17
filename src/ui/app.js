@@ -1,3 +1,4 @@
+import { createGitRepositoryDialog } from "./git-create.js";
 import { methodPicker } from "./method-picker.js";
 import { preview, applyReview } from "../modules/sync/review.mjs";
 import { reviewView } from "./sync-review.js";
@@ -1752,14 +1753,20 @@ function gitView(col) {
       "div",
       { class: "page-heading" },
       el("h2", { text: "Git" }),
-      button("Open repository folder", () =>
-        action(async () => {
-          const r = await api["git-open"](col.id);
-          if (r) {
-            gitInfo.set(col.id, r);
-            render();
-          }
-        }),
+      el("div", { class: "actions" },
+        button("새 저장소 만들기", () => createGitRepositoryDialog({
+          collectionId: col.id, api, modal, status,
+          onCreated(info) { gitInfo.set(col.id, info); render(); },
+        }), { id: "gitCreateRepository", class: "primary" }),
+        button("Open repository folder", () =>
+          action(async () => {
+            const r = await api["git-open"](col.id);
+            if (r) {
+              gitInfo.set(col.id, r);
+              render();
+            }
+          }),
+        ),
       ),
     ),
   );
@@ -1768,7 +1775,7 @@ function gitView(col) {
       class: "muted",
       text:
         info?.root ||
-        "Select an existing local Git repository to share this collection.",
+        "Open an existing local Git repository or create a new folder and repository to share this collection.",
     }),
   );
   if (!info) return root;
