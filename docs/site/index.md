@@ -13,8 +13,11 @@ hero:
       text: 시작하기
       link: /guide/getting-started
     - theme: alt
-      text: 최신 버전 받기
-      link: https://github.com/dohyeon-kr/free-rider/releases/latest
+      text: Mac · Apple Silicon
+      link: https://github.com/dohyeon-kr/free-rider/releases/latest/download/Free-Rider-mac-arm64.dmg
+    - theme: alt
+      text: Mac · Intel
+      link: https://github.com/dohyeon-kr/free-rider/releases/latest/download/Free-Rider-mac-x64.dmg
 
 features:
   - title: Local-first
