@@ -20,7 +20,9 @@ jobs:
         with:
           node-version: 22
       - name: Apply changes
-        run: node scripts/apply-collection-settings.mjs
+        run: |
+          node scripts/prepatch-smoke.mjs
+          node scripts/apply-collection-settings.mjs
       - name: Install dependencies
         run: npm ci
       - name: Run unit tests
@@ -31,6 +33,7 @@ jobs:
         env:
           HEAD_REF: ${{ github.head_ref }}
         run: |
+          rm scripts/prepatch-smoke.mjs
           rm scripts/apply-collection-settings.mjs
           rm .github/workflows/apply-collection-settings.yml
           git add -A
