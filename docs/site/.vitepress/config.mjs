@@ -28,6 +28,7 @@ export default defineConfig({
           { text: '사용 방법', link: '/guide/getting-started' },
           { text: 'API Reference', link: '/reference/script-api' },
           { text: '개발', link: '/development' },
+          { text: '오픈소스', link: '/license' },
           { text: 'Releases', link: 'https://github.com/dohyeon-kr/free-rider/releases' }
         ],
         sidebar: {
@@ -58,7 +59,21 @@ export default defineConfig({
           '/development': [
             {
               text: 'Development',
-              items: [{ text: '개발과 문서 빌드', link: '/development' }]
+              items: [
+                { text: '개발과 문서 빌드', link: '/development' },
+                { text: '오픈소스와 라이선스', link: '/license' },
+                { text: '개발자 GitHub', link: 'https://github.com/dohyeon2' }
+              ]
+            }
+          ],
+          '/license': [
+            {
+              text: 'Open Source',
+              items: [
+                { text: '오픈소스와 라이선스', link: '/license' },
+                { text: '개발과 문서 빌드', link: '/development' },
+                { text: '개발자 GitHub', link: 'https://github.com/dohyeon2' }
+              ]
             }
           ]
         },
@@ -90,6 +105,7 @@ export default defineConfig({
           { text: 'Guide', link: '/en/guide/getting-started' },
           { text: 'API Reference', link: '/en/reference/script-api' },
           { text: 'Development', link: '/en/development' },
+          { text: 'Open Source', link: '/en/license' },
           { text: 'Releases', link: 'https://github.com/dohyeon-kr/free-rider/releases' }
         ],
         sidebar: {
@@ -120,7 +136,21 @@ export default defineConfig({
           '/en/development': [
             {
               text: 'Development',
-              items: [{ text: 'Development and Docs Build', link: '/en/development' }]
+              items: [
+                { text: 'Development and Docs Build', link: '/en/development' },
+                { text: 'Open Source and License', link: '/en/license' },
+                { text: 'Developer GitHub', link: 'https://github.com/dohyeon2' }
+              ]
+            }
+          ],
+          '/en/license': [
+            {
+              text: 'Open Source',
+              items: [
+                { text: 'Open Source and License', link: '/en/license' },
+                { text: 'Development and Docs Build', link: '/en/development' },
+                { text: 'Developer GitHub', link: 'https://github.com/dohyeon2' }
+              ]
             }
           ]
         },
@@ -139,12 +169,13 @@ export default defineConfig({
     logo: { src: BRAND_ICON_PATH, alt: 'Free Rider' },
     search: { provider: 'local' },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/dohyeon-kr/free-rider' }
+      { icon: 'github', link: 'https://github.com/dohyeon-kr/free-rider', ariaLabel: 'Free Rider GitHub' },
+      { icon: 'github', link: 'https://github.com/dohyeon2', ariaLabel: 'Developer GitHub' }
     ],
     outline: [2, 3],
     footer: {
-      message: 'All free. Open source. Local-first.',
-      copyright: 'Free Rider'
+      message: 'All free. Open source. AGPL-3.0-only.',
+      copyright: 'Free Rider · Developer: <a href="https://github.com/dohyeon2" target="_blank" rel="noreferrer">@dohyeon2</a>'
     }
   }
 })

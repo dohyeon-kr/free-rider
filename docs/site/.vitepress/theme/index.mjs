@@ -1,5 +1,6 @@
 import DefaultTheme from 'vitepress/theme'
 import LandingHome from './components/InteractiveLanding.vue'
+import McpHandoffPrompt from './components/McpHandoffPrompt.vue'
 import RendererDemo from './components/RendererDemo.vue'
 import './custom.css'
 import './landing-dark.css'
@@ -18,6 +19,7 @@ export default {
   extends: DefaultTheme,
   enhanceApp({ app }) {
     app.component('LandingHome', LandingHome)
+    app.component('McpHandoffPrompt', McpHandoffPrompt)
     app.component('RendererDemo', RendererDemo)
 
     if (typeof window !== 'undefined') {
