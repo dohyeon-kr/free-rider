@@ -124,7 +124,7 @@ async function run(win) {
   await poll(() => js("Boolean(window.appReady)"));
   await js("window.appReady");
   if(!await js(`!!document.querySelector("[data-view=overview]")&&document.querySelector("#activeTitle").textContent==="Workspace API"`))throw Error("Overview did not initialize");
-  await js(`document.querySelector('#newCollection').click(); document.querySelector('#dialogCancel').click()`);
+  await js(`document.querySelector('#newCollection').click(); if (![...document.querySelectorAll('#dialogContent button')].some(b=>b.textContent==='OpenAPI로 시작하기')) throw new Error('OpenAPI collection start option missing'); document.querySelector('#dialogCancel').click()`);
   if (await js(`document.querySelector('#dialog').open`))
     throw Error("Empty collection name prevented cancellation");
   await js(`document.querySelector('#openCollection').click()`);
@@ -134,8 +134,8 @@ async function run(win) {
   if (!(await js(`document.querySelector('#dialog').open && document.querySelector('#dialogTitle').textContent === 'Export Collection' && !document.querySelector('#collectionActions').matches(':popover-open')`)))
     throw Error("Collection export menu action failed");
   await js(`document.querySelector('#dialogCancel').click()`);
-  await js(`document.querySelector('#scriptsButton').click(); const view=document.querySelector('[data-view=scripts]');view.querySelector('input[type=checkbox]').click();const before=view.querySelector('[aria-label="전역 전처리"]');before.value='req.headers.set("X-Global", "active");ctx.log("global-before");';before.dispatchEvent(new Event('input',{bubbles:true}));const after=view.querySelector('[aria-label="전역 후처리"]');after.value='ctx.log("global-after");';after.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#collectionHome').click()`);
-  await js(`document.querySelector('#scriptsButton').click()`);
+  await js(`document.querySelector('#collectionHome').click(); [...document.querySelectorAll('.overview-item button')].find(b=>b.textContent==='Configure interceptors').click(); const view=document.querySelector('[data-view=scripts]');view.querySelector('input[type=checkbox]').click();const before=view.querySelector('[aria-label="Before Request Interceptor"]');before.value='req.headers.set("X-Global", "active");ctx.log("collection-before");';before.dispatchEvent(new Event('input',{bubbles:true}));const after=view.querySelector('[aria-label="After Response Interceptor"]');after.value='ctx.log("collection-after");';after.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#collectionHome').click()`);
+  await js(`document.querySelector('#collectionHome').click(); [...document.querySelectorAll('.overview-item button')].find(b=>b.textContent==='Configure interceptors').click()`);
   await screenshot("scripts");
   await js(`document.querySelector('#collectionHome').click()`);
   await screenshot("collection");
@@ -244,7 +244,7 @@ async function run(win) {
   await js(`document.querySelector('.response-pane [data-tab="body"]').click()`);
   if (!(await js(`document.querySelector('.response-pane').textContent.includes('수신한 응답이 없습니다')`)))
     throw Error("Execution error leaked into response body");
-  await js(`document.querySelector('#specButton').click(); const source=document.querySelector('[placeholder="https://api.example.com/openapi.json"]'); source.value=${JSON.stringify(baseUrl + "/spec")}; source.dispatchEvent(new Event('input',{bubbles:true})); [...document.querySelectorAll('button')].find(b=>b.textContent.includes('Synchronize')).click()`);
+  await js(`document.querySelector('#collectionHome').click(); [...document.querySelectorAll('.overview-item button')].find(b=>b.textContent==='Import or synchronize').click(); const source=document.querySelector('[placeholder="https://api.example.com/openapi.json"]'); source.value=${JSON.stringify(baseUrl + "/spec")}; source.dispatchEvent(new Event('input',{bubbles:true})); [...document.querySelectorAll('button')].find(b=>b.textContent.includes('Synchronize')).click()`);
   await poll(() => js(`!!document.querySelector('#applySyncSelection')`));
   if (await js(`document.querySelector('#tree').textContent.includes('Review fixture')`)) throw Error("Preview modified collection");
   await js(`document.querySelector('.sync-change summary').click(); document.querySelector('#applySyncSelection').click()`);
@@ -260,7 +260,7 @@ async function run(win) {
   await js(`const editor=document.querySelector('[aria-label="환경 파일 내용"]');editor.value='BASE_URL=https://changed.example.com';editor.dispatchEvent(new Event('input',{bubbles:true}));[...document.querySelectorAll('button')].find(b=>b.textContent==='파일 저장').click()`);
   await poll(async()=> (await fs.readFile(envPath,"utf8")).includes("changed.example.com"));
   await screenshot("env-file");
-  await js(`document.querySelector('#specButton').click();[...document.querySelectorAll('button')].find(b=>b.textContent==='Import OpenAPI file').click()`);
+  await js(`document.querySelector('#collectionHome').click(); [...document.querySelectorAll('.overview-item button')].find(b=>b.textContent==='Import or synchronize').click();[...document.querySelectorAll('button')].find(b=>b.textContent==='Import OpenAPI file').click()`);
   await poll(()=>js(`!!document.querySelector('#reloadSpecFile')`));
   await js(`document.querySelector('#applySyncSelection').click()`);
   await poll(()=>js(`document.querySelector('#tree').textContent.includes('File endpoint')`));
@@ -273,9 +273,9 @@ async function run(win) {
   await poll(()=>js(`document.querySelector('#status').textContent.includes('워크스페이스를 저장')`));
   await new Promise(resolve=>{win.webContents.once("did-finish-load",resolve);win.webContents.reload();});
   await js("window.appReady");
-  await js(`document.querySelector('#scriptsButton').click()`);
-  if(!(await js(`document.querySelector('[data-view=scripts] input[type=checkbox]').checked && document.querySelector('[aria-label="전역 전처리"]').value.includes('X-Global')`)))
-    throw Error("Global scripts were not restored from disk");
+  await js(`document.querySelector('#collectionHome').click(); [...document.querySelectorAll('.overview-item button')].find(b=>b.textContent==='Configure interceptors').click()`);
+  if(!(await js(`document.querySelector('[data-view=scripts] input[type=checkbox]').checked && document.querySelector('[aria-label="Before Request Interceptor"]').value.includes('X-Global')`)))
+    throw Error("Collection interceptors were not restored from disk");
   await js(`document.querySelector('#runnerButton').click()`);
   if((await js(`document.querySelectorAll('[data-view=runner] .run-item').length`))!==5)
     throw Error("Execution list was not restored from disk");

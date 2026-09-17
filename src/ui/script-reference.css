@@ -1,0 +1,20 @@
+.script-reference-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 8px;
+}
+
+.script-reference-toolbar strong {
+  font-size: 13px;
+}
+
+.script-reference-status {
+  margin-right: auto;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.script-reference-toolbar .text-button {
+  white-space: nowrap;
+}

@@ -7,6 +7,12 @@ import { RequestDrafts } from "./drafts.mjs";
 const drafts = new RequestDrafts();
 import { isCurl, parseCurl } from "../modules/curl/index.mjs";
 import { $, el, button, input, select, textarea, field, table } from "./dom.js";
+import {
+  openApiBadge,
+  parameterSchemaView,
+  requestBodySchemaView,
+  responseSchemaView,
+} from "./openapi-schema.js";
 import { collection, request, normalize, rowList } from "./model.js";
 const api = window.client;
 let state = {
@@ -158,6 +164,10 @@ function collectionMenu(col) {
         mark(col);
         render();
       });
+    }),
+    button("Interceptors", () => {
+      $("dialog").close();
+      open("scripts", null, col);
     }),
     button("OpenAPI", () => {
       $("dialog").close();
@@ -330,7 +340,7 @@ function tabTitle(t) {
     spec: "♧ API Specs",
     runner: "▷ Runner",
     git: "⑂ Git",
-    scripts: "전역 전후처리",
+    scripts: "⚡ Interceptors",
     folder: "▱ " + t.id,
   }[t.kind];
 }
@@ -462,7 +472,7 @@ function render() {
     spec: () => specView(col),
     runner: () => runnerView(col),
     git: () => gitView(col),
-    scripts: () => scriptsView(),
+    scripts: () => scriptsView(col),
     folder: () => folderView(col, t.id),
   }[t.kind];
   $("view").replaceChildren(view());
@@ -578,6 +588,15 @@ function overview(col) {
       "Share requests and variable names with your team",
       "Export collection",
       () => exportCollection(col),
+    ],
+    [
+      "⚡",
+      "Interceptors",
+      col.interceptors?.enabled
+        ? "Enabled for this collection"
+        : "Disabled",
+      "Configure interceptors",
+      () => open("scripts", null, col),
     ],
     [
       "♧",
@@ -798,6 +817,7 @@ function requestView(col, r) {
       { class: "request-heading" },
       el("span", { text: col.title + " / " + (r.group || "Requests") }),
       el("strong", { text: r.name }),
+      openApiBadge(r),
       r.removed
         ? el("span", { class: "pill", text: "Removed from specification" })
         : null,
@@ -869,8 +889,14 @@ function requestView(col, r) {
     ),
   );
   const content = el("div", { class: "request-content" });
-  if (current === "params") content.append(kv(r, "query", col));
+  if (current === "params") {
+    const schema = parameterSchemaView(r, ["path", "query", "cookie"]);
+    if (schema) content.append(schema);
+    content.append(kv(r, "query", col));
+  }
   if (current === "headers") {
+    const schema = parameterSchemaView(r, "header");
+    if (schema) content.append(schema);
     content.append(kv(r, "headers", col));
     if (rowList(col.headers).length)
       content.append(
@@ -881,6 +907,8 @@ function requestView(col, r) {
       );
   }
   if (current === "body") {
+    const schema = requestBodySchemaView(r);
+    if (schema) content.append(schema);
     content.append(
       el(
         "div",
@@ -1134,6 +1162,9 @@ function responseView(col, r) {
         [
           ["body", "Body"],
           ["headers", "Headers"],
+          ...(r.openapi || Object.keys(r.responses || {}).length
+            ? [["schema", "Schema"]]
+            : []),
           ["tests", "Tests"],
           ["history", "History"],
           ["console", "콘솔"],
@@ -1174,6 +1205,10 @@ function responseView(col, r) {
           text: "No requests sent in this session.",
         }),
       );
+    return root;
+  }
+  if (tab === "schema") {
+    root.append(responseSchemaView(r));
     return root;
   }
   if (!res) {
@@ -1226,7 +1261,7 @@ async function sendRequest(
   r,
   fromRunner = false,
   fixedEnvironment = null,
-  fixedScripts = null,
+  fixedInterceptors = null,
 ) {
   if (busy && !fromRunner) return;
   if (!fromRunner) r = drafts.get(col.id, r);
@@ -1253,7 +1288,7 @@ async function sendRequest(
         { key: "Content-Type", value: "application/json", enabled: true },
       ];
     }
-    result = await api.send(ready, environment, col, structuredClone(fixedScripts || state.globalScripts || {}));
+    result = await api.send(ready, environment, col, structuredClone(fixedInterceptors || col.interceptors || {}));
     for(const line of result.logs || []) logExecution(col.id+r.id,"info",line);
     if(result.scriptError) {logExecution(col.id+r.id,"error",result.scriptError);subtabs.set(col.id+r.id+"response","console");}
     logExecution(col.id + r.id, "info", "HTTP " + result.status + " · " + result.elapsed + " ms");
@@ -1281,14 +1316,14 @@ async function sendRequest(
   render();
   return result;
 }
-function scriptsView() {
-  const scripts=state.globalScripts ||= {enabled:false,before:"",after:""};
+function scriptsView(col) {
+  const interceptors = col.interceptors ||= {enabled:false,before:"",after:""};
   const root=el("div",{class:"view-inner","data-view":"scripts"});
-  root.append(el("h2",{text:"전역 전후처리"}),
-    el("p",{class:"muted",text:"모든 컬렉션의 단일 요청과 순차 실행에 적용합니다. 변경한 요청은 이번 전송에만 사용합니다."}),
-    el("label",{},el("input",{type:"checkbox",checked:scripts.enabled,onChange:e=>{scripts.enabled=e.target.checked;mark();}})," 활성화"),
-    field("전처리 · req, ctx",textarea(scripts.before,v=>{scripts.before=v;mark();},{"aria-label":"전역 전처리",placeholder:'req.headers.set("Authorization", "Bearer " + ctx.vars.get("accessToken"));'})),
-    field("후처리 · req, res, ctx",textarea(scripts.after,v=>{scripts.after=v;mark();},{"aria-label":"전역 후처리",placeholder:'if (res.status === 200) ctx.vars.set("accessToken", res.json().accessToken);'})),
+  root.append(el("h2",{text:"Collection Interceptors"}),
+    el("p",{class:"muted",text:"이 컬렉션의 단일 요청과 컬렉션 실행에만 적용합니다. Before Request는 전송 직전, After Response는 응답 수신 뒤 실행합니다."}),
+    el("label",{},el("input",{type:"checkbox",checked:interceptors.enabled,onChange:e=>{interceptors.enabled=e.target.checked;mark(col);}})," 활성화"),
+    field("Before Request · req, ctx",textarea(interceptors.before,v=>{interceptors.before=v;mark(col);},{"aria-label":"Before Request Interceptor",placeholder:'req.headers.set("Authorization", "Bearer " + ctx.vars.get("accessToken"));'})),
+    field("After Response · req, res, ctx",textarea(interceptors.after,v=>{interceptors.after=v;mark(col);},{"aria-label":"After Response Interceptor",placeholder:'if (res.status === 200) ctx.vars.set("accessToken", res.json().accessToken);'})),
     el("pre",{class:"code-block",text:`req.method / req.url / req.body
 req.headers.get / set / delete
 res.status / res.headers.get / res.text() / res.json()
@@ -1296,7 +1331,7 @@ ctx.env.get("KEY")
 ctx.vars.get / set / delete
 ctx.log("실행 로그")`}),
     button("저장",()=>save(),{class:"primary"}),
-    el("p",{class:"hint",text:"실행 로그는 요청의 콘솔에서 확인합니다. 파일·셸·직접 네트워크 API는 제공하지 않습니다."}));
+    el("p",{class:"hint",text:"Interceptor 로그는 요청의 콘솔에서 확인합니다. 파일·셸·직접 네트워크 API는 제공하지 않습니다."}));
   return root;
 }
 function environments(col) {
@@ -1675,7 +1710,7 @@ async function runCollection(col) {
     runEnvironment = structuredClone(env(col)),
     runContext = structuredClone(col),
     stopOnFailure = !!col.stopOnFailure,
-    runScripts = structuredClone(state.globalScripts || {});
+    runInterceptors = structuredClone(col.interceptors || {});
   if (!selected.length) {
     status("Select requests to run.");
     return;
@@ -1688,7 +1723,7 @@ async function runCollection(col) {
   try {
     for (const r of selected) {
       if (stopRun) break;
-      const result = await sendRequest(runContext, r, true, runEnvironment, runScripts);
+      const result = await sendRequest(runContext, r, true, runEnvironment, runInterceptors);
       runnerResults.set(col.id + r.id, result);
       count++;
       render();
@@ -1842,13 +1877,71 @@ async function exportCollection(col) {
     "Export",
   );
 }
-$("newCollection").onclick = () =>
-  askName("Create Collection", "", (name) => {
-    const col = collection(name);
-    state.collections.push(col);
-    mark(col);
-    open("overview", null, col);
-  });
+function addCollection(col, kind = "overview") {
+  state.collections.push(col);
+  mark(col);
+  open(kind, null, col);
+}
+function startBlankCollection() {
+  askName("Create Collection", "", (name) => addCollection(collection(name)));
+}
+function startOpenApiCollection() {
+  let source = "";
+  modal(
+    "OpenAPI로 시작하기",
+    el(
+      "div",
+      {},
+      el("p", { class: "muted", text: "OpenAPI 3.x 파일 또는 URL에서 새 컬렉션을 시작합니다." }),
+      field(
+        "Specification URL",
+        input(source, (value) => (source = value), {
+          placeholder: "https://api.example.com/openapi.json",
+        }),
+      ),
+      el(
+        "div",
+        { class: "actions" },
+        button("OpenAPI 파일 선택", () =>
+          action(async () => {
+            const imported = await api["import-spec"]();
+            if (!imported) return;
+            const col = collection(imported.title || "OpenAPI Collection");
+            col.sourceFile = imported.sourceFile;
+            $("dialog").close();
+            addCollection(col, "spec");
+            beginSyncReview(col, {...imported, generated: imported.requests});
+          }),
+        ),
+      ),
+    ),
+    async () => {
+      source = source.trim();
+      if (!source) throw Error("OpenAPI URL을 입력하거나 파일을 선택하세요.");
+      status("OpenAPI 명세를 불러오는 중…");
+      const result = await api["sync-spec"](source, []);
+      const col = collection(result.title || "OpenAPI Collection");
+      col.source = source;
+      addCollection(col, "spec");
+      beginSyncReview(col, result);
+    },
+    "URL로 시작",
+  );
+}
+function newCollectionFlow() {
+  modal(
+    "새 컬렉션",
+    el(
+      "div",
+      { class: "actions" },
+      button("빈 컬렉션으로 시작", startBlankCollection),
+      button("OpenAPI로 시작하기", startOpenApiCollection, { class: "primary" }),
+    ),
+    () => true,
+    "닫기",
+  );
+}
+$("newCollection").onclick = newCollectionFlow;
 $("importCollectionFile").onclick = () =>
   action(async () => {
     $("collectionActions").hidePopover();
@@ -1979,7 +2072,13 @@ window.appReady = (async () => {
     const saved = await action(() => api["workspace-load"]());
     if (saved && Array.isArray(saved.collections)) {
       state = saved;
-      state.collections.forEach(normalize);
+      const legacyInterceptors = state.globalScripts;
+      state.collections.forEach((col) => {
+        if (!col.interceptors && legacyInterceptors)
+          col.interceptors = structuredClone(legacyInterceptors);
+        normalize(col);
+      });
+      delete state.globalScripts;
       state.selectedEnvironments ||= {};
       state.tabs ||= [];
       state.layout ||= "vertical";

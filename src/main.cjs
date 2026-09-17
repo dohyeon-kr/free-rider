@@ -164,7 +164,7 @@ function publishNetworkEntry(entry, replay = null) {
   persistNetworkHistory();
   if (win && !win.isDestroyed()) win.webContents.send("network-entry", entry);
 }
-async function runRequest(request, environment, collection, scripts) {
+async function runRequest(request, environment, collection, interceptors) {
   if (controller) throw Error("요청이 실행 중입니다.");
   controller = new AbortController();
   const startedAt = Date.now();
@@ -191,7 +191,7 @@ async function runRequest(request, environment, collection, scripts) {
       context.request,
       vars,
       controller.signal,
-      scripts,
+      interceptors,
       environment.values,
       resolveRequestFile,
       fetcher,
@@ -225,7 +225,7 @@ async function runRequest(request, environment, collection, scripts) {
       },
       timing: result.timing || { waiting: 0, download: 0, total: result.elapsed || 0 },
     };
-    publishNetworkEntry(entry, structuredClone({ request, environment, collection, scripts }));
+    publishNetworkEntry(entry, structuredClone({ request, environment, collection, interceptors }));
     return result;
   } catch (error) {
     const entry = {
@@ -253,7 +253,7 @@ async function runRequest(request, environment, collection, scripts) {
       cookies: { request: requestCookies, current: [], setCookie: [] },
       timing: { waiting: 0, download: 0, total: Date.now() - startedAt },
     };
-    publishNetworkEntry(entry, structuredClone({ request, environment, collection, scripts }));
+    publishNetworkEntry(entry, structuredClone({ request, environment, collection, interceptors }));
     throw error;
   } finally {
     controller = null;
@@ -283,8 +283,8 @@ handle("sync-spec", async (source, old) => {
   };
 });
 handle("merge-spec", async (old, generated) => synchronize(old, generated));
-handle("send", (request, environment, collection, scripts) =>
-  runRequest(request, environment, collection, scripts),
+handle("send", (request, environment, collection, interceptors) =>
+  runRequest(request, environment, collection, interceptors || collection?.interceptors || {}),
 );
 handle("network-replay", async (id) => {
   const replay = replayRequests.get(String(id));
@@ -293,7 +293,7 @@ handle("network-replay", async (id) => {
     structuredClone(replay.request),
     structuredClone(replay.environment),
     structuredClone(replay.collection),
-    structuredClone(replay.scripts),
+    structuredClone(replay.interceptors || replay.scripts || replay.collection?.interceptors || {}),
   );
 });
 handle("network-history", () => networkEntries);

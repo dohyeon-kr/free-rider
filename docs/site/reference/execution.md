@@ -46,16 +46,16 @@ accessToken -> data.auth.accessToken
 
 추출값이 없거나 객체인 경우 오류로 처리합니다. 추출 변수 이름으로 `__proto__`, `constructor`, `prototype`은 사용할 수 없습니다.
 
-## 스크립트와 요청 순서
+## Interceptor와 요청 순서
 
 실행 순서는 다음과 같습니다.
 
 1. 변수 치환과 Auth를 적용해 요청 준비
-2. 전처리 실행
-3. 전처리 결과 URL / method 재검증
+2. Collection Before Request Interceptor 실행
+3. Before Request 결과 URL / method 재검증
 4. HTTP 요청 전송
 5. 2xx 응답의 extract mapping 처리
-6. 후처리 실행
-7. extract 값과 스크립트 Vars 변경을 실행 결과에 반영
+6. Collection After Response Interceptor 실행
+7. extract 값과 Interceptor Vars 변경을 실행 결과에 반영
 
-전처리에서 저장된 요청 원본을 수정하지 않고 현재 실행 요청만 변경합니다.
+Before Request Interceptor는 저장된 요청 원본을 수정하지 않고 현재 실행 요청만 변경합니다.

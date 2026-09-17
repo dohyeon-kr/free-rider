@@ -9,6 +9,10 @@ const {
   loadAnnouncements,
   isAllowedAnnouncementUrl,
 } = require("./modules/announcements.cjs");
+const {
+  loadScriptReference,
+  SCRIPT_REFERENCE_PAGE,
+} = require("./modules/docs-reference.cjs");
 
 const capturedHandlers = new Map();
 const registerHandle = ipcMain.handle.bind(ipcMain);
@@ -23,9 +27,14 @@ ipcMain.handle = (channel, listener) => {
 require("./main.cjs");
 ipcMain.handle = registerHandle;
 
-function rendererEvent() {
+function appWindow() {
   const win = BrowserWindow.getAllWindows()[0];
   if (!win || win.isDestroyed()) throw Error("Free Rider window is not ready.");
+  return win;
+}
+
+function rendererEvent() {
+  const win = appWindow();
   return {
     sender: win.webContents,
     senderFrame: win.webContents.mainFrame,
@@ -40,6 +49,27 @@ async function callApp(channel, ...args) {
 
 async function loadWorkspace() {
   return (await callApp("workspace-load")) || { collections: [] };
+}
+
+async function saveCollectionInterceptors({ collectionId, interceptors }) {
+  const win = appWindow();
+  if (win.isDocumentEdited?.())
+    throw Error("Save the Free Rider workspace before changing interceptors through MCP.");
+
+  const state = await loadWorkspace();
+  if (win.isDocumentEdited?.())
+    throw Error("Save the Free Rider workspace before changing interceptors through MCP.");
+  const collection = (state.collections || []).find((item) => item.id === collectionId);
+  if (!collection) throw Error(`Collection not found: ${collectionId}`);
+
+  collection.interceptors = structuredClone(interceptors);
+  await callApp("workspace-save", state);
+
+  // The renderer owns an in-memory workspace snapshot. Reload it only after a
+  // successful persisted MCP write so the UI cannot later overwrite this change
+  // with stale state. Unsaved renderer edits are rejected above.
+  if (!win.isDestroyed()) win.webContents.reload();
+  return collection.interceptors;
 }
 
 async function runSavedRequest({ collectionId, requestId, environmentId }) {
@@ -63,7 +93,7 @@ async function runSavedRequest({ collectionId, requestId, environmentId }) {
     structuredClone(request),
     structuredClone(environment),
     structuredClone(collection),
-    structuredClone(state.globalScripts || {}),
+    structuredClone(collection.interceptors || state.globalScripts || {}),
   );
 }
 
@@ -73,6 +103,7 @@ const rpc = createMcpServer({
   loadWorkspace,
   runSavedRequest,
   loadNetworkHistory: () => callApp("network-history"),
+  saveCollectionInterceptors,
 });
 const mcp = createLocalMcpHttpServer(rpc);
 
@@ -105,6 +136,27 @@ registerHandle("announcement-open", async (event, url) => {
   validateRenderer(event);
   if (!isAllowedAnnouncementUrl(url)) throw Error("허용되지 않은 공지 링크입니다.");
   await shell.openExternal(String(url));
+  return true;
+});
+
+const DOC_REFERENCE_CACHE_MS = 5 * 60 * 1000;
+let docReferenceCache = { at: 0, value: null };
+
+registerHandle("docs-reference-get", async (event) => {
+  validateRenderer(event);
+  if (
+    docReferenceCache.value &&
+    Date.now() - docReferenceCache.at < DOC_REFERENCE_CACHE_MS
+  )
+    return docReferenceCache.value;
+  const value = await loadScriptReference((url, options) => net.fetch(url, options));
+  docReferenceCache = { at: Date.now(), value };
+  return value;
+});
+
+registerHandle("docs-reference-open", async (event) => {
+  validateRenderer(event);
+  await shell.openExternal(SCRIPT_REFERENCE_PAGE);
   return true;
 });
 

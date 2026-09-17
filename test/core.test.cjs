@@ -34,6 +34,86 @@ test("OpenAPI generates runnable parameter templates and rejects unsupported spe
   assert.equal(r.auth, true);
   assert.throws(() => parseSpec('{"swagger":"2.0"}'));
 });
+test("OpenAPI preserves request types, required fields and response schemas", () => {
+  const schemaDoc = {
+    openapi: "3.1.0",
+    info: { title: "Schema Demo", version: "1.0.0" },
+    components: {
+      schemas: {
+        User: {
+          type: "object",
+          required: ["id", "name"],
+          properties: {
+            id: { type: "string", format: "uuid" },
+            name: { type: "string" },
+          },
+        },
+      },
+    },
+    paths: {
+      "/users/{id}": {
+        post: {
+          operationId: "updateUser",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              description: "User id",
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "expand",
+              in: "query",
+              required: true,
+              schema: { type: "boolean" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["name"],
+                  properties: {
+                    name: { type: "string" },
+                    age: { type: "integer" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: "OK",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/User" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  const [r] = operations(schemaDoc);
+  assert.equal(r.openapi.source, "openapi");
+  assert.equal(r.openapi.operationId, "updateUser");
+  assert.equal(r.openapi.document.title, "Schema Demo");
+  assert.equal(r.openapi.parameters[0].required, true);
+  assert.equal(r.openapi.parameters[0].schema.format, "uuid");
+  assert.equal(r.openapi.parameters[1].schema.type, "boolean");
+  assert.equal(r.openapi.requestBody.required, true);
+  assert.equal(r.openapi.requestBody.contentType, "application/json");
+  assert.deepEqual(
+    r.openapi.requestBody.content["application/json"].schema.required,
+    ["name"],
+  );
+  const responseSchema = r.responses["200"].content["application/json"].schema;
+  assert.deepEqual(responseSchema.required, ["id", "name"]);
+  assert.equal(responseSchema.properties.id.format, "uuid");
+});
 test("sync updates generated defaults but preserves edits and removed operations", () => {
   const generated = operations(doc),
     first = synchronize([], generated).requests;

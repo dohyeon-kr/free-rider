@@ -2,6 +2,22 @@
 
 전역 전처리와 후처리는 별도 Worker의 QuickJS 런타임에서 실행됩니다. 코드는 함수 본문처럼 작성하며 Free Rider가 `req`, `res`, `ctx`를 제공합니다.
 
+## 빠른 참조
+
+<!-- free-rider-app-reference:start -->
+```text
+req.method / req.url / req.body
+req.headers.get / set / delete
+res.status / res.statusText / res.headers.get
+res.text() / res.json()
+ctx.env.get("KEY")
+ctx.vars.get / set / delete
+ctx.log("실행 로그")
+```
+<!-- free-rider-app-reference:end -->
+
+앱의 전역 전후처리 화면은 이 블록을 HTTP GET으로 불러와 표시합니다. 네트워크가 불가능하면 앱에 포함된 기본 요약을 계속 표시합니다.
+
 ## `req`
 
 전처리와 후처리에서 현재 요청을 나타냅니다. 전처리에서 변경한 값은 실제 네트워크 요청에 반영됩니다.

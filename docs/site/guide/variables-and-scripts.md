@@ -36,11 +36,11 @@ Free Rider는 바뀌는 실행 환경과 실행 중 상태를 분리합니다.
 
 파일이 Free Rider 밖에서 바뀌었다면 실수로 덮어쓰지 않도록 저장을 차단합니다. 먼저 다시 읽어 변경 내용을 확인하세요.
 
-## 전역 전후처리
+## 컬렉션 Interceptors
 
-사이드바의 `전역 전후처리`에서 활성화합니다. 모든 컬렉션에 적용되며 컬렉션 Runner를 시작할 때 현재 스크립트 설정을 고정합니다.
+컬렉션 Overview의 `Interceptors`에서 활성화합니다. 설정은 해당 컬렉션에만 적용되며 컬렉션 Runner를 시작할 때 현재 Interceptor 설정을 고정합니다.
 
-### 전처리 예시
+### Before Request 예시
 
 ```js
 const token = ctx.vars.get('accessToken')
@@ -52,9 +52,9 @@ if (token) {
 req.headers.set('X-Environment', ctx.env.get('ENV'))
 ```
 
-전처리에서 바꾼 `req.method`, `req.url`, `req.body`, `req.headers`는 실제 전송 요청에 반영됩니다.
+Before Request에서 바꾼 `req.method`, `req.url`, `req.body`, `req.headers`는 실제 전송 요청에 반영됩니다.
 
-### 후처리 예시
+### After Response 예시
 
 ```js
 if (req.url.includes('/login') && res.status === 200) {

@@ -30,7 +30,7 @@ export default defineConfig({
               items: [
                 { text: '시작하기', link: '/guide/getting-started' },
                 { text: '요청과 저장', link: '/guide/requests' },
-                { text: 'Environment와 Vars', link: '/guide/variables-and-scripts' },
+                { text: 'Environment, Vars, Interceptors', link: '/guide/variables-and-scripts' },
                 { text: '컬렉션 실행', link: '/guide/collection-runner' },
                 { text: 'OpenAPI 동기화', link: '/guide/openapi-sync' },
                 { text: 'Git 연동', link: '/guide/git' },
@@ -92,7 +92,7 @@ export default defineConfig({
               items: [
                 { text: 'Getting Started', link: '/en/guide/getting-started' },
                 { text: 'Requests and Saving', link: '/en/guide/requests' },
-                { text: 'Environments and Vars', link: '/en/guide/variables-and-scripts' },
+                { text: 'Environment, Vars, Interceptors', link: '/en/guide/variables-and-scripts' },
                 { text: 'Collection Runner', link: '/en/guide/collection-runner' },
                 { text: 'OpenAPI Sync', link: '/en/guide/openapi-sync' },
                 { text: 'Git Integration', link: '/en/guide/git' },

@@ -15,7 +15,7 @@ Free Rider는 서버와 계정 없이 동작하는 macOS Electron API 클라이�
 
 ## 첫 요청 보내기
 
-1. 사이드바의 `+`로 컬렉션을 만듭니다.
+1. 사이드바의 `+`에서 빈 컬렉션 또는 `OpenAPI로 시작하기`를 선택합니다.
 2. 상단 `+ 요청` 또는 탭의 `+`로 요청을 추가합니다.
 3. HTTP 메서드와 절대 URL을 입력합니다.
 4. 필요하면 Params / Headers / Body / Auth / Vars / Tests / Docs를 설정합니다.
@@ -50,5 +50,5 @@ npm start
 ## 다음 단계
 
 - [요청과 저장](/guide/requests) — 요청 편집, multipart, Auth, 탭과 응답
-- [Environment와 Vars](/guide/variables-and-scripts) — 변수 우선순위와 전후처리
+- [Environment와 Vars](/guide/variables-and-scripts) — 변수 우선순위와 컬렉션 Interceptors
 - [OpenAPI 동기화](/guide/openapi-sync) — 명세 변경 검토와 선택 반영
