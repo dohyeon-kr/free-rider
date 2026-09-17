@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "vitepress",
+    "prebuild": "node --test tests/brand-assets.test.mjs",
     "build": "vitepress build",
     "preview": "vitepress preview"
   },
