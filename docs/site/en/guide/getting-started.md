@@ -4,14 +4,42 @@ Free Rider is a macOS Electron API client that works without a server or account
 
 ## Installation
 
-Download the DMG or ZIP for your Mac architecture from [GitHub Releases](https://github.com/dohyeon-kr/free-rider/releases/latest).
+### Homebrew
+
+Homebrew Cask is the recommended installation method if you already use Homebrew. The Free Rider repository doubles as its tap, so you only need to connect the explicit Git URL once.
+
+```sh
+brew tap dohyeon-kr/free-rider https://github.com/dohyeon-kr/free-rider.git
+brew install --cask dohyeon-kr/free-rider/free-rider
+```
+
+Homebrew 6 requires explicit trust for non-official taps. Installing the **fully qualified Cask name** as shown above trusts only the Free Rider Cask instead of the entire tap.
+
+Upgrade through the normal Homebrew flow when a new Free Rider release is published:
+
+```sh
+brew update
+brew upgrade --cask free-rider
+```
+
+To uninstall:
+
+```sh
+brew uninstall --cask free-rider
+```
+
+After each published release, Free Rider's release workflow automatically updates the version and the Apple Silicon / Intel DMG SHA-256 values in `Casks/free-rider.rb`.
+
+### Direct download
+
+You can also download the DMG or ZIP for your Mac architecture from [GitHub Releases](https://github.com/dohyeon-kr/free-rider/releases/latest).
 
 | Mac | Architecture |
 | --- | --- |
 | Apple Silicon | `arm64` |
 | Intel Mac | `x64` |
 
-Automatic updates for distribution builds are enabled only for Developer ID signed and notarized builds. Ad-hoc and development builds do not use automatic updates because macOS Squirrel requires valid signing.
+Free Rider uses Electron 44 and therefore requires macOS 13 Ventura or later. Automatic updates for distribution builds are enabled only for Developer ID signed and notarized builds. Ad-hoc and development builds do not use automatic updates because macOS Squirrel requires valid signing.
 
 ## Send your first request
 
