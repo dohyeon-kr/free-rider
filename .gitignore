@@ -7,3 +7,6 @@ dist/
 *.p12
 *.p8
 test-results/
+build/icon.icns
+build/icon-source.png
+build/icon.iconset/
