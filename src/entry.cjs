@@ -23,9 +23,14 @@ ipcMain.handle = (channel, listener) => {
 require("./main.cjs");
 ipcMain.handle = registerHandle;
 
-function rendererEvent() {
+function appWindow() {
   const win = BrowserWindow.getAllWindows()[0];
   if (!win || win.isDestroyed()) throw Error("Free Rider window is not ready.");
+  return win;
+}
+
+function rendererEvent() {
+  const win = appWindow();
   return {
     sender: win.webContents,
     senderFrame: win.webContents.mainFrame,
@@ -40,6 +45,27 @@ async function callApp(channel, ...args) {
 
 async function loadWorkspace() {
   return (await callApp("workspace-load")) || { collections: [] };
+}
+
+async function saveCollectionInterceptors({ collectionId, interceptors }) {
+  const win = appWindow();
+  if (win.isDocumentEdited?.())
+    throw Error("Save the Free Rider workspace before changing interceptors through MCP.");
+
+  const state = await loadWorkspace();
+  if (win.isDocumentEdited?.())
+    throw Error("Save the Free Rider workspace before changing interceptors through MCP.");
+  const collection = (state.collections || []).find((item) => item.id === collectionId);
+  if (!collection) throw Error(`Collection not found: ${collectionId}`);
+
+  collection.interceptors = structuredClone(interceptors);
+  await callApp("workspace-save", state);
+
+  // The renderer owns an in-memory workspace snapshot. Reload it only after a
+  // successful persisted MCP write so the UI cannot later overwrite this change
+  // with stale state. Unsaved renderer edits are rejected above.
+  if (!win.isDestroyed()) win.webContents.reload();
+  return collection.interceptors;
 }
 
 async function runSavedRequest({ collectionId, requestId, environmentId }) {
@@ -63,7 +89,7 @@ async function runSavedRequest({ collectionId, requestId, environmentId }) {
     structuredClone(request),
     structuredClone(environment),
     structuredClone(collection),
-    structuredClone(state.globalScripts || {}),
+    structuredClone(collection.interceptors || state.globalScripts || {}),
   );
 }
 
@@ -73,6 +99,7 @@ const rpc = createMcpServer({
   loadWorkspace,
   runSavedRequest,
   loadNetworkHistory: () => callApp("network-history"),
+  saveCollectionInterceptors,
 });
 const mcp = createLocalMcpHttpServer(rpc);
 
