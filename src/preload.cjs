@@ -32,6 +32,8 @@ for (const name of [
   "workspace-save",
   "set-dirty",
   "copy",
+  "mcp-state",
+  "mcp-toggle",
   "update-state",
   "update-check",
   "update-install",
