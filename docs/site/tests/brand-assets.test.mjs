@@ -28,13 +28,19 @@ test('documentation uses the exact transparent app icon, without re-encoding', t
 
 test('landing uses the app icon for every Free Rider brand mark', () => {
   const landing = readFileSync(new URL('../.vitepress/theme/components/LandingHome.vue', import.meta.url), 'utf8')
-  assert.doesNotMatch(landing, />\s*F\s*</, 'single-letter F placeholder brand marks must not return')
-  assert.doesNotMatch(landing, /class=["']rider["']/, 'legacy rider placeholder class must not return')
+  const rail = readFileSync(new URL('../.vitepress/theme/components/McpAgentRail.vue', import.meta.url), 'utf8')
+  for (const source of [landing, rail]) {
+    assert.doesNotMatch(source, />\s*F\s*</, 'single-letter F placeholder brand marks must not return')
+    assert.doesNotMatch(source, /class=["']rider["']/, 'legacy rider placeholder class must not return')
+  }
   assert.match(landing, /const brandIcon = withBase\(['"]\/free-rider-app-icon\.png['"]\)/)
-  assert.equal((landing.match(/:src=["']brandIcon["']/g) ?? []).length, 3)
+  assert.equal((landing.match(/:src=["']brandIcon["']/g) ?? []).length, 2)
   assert.match(landing, /brand-icon-sidebar/)
-  assert.match(landing, /brand-icon-agent/)
   assert.match(landing, /brand-icon-os/)
+  // The third mark now lives in the rail component, not the parent template.
+  assert.match(landing, /import McpAgentRail from ['"]\.\/McpAgentRail\.vue['"]/)
+  assert.match(landing, /<McpAgentRail\s*\/>/)
+  assert.match(rail, /class="mcp-rail-rider"[\s\S]*?<img\s+:src="withBase\('\/free-rider-app-icon\.png'\)"/)
 })
 
 test('repeated preparation remains byte-identical', t => {
