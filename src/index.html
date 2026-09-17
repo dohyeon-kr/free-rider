@@ -15,26 +15,39 @@
     <link rel="stylesheet" href="ui/openapi-schema.css" />
     <link rel="stylesheet" href="ui/announcements.css" />
     <link rel="stylesheet" href="ui/script-reference.css" />
+    <link rel="stylesheet" href="ui/brand-shell.css" />
   </head>
   <body>
     <header class="titlebar">
-      <span class="workspace-title">⌂　 내 워크스페이스</span
-      ><strong>◈　Free Rider</strong
-      ><span class="title-end">LOCAL WORKSPACE</span>
+      <div class="brand-lockup" aria-label="Free Rider API Client">
+        <span class="brand-mark" aria-hidden="true">
+          <span data-lucide="gauge"></span>
+        </span>
+        <span class="brand-copy">
+          <strong>Free Rider</strong>
+          <small>API CLIENT</small>
+        </span>
+      </div>
+      <span class="workspace-title">
+        <span data-lucide="house"></span>
+        <span>내 워크스페이스</span>
+      </span>
+      <span class="title-end">RIDE FASTER · BUILD FURTHER</span>
     </header>
     <div class="workspace">
       <aside>
         <div class="sidebar-heading">
           <strong>컬렉션</strong
-          ><button id="searchButton" title="Search requests · ⌘K">⌕</button
-          ><button id="newCollection" title="New collection">＋</button
-          ><button id="openCollection" title="컬렉션 메뉴" aria-label="컬렉션 메뉴" aria-expanded="false" popovertarget="collectionActions">⋯</button>
+          ><button id="searchButton" class="icon-button" title="Search requests · ⌘K" aria-label="요청 검색"><span data-lucide="search"></span></button
+          ><button id="newCollection" class="icon-button" title="New collection" aria-label="새 컬렉션"><span data-lucide="plus"></span></button
+          ><button id="openCollection" class="icon-button" title="컬렉션 메뉴" aria-label="컬렉션 메뉴" aria-expanded="false" popovertarget="collectionActions"><span data-lucide="ellipsis"></span></button>
           <div id="collectionActions" popover aria-label="컬렉션 작업">
             <button id="importCollectionFile">컬렉션 파일 가져오기</button>
             <button id="exportActiveCollection">현재 컬렉션 내보내기</button>
           </div>
         </div>
         <div class="search-box">
+          <span class="search-icon" aria-hidden="true"><span data-lucide="search"></span></span>
           <input
             id="search"
             placeholder="컬렉션·요청 검색"
@@ -56,17 +69,17 @@
         <div class="collection-toolbar">
           <div class="collection-switcher">
             <button id="collectionHome" class="collection-title">
-              ⬡　<span id="activeTitle"></span>
+              <span class="button-icon" aria-hidden="true"><span data-lucide="hexagon"></span></span><span id="activeTitle"></span>
             </button>
-            <button id="collectionSwitch" aria-label="컬렉션 선택" aria-expanded="false" popovertarget="collectionPicker">⌄</button>
+            <button id="collectionSwitch" class="icon-button compact" aria-label="컬렉션 선택" aria-expanded="false" popovertarget="collectionPicker"><span data-lucide="chevron-down"></span></button>
             <div id="collectionPicker" popover aria-label="컬렉션 목록"></div>
           </div>
           <div class="toolbar-actions">
-            <button id="saveWorkspace" title="Save workspace · ⌘S">저장</button
-            ><button id="gitButton">⑂ Git</button
-            ><button id="runnerButton" title="Collection Runner">컬렉션 실행</button
-            ><button id="newRequest" title="New request · ⌘N">＋ 요청</button
-            ><button id="envButton" title="Configure environments">▤</button
+            <button id="saveWorkspace" title="Save workspace · ⌘S"><span data-lucide="save"></span><span>저장</span></button
+            ><button id="gitButton"><span data-lucide="git-branch"></span><span>Git</span></button
+            ><button id="runnerButton" title="Collection Runner"><span data-lucide="play"></span><span>컬렉션 실행</span></button
+            ><button id="newRequest" class="accent-action" title="New request · ⌘N"><span data-lucide="plus"></span><span>요청</span></button
+            ><button id="envButton" class="icon-button" title="Configure environments" aria-label="환경 설정"><span data-lucide="sliders-horizontal"></span></button
             ><select
               id="environmentSelect"
               aria-label="Active environment"
@@ -83,9 +96,9 @@
         <span id="branchStatus"></span
         ><button id="mcpButton" title="로컬 MCP 서버 켜기">MCP 꺼짐</button
         ><button id="updateButton" title="업데이트 확인">업데이트 확인</button
-        ><button id="announcementButton" title="공지" aria-label="공지" popovertarget="announcementPanel">🔔 공지<span id="announcementUnread" class="announcement-unread" hidden></span></button
+        ><button id="announcementButton" title="공지" aria-label="공지" popovertarget="announcementPanel"><span data-lucide="bell"></span><span>공지</span><span id="announcementUnread" class="announcement-unread" hidden></span></button
         ><div id="announcementPanel" popover aria-label="공지 목록"></div
-        ><button id="shortcuts">⌘ Shortcuts</button><span id="appVersion">v0.3.1</span>
+        ><button id="shortcuts"><span data-lucide="keyboard"></span><span>Shortcuts</span></button><span id="appVersion">v0.3.1</span>
       </div>
     </footer>
     <dialog id="dialog">
@@ -100,6 +113,7 @@
         </div>
       </form>
     </dialog>
+    <script type="module" src="ui/lucide-icons.js"></script>
     <script type="module" src="ui/app.js"></script>
     <script type="module" src="ui/dialog-enter.mjs"></script>
     <script type="module" src="ui/network-panel.js"></script>
