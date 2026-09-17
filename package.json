@@ -5,7 +5,7 @@
   "description": "Git-friendly OpenAPI collaboration client",
   "repository": "https://github.com/dohyeon-kr/free-rider",
   "author": "Ju Dohyeon",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "main": "src/entry.cjs",
   "scripts": {
     "start": "electron .",
