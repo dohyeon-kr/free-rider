@@ -2,6 +2,7 @@ import DefaultTheme from 'vitepress/theme'
 import LandingHome from './components/LandingHome.vue'
 import './custom.css'
 import './landing-dark.css'
+import './typography.css'
 
 function applyLandingHeroCopy() {
   const title = document.querySelector('.landing .hero h1')

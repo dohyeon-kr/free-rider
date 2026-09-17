@@ -1,0 +1,100 @@
+/* Korean typography. Load after the theme and landing overrides. */
+:root {
+  --vp-font-family-base: Inter, ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR",
+    "Malgun Gothic", sans-serif;
+}
+
+/* Keep Korean words intact. Only split an oversized token to prevent overflow. */
+html:lang(ko) body,
+html:lang(ko) .VPDoc .vp-doc,
+html:lang(ko) .landing {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+/* Override VitePress's link wrapping without splitting Korean link labels. */
+html:lang(ko) .VPDoc .vp-doc :is(a, th, td) {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+html:lang(ko) .VPDoc .vp-doc :is(h1, h2, h3, h4, h5, h6) {
+  line-height: 1.4;
+  letter-spacing: -0.025em;
+  word-break: keep-all;
+  text-wrap: balance;
+}
+
+html:lang(ko) .VPDoc .vp-doc :is(p, li, dd) {
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+
+/* Match the landing's scoped selector specificity, including mobile overrides. */
+html:lang(ko) .landing :is(.section-head, .feature-head) h2 {
+  font-size: clamp(1.75rem, 3.8vw, 3.25rem);
+  line-height: 1.3;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+html:lang(ko) .landing .bento-card h3 {
+  line-height: 1.4;
+  text-wrap: balance;
+}
+
+html:lang(ko) .landing :is(
+  .hero-copy,
+  .section-head > p,
+  .feature-head > p,
+  .open-source p,
+  .final-card > p
+) {
+  line-height: 1.8;
+  text-wrap: pretty;
+}
+
+/* Preserve the demo cards' reserved height while improving copy wrapping. */
+html:lang(ko) .landing .bento-card > p {
+  text-wrap: pretty;
+}
+
+html:lang(ko) .landing .hero-copy {
+  max-width: 42rem;
+}
+
+html:lang(ko) .landing .open-source p {
+  max-width: 46rem;
+}
+
+html:lang(ko) .landing .section-head > *,
+html:lang(ko) .landing .bento-card {
+  min-width: 0;
+}
+
+/* Inline identifiers may wrap; preformatted examples must keep their layout. */
+html:lang(ko) .VPDoc .vp-doc :not(pre) > code {
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+html:lang(ko) .VPDoc .vp-doc pre,
+html:lang(ko) .VPDoc .vp-doc pre code,
+html:lang(ko) .landing pre {
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+  text-wrap: nowrap;
+}
+
+html:lang(ko) .VPDoc .vp-doc pre,
+html:lang(ko) .landing pre {
+  overflow-x: auto;
+}
+
+html:lang(ko) .landing code {
+  word-break: normal;
+  overflow-wrap: normal;
+}
