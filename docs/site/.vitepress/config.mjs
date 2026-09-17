@@ -1,12 +1,17 @@
 import { defineConfig } from 'vitepress'
+import { BRAND_ICON_PATH, prepareBrandAssets } from './brand.mjs'
+
+const base = '/free-rider/'
+prepareBrandAssets()
 
 export default defineConfig({
   title: 'Free Rider',
-  base: '/free-rider/',
+  base,
   lastUpdated: true,
   appearance: 'dark',
   cleanUrls: true,
   head: [
+    ['link', { rel: 'icon', type: 'image/png', href: `${base}${BRAND_ICON_PATH.slice(1)}` }],
     ['meta', { name: 'theme-color', content: '#0d0f10' }],
     ['meta', { property: 'og:title', content: 'Free Rider — All-free Open Source API Client' }],
     ['meta', { property: 'og:description', content: 'All-free, open-source, local-first API client for requests, OpenAPI, Git and MCP.' }]
@@ -129,6 +134,7 @@ export default defineConfig({
   },
   themeConfig: {
     siteTitle: 'Free Rider',
+    logo: { src: BRAND_ICON_PATH, alt: 'Free Rider' },
     search: { provider: 'local' },
     socialLinks: [
       { icon: 'github', link: 'https://github.com/dohyeon-kr/free-rider' }

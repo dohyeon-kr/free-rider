@@ -6,7 +6,7 @@ hero:
   text: Keep API work close to files and Git.
   tagline: A macOS API client for writing requests, environment variables, pre/post-processing, OpenAPI change review, and local Git workflows without a server or account.
   image:
-    src: /free-rider-hero.webp
+    src: /free-rider-app-icon.png
     alt: Free Rider rider character
   actions:
     - theme: brand

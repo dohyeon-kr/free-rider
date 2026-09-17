@@ -4,7 +4,7 @@
   "scripts": {
     "predev": "node demo/build.mjs",
     "dev": "vitepress",
-    "prebuild": "node demo/build.mjs",
+    "prebuild": "node --test tests/brand-assets.test.mjs && node demo/build.mjs",
     "build": "vitepress build",
     "preview": "vitepress preview",
     "test:demo": "node --test demo/*.test.mjs",
