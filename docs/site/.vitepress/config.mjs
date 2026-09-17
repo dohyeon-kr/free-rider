@@ -32,7 +32,8 @@ export default defineConfig({
             { text: 'Environment와 Vars', link: '/guide/variables-and-scripts' },
             { text: '컬렉션 실행', link: '/guide/collection-runner' },
             { text: 'OpenAPI 동기화', link: '/guide/openapi-sync' },
-            { text: 'Git 연동', link: '/guide/git' }
+            { text: 'Git 연동', link: '/guide/git' },
+            { text: 'MCP 서버', link: '/guide/mcp' }
           ]
         }
       ],
