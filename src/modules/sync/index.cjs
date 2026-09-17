@@ -97,12 +97,57 @@ function multipartConfig(doc, schema, seed) {
 function responseContract(doc, value, seen = new Set(), depth = 0) {
   if (!value || typeof value !== "object" || depth > 30) return value;
   if (value.$ref) {
-    if (seen.has(value.$ref)) return {$ref:value.$ref};
-    const next = new Set(seen); next.add(value.$ref);
-    return responseContract(doc, resolve(doc,value), next, depth+1);
+    if (seen.has(value.$ref)) return { $ref: value.$ref };
+    const next = new Set(seen);
+    next.add(value.$ref);
+    return responseContract(doc, resolve(doc, value), next, depth + 1);
   }
-  if (Array.isArray(value)) return value.map(v=>responseContract(doc,v,seen,depth+1));
-  return Object.fromEntries(Object.entries(value).map(([k,v])=>[k,responseContract(doc,v,seen,depth+1)]));
+  if (Array.isArray(value))
+    return value.map((v) => responseContract(doc, v, seen, depth + 1));
+  return Object.fromEntries(
+    Object.entries(value).map(([k, v]) => [
+      k,
+      responseContract(doc, v, seen, depth + 1),
+    ]),
+  );
+}
+function parameterContract(doc, parameter) {
+  return {
+    name: parameter.name || "",
+    in: parameter.in || "",
+    required: parameter.in === "path" || parameter.required === true,
+    ...(parameter.description ? { description: parameter.description } : {}),
+    ...(parameter.deprecated === true ? { deprecated: true } : {}),
+    ...(parameter.example !== undefined ? { example: parameter.example } : {}),
+    schema: responseContract(doc, parameter.schema || {}),
+  };
+}
+function requestBodyContract(doc, raw, selectedContentType) {
+  const body = resolve(doc, raw);
+  if (!body) return null;
+  const content = Object.fromEntries(
+    Object.entries(body.content || {}).map(([mime, rawMedia]) => {
+      const media = resolve(doc, rawMedia) || {};
+      return [
+        mime,
+        {
+          schema: responseContract(doc, media.schema || {}),
+          ...(media.example !== undefined
+            ? { example: responseContract(doc, media.example) }
+            : {}),
+          ...(media.examples
+            ? { examples: responseContract(doc, media.examples) }
+            : {}),
+        },
+      ];
+    }),
+  );
+  return {
+    required: body.required === true,
+    ...(body.description ? { description: body.description } : {}),
+    contentType: selectedContentType || Object.keys(content)[0] || "",
+    content,
+  };
 }
 function operations(doc) {
   const out = [];
@@ -150,6 +195,7 @@ function operations(doc) {
           2,
         );
       }
+      const requestBody = requestBodyContract(doc, op.requestBody, mime);
       out.push({
         id: method.toUpperCase() + " " + path,
         name: op.summary || op.operationId || path,
@@ -163,6 +209,20 @@ function operations(doc) {
         ...(bodyType ? { bodyType } : {}),
         auth: (op.security ?? doc.security)?.length ? true : false,
         extract: {},
+        openapi: {
+          source: "openapi",
+          path,
+          method: method.toUpperCase(),
+          operationId: op.operationId || "",
+          deprecated: op.deprecated === true,
+          document: {
+            title: doc.info?.title || "",
+            version: doc.info?.version || "",
+            openapi: doc.openapi || "",
+          },
+          parameters: [...params.values()].map((p) => parameterContract(doc, p)),
+          ...(requestBody ? { requestBody } : {}),
+        },
         responses: responseContract(doc, op.responses || {}),
       });
     }
