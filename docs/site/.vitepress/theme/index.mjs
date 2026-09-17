@@ -6,6 +6,7 @@ import './custom.css'
 import './landing-dark.css'
 import './typography.css'
 import './brand.css'
+import './final-cta.css'
 
 function applyLandingHeroCopy() {
   const title = document.querySelector('.landing .hero h1')

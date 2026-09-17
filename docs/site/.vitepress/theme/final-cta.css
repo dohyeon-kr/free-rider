@@ -1,0 +1,311 @@
+/* Final CTA: make the last screen feel like a product finale, not a footer card. */
+.landing .final-section {
+  position: relative;
+  isolation: isolate;
+  padding: 70px 0 104px !important;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(145, 119, 255, 0.08), transparent 28rem),
+    linear-gradient(180deg, #050505 0%, #070708 48%, #050505 100%) !important;
+}
+
+.landing .final-section::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+}
+
+.landing .final-section::after {
+  position: absolute;
+  left: 50%;
+  bottom: -390px;
+  width: min(1080px, 95vw);
+  aspect-ratio: 1;
+  border: 1px solid rgba(215, 255, 102, 0.08);
+  border-radius: 50%;
+  pointer-events: none;
+  content: '';
+  transform: translateX(-50%);
+  box-shadow:
+    0 0 0 90px rgba(145, 119, 255, 0.025),
+    0 0 0 180px rgba(255, 255, 255, 0.012);
+}
+
+.landing .final-card {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 620px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 118px 32px 112px !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  border-radius: 36px !important;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(215, 255, 102, 0.055), transparent 22rem),
+    radial-gradient(circle at 82% 9%, rgba(145, 119, 255, 0.11), transparent 25rem),
+    linear-gradient(160deg, rgba(20, 20, 22, 0.99), rgba(8, 8, 9, 0.995) 58%, rgba(11, 11, 12, 0.99)) !important;
+  box-shadow:
+    0 60px 150px rgba(0, 0, 0, 0.62),
+    0 18px 50px rgba(0, 0, 0, 0.42),
+    inset 0 1px rgba(255, 255, 255, 0.11),
+    inset 0 -1px rgba(255, 255, 255, 0.035) !important;
+  transform: translateZ(0);
+}
+
+/* Fine engineering grid that disappears into the edges. */
+.landing .final-card::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  opacity: 0.48;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(118deg, rgba(255, 255, 255, 0.07), transparent 17%, transparent 77%, rgba(145, 119, 255, 0.035));
+  background-size: 54px 54px, 54px 54px, 100% 100%;
+  mask-image: radial-gradient(ellipse at 50% 48%, #000 10%, rgba(0, 0, 0, 0.82) 48%, transparent 88%);
+}
+
+/* An orbital horizon gives the card a rider / motion cue without turning literal. */
+.landing .final-card::after {
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  bottom: -345px;
+  width: 920px;
+  height: 520px;
+  border: 1px solid rgba(215, 255, 102, 0.18);
+  border-radius: 50%;
+  pointer-events: none;
+  content: '';
+  transform: translateX(-50%);
+  box-shadow:
+    0 -2px 26px rgba(215, 255, 102, 0.06),
+    0 0 0 38px rgba(145, 119, 255, 0.028),
+    0 0 0 39px rgba(255, 255, 255, 0.025),
+    0 0 0 108px rgba(255, 255, 255, 0.012);
+  animation: final-cta-orbit 8s ease-in-out infinite;
+}
+
+.landing .final-card .final-glow {
+  z-index: 0;
+  top: -410px !important;
+  left: 50% !important;
+  width: 820px !important;
+  height: 650px !important;
+  margin-left: -410px;
+  border-radius: 50%;
+  opacity: 0.62 !important;
+  background:
+    radial-gradient(circle at 36% 64%, rgba(215, 255, 102, 0.62), transparent 31%),
+    radial-gradient(circle at 64% 55%, rgba(145, 119, 255, 0.68), transparent 38%),
+    radial-gradient(circle at 52% 30%, rgba(93, 176, 255, 0.42), transparent 36%) !important;
+  filter: blur(70px) !important;
+  transform: translate3d(0, 0, 0);
+  animation: final-cta-aurora 9s ease-in-out infinite alternate;
+}
+
+.landing .final-card > small,
+.landing .final-card > h2,
+.landing .final-card > p,
+.landing .final-card > .actions {
+  position: relative;
+  z-index: 2;
+}
+
+.landing .final-card > small {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.72) !important;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.landing .final-card > small::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  content: '';
+  background: #d7ff66;
+  box-shadow: 0 0 18px rgba(215, 255, 102, 0.6);
+}
+
+.landing .final-card h2 {
+  max-width: 900px;
+  margin: 28px auto 0 !important;
+  color: #fff !important;
+  font-size: clamp(58px, 7.7vw, 104px) !important;
+  font-weight: 820;
+  line-height: 0.93;
+  letter-spacing: -0.065em;
+  text-wrap: balance;
+  text-shadow: 0 16px 46px rgba(0, 0, 0, 0.26);
+}
+
+.landing .final-card h2 span {
+  color: transparent !important;
+  background: linear-gradient(104deg, #ffffff 5%, #c8b8ff 46%, #d7ff66 102%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.landing .final-card p {
+  max-width: 560px;
+  margin: 25px auto 0 !important;
+  color: rgba(255, 255, 255, 0.52) !important;
+  font-size: 15px;
+  line-height: 1.72;
+  letter-spacing: -0.015em;
+  text-wrap: pretty;
+}
+
+/* Treat the downloads as one intentional control dock. */
+.landing .final-card .actions {
+  width: max-content;
+  max-width: 100%;
+  gap: 6px !important;
+  margin-top: 34px !important;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.105);
+  border-radius: 18px;
+  background: rgba(12, 12, 13, 0.72);
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.06),
+    0 18px 44px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(22px);
+}
+
+.landing .final-card .actions .button {
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+
+.landing .final-card .actions .button.primary {
+  min-width: 142px;
+  border-color: rgba(233, 255, 164, 0.72) !important;
+  background: linear-gradient(180deg, #edffb6 0%, #d7ff66 58%, #c9ee59 100%) !important;
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.92),
+    inset 0 -1px rgba(91, 116, 25, 0.18),
+    0 12px 34px rgba(215, 255, 102, 0.13) !important;
+}
+
+.landing .final-card .actions .button.secondary {
+  min-width: 128px;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: linear-gradient(180deg, rgba(39, 39, 42, 0.96), rgba(21, 21, 23, 0.96)) !important;
+}
+
+.landing .final-card .actions .button.ghost {
+  border-color: transparent !important;
+  color: rgba(255, 255, 255, 0.58) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.landing .final-card .actions .button.ghost:hover {
+  color: rgba(255, 255, 255, 0.9) !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+}
+
+.landing .final-card:hover {
+  border-color: rgba(255, 255, 255, 0.19) !important;
+}
+
+.landing .final-card:hover .final-glow {
+  opacity: 0.72 !important;
+}
+
+@keyframes final-cta-aurora {
+  0% { transform: translate3d(-18px, -4px, 0) scale(0.98); }
+  100% { transform: translate3d(22px, 18px, 0) scale(1.05); }
+}
+
+@keyframes final-cta-orbit {
+  0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.8; }
+  50% { transform: translateX(-50%) scale(1.035); opacity: 1; }
+}
+
+@media (max-width: 760px) {
+  .landing .final-section {
+    padding: 38px 0 56px !important;
+  }
+
+  .landing .final-card {
+    min-height: 560px;
+    padding: 86px 18px 82px !important;
+    border-radius: 25px !important;
+  }
+
+  .landing .final-card h2 {
+    max-width: 560px;
+    font-size: clamp(50px, 15vw, 70px) !important;
+    line-height: 0.95;
+  }
+
+  .landing .final-card p {
+    max-width: 390px;
+    font-size: 14px;
+  }
+
+  .landing .final-card .actions {
+    display: grid !important;
+    width: min(100%, 360px);
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .landing .final-card .actions .button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .landing .final-card .actions .button.ghost {
+    grid-column: 1 / -1;
+  }
+
+  .landing .final-card::after {
+    bottom: -390px;
+    width: 760px;
+    height: 500px;
+  }
+}
+
+@media (max-width: 430px) {
+  .landing .final-card h2 {
+    font-size: 48px !important;
+  }
+
+  .landing .final-card .actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .landing .final-card .actions .button.ghost {
+    grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .final-card .final-glow,
+  .landing .final-card::after {
+    animation: none !important;
+  }
+}
