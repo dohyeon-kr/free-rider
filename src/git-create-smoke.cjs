@@ -6,6 +6,11 @@ const path = require("node:path");
 async function run({ js, poll, win, gitPath }) {
   const folderName = "새 API collection";
   const target = path.join(gitPath, folderName);
+  async function screenshot(name) {
+    await js("new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))");
+    await new Promise(resolve => setTimeout(resolve, 250));
+    await fs.writeFile(path.join("test-results", name + ".png"), (await win.webContents.capturePage()).toPNG());
+  }
   async function openForm() {
     await js(`document.querySelector('#gitButton').click(); document.querySelector('#gitCreateRepository').click(); document.querySelector('#gitCreateChooseParent').click()`);
     await poll(() => js(`!!document.querySelector('#gitCreateParent')?.value && !document.querySelector('#dialogConfirm').disabled`));
@@ -14,7 +19,7 @@ async function run({ js, poll, win, gitPath }) {
   }
   await openForm();
   assert.equal(await js(`document.querySelector('#gitCreatePreview').textContent`), target);
-  await fs.writeFile(path.join("test-results", "git-create-dialog.png"), (await win.webContents.capturePage()).toPNG());
+  await screenshot("git-create-dialog");
   // Verify the same reversible Enter-to-confirm path used by the other input modals.
   await js(`document.querySelector('#gitCreateFolderName').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}))`);
   await poll(() => js(`!document.querySelector('#dialog').open`));
@@ -29,7 +34,8 @@ async function run({ js, poll, win, gitPath }) {
   assert.equal(await js(`document.querySelector('#dialog').open`), true);
   assert.equal(await js(`document.querySelector('#gitCreateFolderName').value`), folderName);
   assert.deepEqual(await fs.readdir(target), [".git"]);
+  await screenshot("git-create-duplicate");
   await js(`document.querySelector('#dialog').close()`);
-  await fs.writeFile(path.join("test-results", "git-created.png"), (await win.webContents.capturePage()).toPNG());
+  await screenshot("git-created");
 }
 module.exports = { run };
