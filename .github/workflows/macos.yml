@@ -39,6 +39,30 @@ jobs:
       released: ${{ steps.semantic.outputs.released }}
       tag: ${{ steps.semantic.outputs.tag }}
     steps:
+      - name: Require Apple signing secrets
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          missing=()
+          [[ -n "$CSC_LINK" ]] || missing+=("CSC_LINK")
+          [[ -n "$CSC_KEY_PASSWORD" ]] || missing+=("CSC_KEY_PASSWORD")
+          [[ -n "$APPLE_ID" ]] || missing+=("APPLE_ID")
+          [[ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]] || missing+=("APPLE_APP_SPECIFIC_PASSWORD")
+          [[ -n "$APPLE_TEAM_ID" ]] || missing+=("APPLE_TEAM_ID")
+
+          if (( ${#missing[@]} )); then
+            printf 'Missing required release secret: %s\n' "${missing[@]}" >&2
+            echo 'Configure all five Apple signing secrets before publishing a release.' >&2
+            exit 1
+          fi
+
+          echo '### Developer ID signing configured' >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -122,12 +146,9 @@ jobs:
             echo '### Unsigned PR build — package validation only' >> "$GITHUB_STEP_SUMMARY"
           elif [[ -n "$CERTIFICATE" && -n "$CERT_PASSWORD" && -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$TEAM_ID" ]]; then
             echo 'mode=developer-id' >> "$GITHUB_OUTPUT"
-          elif [[ -n "$CERTIFICATE$CERT_PASSWORD$APPLE_ID$APPLE_PASSWORD$TEAM_ID" ]]; then
-            echo 'Apple signing secrets are incomplete. Configure all five secrets.' >&2
-            exit 1
           else
-            echo 'mode=adhoc' >> "$GITHUB_OUTPUT"
-            echo '### Ad-hoc signed test build — not Apple notarized' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Apple signing secrets are required for release builds.' >&2
+            exit 1
           fi
 
       - name: Developer ID signed and notarized build
@@ -139,10 +160,6 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run dist:mac -- --${{ matrix.arch }} -c.forceCodeSigning=true -c.mac.notarize=true
-
-      - name: Ad-hoc signed test build
-        if: steps.signing.outputs.mode == 'adhoc'
-        run: npm run dist:mac -- --${{ matrix.arch }} -c.mac.identity=- -c.mac.notarize=false
 
       - name: Unsigned PR build
         if: steps.signing.outputs.mode == 'pr-unsigned'
