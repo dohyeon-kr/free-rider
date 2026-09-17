@@ -10,14 +10,21 @@ export function reviewView(review,onApply) {
     summary.textContent=selected.size+"개 선택"+(blocked?" · 충돌 처리 방식을 선택하세요.":"");
   }
   root.append(el("h2",{text:"명세 변경 검토"}));
+  if(review.breakingCount) root.append(el("div",{class:"sync-row"},el("div",{},
+    el("strong",{class:"danger",text:`Breaking Change ${review.breakingCount}개 감지`}),
+    el("p",{class:"hint",text:"호환성을 깨뜨릴 수 있는 변경입니다. 이유를 확인한 뒤 필요한 항목만 반영하세요."}))));
   if(!review.changes.length) root.append(el("p",{text:"명세 변경이 없습니다."}));
   for(const change of review.changes) {
-    const conflicts=change.fields.filter(f=>f.conflict);
+    const conflicts=change.fields.filter(f=>f.conflict), breaking=change.breakingReasons || [];
     const check=el("input",{type:"checkbox",checked:selected.has(change.id),"aria-label":change.id+" 반영",
       onChange:e=>{e.target.checked?selected.add(change.id):selected.delete(change.id);update();}});
     const details=el("details",{class:"sync-change"});
+    const breakingBadge=el("span",{class:"sync-conflict",text:breaking.length?"BREAKING "+breaking.length:""});
     const badge=el("span",{class:"sync-conflict",text:conflicts.length?"충돌 "+conflicts.length+"개":""});
-    details.append(el("summary",{},change.id+" · "+({added:"추가",updated:"수정",removed:"삭제"}[change.type]),badge));
+    details.append(el("summary",{},change.id+" · "+({added:"추가",updated:"수정",removed:"삭제"}[change.type]),breakingBadge,badge));
+    if(breaking.length) details.append(el("div",{class:"sync-field"},
+      el("strong",{class:"danger",text:"호환성 영향"}),
+      el("ul",{},...breaking.map(reason=>el("li",{text:reason.message})))));
     for(const field of change.fields) {
       const block=el("div",{class:"sync-field"},el("strong",{text:field.key}));
       const pretty=v=>v===undefined?"(없음)":typeof v==="string"?v:JSON.stringify(v,null,2);
