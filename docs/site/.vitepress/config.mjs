@@ -15,8 +15,20 @@ export default defineConfig({
   head: [
     ['link', { rel: 'icon', type: 'image/png', href: `${base}${BRAND_ICON_PATH.slice(1)}` }],
     ['meta', { name: 'theme-color', content: '#0d0f10' }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:url', content: 'https://dohyeon-kr.github.io/free-rider/' }],
     ['meta', { property: 'og:title', content: 'Free Rider — All-free Open Source API Client' }],
-    ['meta', { property: 'og:description', content: 'All-free, open-source, local-first API client for requests, OpenAPI, Git and MCP.' }]
+    ['meta', { property: 'og:description', content: 'All-free, open-source, local-first API client for requests, OpenAPI, Git and MCP.' }],
+    ['meta', { property: 'og:image', content: 'https://dohyeon-kr.github.io/free-rider/free-rider-og.jpg' }],
+    ['meta', { property: 'og:image:width', content: '1200' }],
+    ['meta', { property: 'og:image:height', content: '630' }],
+    ['meta', { property: 'og:image:type', content: 'image/jpeg' }],
+    ['meta', { property: 'og:image:alt', content: 'Free Rider — Open-source API Client for Requests, OpenAPI, Git and MCP' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:title', content: 'Free Rider — All-free Open Source API Client' }],
+    ['meta', { name: 'twitter:description', content: 'All-free, open-source, local-first API client for requests, OpenAPI, Git and MCP.' }],
+    ['meta', { name: 'twitter:image', content: 'https://dohyeon-kr.github.io/free-rider/free-rider-og.jpg' }],
+    ['meta', { name: 'twitter:image:alt', content: 'Free Rider — Open-source API Client for Requests, OpenAPI, Git and MCP' }]
   ],
   locales: {
     root: {
