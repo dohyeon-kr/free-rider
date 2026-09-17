@@ -1,3 +1,5 @@
+<img width="1560" height="963" alt="image" src="https://github.com/user-attachments/assets/a4b6c189-4ca7-418f-a34d-3e1bf4df3ff0" />
+
 # Free Rider
 
 서버·계정 없이 사용하는 Electron API 클라이언트입니다. 요청 작성과 실행, 환경별 변수, 전역 전후처리, OpenAPI 변경 검토와 선택 반영, 로컬 Git 작업을 제공합니다.
