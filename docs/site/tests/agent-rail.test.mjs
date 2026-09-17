@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { watchRailActivity } from '../.vitepress/theme/components/rail-activity.mjs'
 
@@ -15,6 +16,15 @@ function browser() {
   }
   return { doc, media, Observer, matchMedia: () => media, get observer() { return observer } }
 }
+
+test('agent rail represents four coding agents and does not label Codex as ChatGPT', () => {
+  const component = readFileSync(new URL('../.vitepress/theme/components/McpAgentRail.vue', import.meta.url), 'utf8')
+  for (const agent of ['Codex', 'Claude Code', 'Gemini CLI', 'Cursor']) {
+    assert.match(component, new RegExp(agent.replace(' ', '\\s+')))
+  }
+  assert.doesNotMatch(component, /name:\s*['"]ChatGPT['"]/)
+  assert.match(component, /ONE WORKSPACE\. ANY AGENT\./)
+})
 
 test('SSR and missing elements stay still without browser globals', () => {
   const states = []
