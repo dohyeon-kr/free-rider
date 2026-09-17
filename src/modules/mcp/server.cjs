@@ -28,11 +28,42 @@ function optionalLimit(args, fallback = 20, maximum = 200) {
   return value;
 }
 
+function hasOwn(value, name) {
+  return Object.prototype.hasOwnProperty.call(value || {}, name);
+}
+
+function normalizeInterceptors(value = {}) {
+  return {
+    enabled: value?.enabled === true,
+    before: typeof value?.before === "string" ? value.before : "",
+    after: typeof value?.after === "string" ? value.after : "",
+  };
+}
+
+function interceptorPatch(args = {}) {
+  const patch = {};
+  let changed = false;
+  if (hasOwn(args, "enabled")) {
+    if (typeof args.enabled !== "boolean") throw Error("enabled must be a boolean.");
+    patch.enabled = args.enabled;
+    changed = true;
+  }
+  for (const name of ["before", "after"]) {
+    if (!hasOwn(args, name)) continue;
+    if (typeof args[name] !== "string") throw Error(`${name} must be a string.`);
+    patch[name] = args[name];
+    changed = true;
+  }
+  if (!changed)
+    throw Error("At least one of enabled, before, or after must be provided.");
+  return patch;
+}
+
 function toolDefinitions() {
   return [
     {
       name: "list_collections",
-      description: "List Free Rider collections and their request/environment counts without exposing environment values.",
+      description: "List Free Rider collections and their request/environment counts without exposing environment values or interceptor source.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
     },
     {
@@ -59,8 +90,38 @@ function toolDefinitions() {
       },
     },
     {
+      name: "get_collection_interceptors",
+      description: "Read a collection's saved Before Request and After Response interceptor configuration, including script source.",
+      inputSchema: {
+        type: "object",
+        properties: { collectionId: { type: "string" } },
+        required: ["collectionId"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "set_collection_interceptors",
+      description: "Patch and save a collection's Before Request and After Response interceptors. Omitted fields are preserved. Free Rider must have no unsaved UI changes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          collectionId: { type: "string" },
+          enabled: { type: "boolean" },
+          before: { type: "string" },
+          after: { type: "string" },
+        },
+        required: ["collectionId"],
+        anyOf: [
+          { required: ["enabled"] },
+          { required: ["before"] },
+          { required: ["after"] },
+        ],
+        additionalProperties: false,
+      },
+    },
+    {
       name: "send_request",
-      description: "Execute one saved Free Rider request with a saved environment and the workspace's global pre/post scripts.",
+      description: "Execute one saved Free Rider request with a saved environment and the collection's Before Request / After Response interceptors.",
       inputSchema: {
         type: "object",
         properties: {
@@ -101,16 +162,20 @@ function createMcpServer(options) {
     loadWorkspace,
     runSavedRequest,
     loadNetworkHistory,
+    saveCollectionInterceptors,
   } = options;
   if (typeof loadWorkspace !== "function") throw Error("loadWorkspace is required.");
   if (typeof runSavedRequest !== "function") throw Error("runSavedRequest is required.");
   if (typeof loadNetworkHistory !== "function") throw Error("loadNetworkHistory is required.");
+  if (typeof saveCollectionInterceptors !== "function")
+    throw Error("saveCollectionInterceptors is required.");
 
   const serverInfo = { name, version };
   const capabilities = { tools: {} };
   const instructions =
-    "Free Rider exposes the currently open API workspace and recent network history. " +
-    "Use list tools before selecting ids. Environment values are not returned by list tools.";
+    "Free Rider exposes the saved API workspace and recent network history. " +
+    "Use list tools before selecting ids. Environment values are not returned by list tools. " +
+    "Read collection interceptors before patching them; interceptor writes require the app to have no unsaved UI changes.";
 
   function stamp(result, modern, cacheable = false) {
     if (!modern) return result;
@@ -142,6 +207,10 @@ function createMcpServer(options) {
     return request;
   }
 
+  function interceptorsFor(state, collection) {
+    return normalizeInterceptors(collection.interceptors || state.globalScripts || {});
+  }
+
   async function callTool(name, args = {}) {
     if (name === "list_collections") {
       const state = await workspace();
@@ -150,6 +219,7 @@ function createMcpServer(options) {
         title: collection.title,
         description: collection.description || "",
         requestCount: collection.requests?.length || 0,
+        interceptorsEnabled: interceptorsFor(state, collection).enabled,
         environments: (collection.environments || []).map((environment) => ({
           id: environment.id,
           name: environment.name,
@@ -173,6 +243,27 @@ function createMcpServer(options) {
       const state = await workspace();
       const collection = collectionById(state, requiredString(args, "collectionId"));
       return requestById(collection, requiredString(args, "requestId"));
+    }
+
+    if (name === "get_collection_interceptors") {
+      const state = await workspace();
+      const collection = collectionById(state, requiredString(args, "collectionId"));
+      return interceptorsFor(state, collection);
+    }
+
+    if (name === "set_collection_interceptors") {
+      const state = await workspace();
+      const collectionId = requiredString(args, "collectionId");
+      const collection = collectionById(state, collectionId);
+      const next = {
+        ...interceptorsFor(state, collection),
+        ...interceptorPatch(args),
+      };
+      const saved = await saveCollectionInterceptors({
+        collectionId,
+        interceptors: next,
+      });
+      return normalizeInterceptors(saved || next);
     }
 
     if (name === "send_request") {

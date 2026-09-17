@@ -10,6 +10,7 @@ export function collection(title = "Untitled Collection") {
     vars: [],
     headers: [],
     authConfig: { type: "none" },
+    interceptors: { enabled: false, before: "", after: "" },
     environments: [
       {
         id: crypto.randomUUID(),
@@ -44,6 +45,10 @@ export function normalize(c) {
   c.vars ||= [];
   c.headers ||= [];
   c.authConfig ||= { type: "none" };
+  c.interceptors ||= { enabled: false, before: "", after: "" };
+  c.interceptors.enabled = !!c.interceptors.enabled;
+  c.interceptors.before ||= "";
+  c.interceptors.after ||= "";
   c.environments?.forEach((e) => {
     e.id ||= crypto.randomUUID();
   });
