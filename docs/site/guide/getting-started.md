@@ -4,9 +4,9 @@ Free Rider는 서버와 계정 없이 동작하는 macOS Electron API 클라이�
 
 ## 설치
 
-### Homebrew
+### Homebrew (권장)
 
-Homebrew를 사용한다면 Cask로 설치하는 방법을 권장합니다. Free Rider 저장소 자체를 tap으로 사용하므로 처음 한 번만 명시적으로 연결하면 됩니다.
+Homebrew를 사용한다면 Cask 설치를 권장합니다. Free Rider 저장소 자체를 tap으로 사용하므로 처음 한 번만 명시적으로 연결하면 됩니다.
 
 ```sh
 brew tap dohyeon-kr/free-rider https://github.com/dohyeon-kr/free-rider.git
@@ -19,7 +19,7 @@ Homebrew 6부터 비공식 tap은 명시적인 신뢰가 필요합니다. 위처
 
 ```sh
 brew update
-brew upgrade --cask free-rider
+brew upgrade --cask dohyeon-kr/free-rider/free-rider
 ```
 
 삭제는 다음과 같습니다.
