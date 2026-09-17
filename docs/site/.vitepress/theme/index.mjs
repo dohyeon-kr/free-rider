@@ -1,5 +1,6 @@
 import DefaultTheme from 'vitepress/theme'
-import LandingHome from './components/LandingHome.vue'
+import LandingHome from './components/InteractiveLanding.vue'
+import RendererDemo from './components/RendererDemo.vue'
 import './custom.css'
 import './landing-dark.css'
 import './typography.css'
@@ -17,6 +18,7 @@ export default {
   extends: DefaultTheme,
   enhanceApp({ app }) {
     app.component('LandingHome', LandingHome)
+    app.component('RendererDemo', RendererDemo)
 
     if (typeof window !== 'undefined') {
       app.mixin({

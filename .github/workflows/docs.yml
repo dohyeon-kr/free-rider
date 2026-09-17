@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - "docs/site/**"
+      - "src/**"
       - "build/icon-source/**"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "docs/site/**"
+      - "src/**"
       - "build/icon-source/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
@@ -35,16 +37,29 @@ jobs:
       - name: Install documentation dependencies
         run: npm install --prefix docs/site --no-package-lock
 
+      - name: Test demo adapter and renderer build
+        run: npm run --prefix docs/site test:demo
+
       - name: Build VitePress documentation
         run: npm run --prefix docs/site build
 
-      - name: Upload PR documentation preview
-        if: github.event_name == 'pull_request'
+      - name: Install browser for demo verification
+        working-directory: docs/site
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify interactive demo in Chromium
+        run: npm run --prefix docs/site smoke:demo
+
+      - name: Upload demo screenshots and verification results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: docs-preview-${{ github.event.number }}
-          path: docs/site/.vitepress/dist
-          retention-days: 3
+          name: renderer-demo-preview
+          path: |
+            docs/site/.vitepress/demo-artifacts
+            docs/site/.vitepress/dist
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Configure Pages
         if: github.event_name != 'pull_request'
