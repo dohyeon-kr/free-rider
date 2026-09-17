@@ -37,3 +37,59 @@ test("independent query edits merge and nested schema changes are reviewed separ
  assert.equal(result.query.find(r=>r.key==="limit").value,"50");
  assert.equal(result.query.find(r=>r.key==="page").value,"7");
 });
+
+test("removed operations are classified as breaking changes",async()=>{
+ const {preview}=await import("../src/modules/sync/review.mjs");
+ const base={id:"GET /users",method:"GET",openapi:{path:"/users",parameters:[]}};
+ const review=preview([{...base,baseline:base}],[]);
+ assert.equal(review.breakingCount,1);
+ assert.equal(review.changes[0].breaking,true);
+ assert.equal(review.changes[0].breakingReasons[0].code,"operation-removed");
+});
+
+test("new required request inputs are breaking while optional inputs are not",async()=>{
+ const {preview}=await import("../src/modules/sync/review.mjs");
+ const base={id:"GET /users",openapi:{path:"/users",parameters:[{name:"page",in:"query",required:false,schema:{type:"integer"}}]}};
+ const required={...base,openapi:{...base.openapi,parameters:[...base.openapi.parameters,{name:"tenant",in:"header",required:true,schema:{type:"string"}}]}};
+ const optional={...base,openapi:{...base.openapi,parameters:[...base.openapi.parameters,{name:"sort",in:"query",required:false,schema:{type:"string"}}]}};
+ const requiredReview=preview([{...base,baseline:base}],[required]);
+ const optionalReview=preview([{...base,baseline:base}],[optional]);
+ assert.equal(requiredReview.breakingCount,1);
+ assert.equal(requiredReview.changes[0].breakingReasons.some(r=>r.code==="required-parameter-added"),true);
+ assert.equal(optionalReview.breakingCount,0);
+});
+
+test("request schema narrowing and required body changes are classified as breaking",async()=>{
+ const {preview}=await import("../src/modules/sync/review.mjs");
+ const base={id:"POST /users",openapi:{path:"/users",parameters:[{name:"role",in:"query",required:false,schema:{type:"string",enum:["admin","member"]}}],requestBody:{required:false,contentType:"application/json",content:{"application/json":{schema:{type:"object",properties:{name:{type:"string"}},required:[]}}}}}};
+ const next=structuredClone(base);
+ next.openapi.parameters[0].schema.enum=["admin"];
+ next.openapi.requestBody.required=true;
+ next.openapi.requestBody.content["application/json"].schema.required=["name"];
+ const review=preview([{...base,baseline:base}],[next]);
+ const codes=review.changes[0].breakingReasons.map(r=>r.code);
+ assert.equal(review.breakingCount,1);
+ assert.equal(codes.includes("parameter-enum-narrowed"),true);
+ assert.equal(codes.includes("request-body-became-required"),true);
+ assert.equal(codes.includes("request-property-became-required"),true);
+});
+
+test("removed success responses and incompatible response schemas are breaking",async()=>{
+ const {preview}=await import("../src/modules/sync/review.mjs");
+ const base={id:"GET /users",responses:{"200":{description:"ok",content:{"application/json":{schema:{type:"object",properties:{id:{type:"string"},name:{type:"string"}}}}}},"404":{description:"not found"}},openapi:{path:"/users",parameters:[]}};
+ const removed=structuredClone(base); delete removed.responses["200"];
+ const changed=structuredClone(base); delete changed.responses["200"].content["application/json"].schema.properties.name;
+ const removedReview=preview([{...base,baseline:base}],[removed]);
+ const changedReview=preview([{...base,baseline:base}],[changed]);
+ assert.equal(removedReview.changes[0].breakingReasons.some(r=>r.code==="success-response-removed"),true);
+ assert.equal(changedReview.changes[0].breakingReasons.some(r=>r.code==="response-property-removed"),true);
+});
+
+test("description-only OpenAPI changes are not classified as breaking",async()=>{
+ const {preview}=await import("../src/modules/sync/review.mjs");
+ const base={id:"GET /users",description:"old",responses:{"200":{description:"old"}},openapi:{path:"/users",parameters:[]}};
+ const next={...base,description:"new",responses:{"200":{description:"new"}}};
+ const review=preview([{...base,baseline:base}],[next]);
+ assert.equal(review.breakingCount,0);
+ assert.equal(review.changes[0].breaking,false);
+});
