@@ -15,6 +15,7 @@ const { pathToFileURL } = require("node:url");
 const { parseSpec, operations, synchronize, parseEnv } = require("./core.cjs");
 const { execute, fetchText } = require("./network.cjs");
 const { serverUrl } = require("./modules/sync/server.cjs");
+const { readSpecSource } = require("./modules/sync/source.cjs");
 const {
   EnvironmentStore,
   shareableEnvironments,
@@ -272,10 +273,8 @@ handle("import-spec", async () => {
   specFiles.add(result.filePaths[0]);return readSpecFile(result.filePaths[0]);
 });
 handle("sync-spec-file", filename => readSpecFile(filename));
-handle("sync-spec", async (source, old) => {
-  const r = await fetchText(source);
-  if (r.status < 200 || r.status >= 300) throw Error(`명세 HTTP ${r.status}`);
-  const doc = parseSpec(r.body);
+handle("sync-spec", async (source, old, auth) => {
+  const doc = parseSpec(await readSpecSource(source, auth, fetchText));
   return {
     generated: operations(doc),
     title: doc.info?.title || "API Collection",

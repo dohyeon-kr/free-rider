@@ -36,3 +36,11 @@ If a connected file was modified in an external editor, use `Reload` to read and
 If the selected Environment has an empty `baseUrl`, Free Rider can suggest registering the specification's server URL.
 
 When a specification imported from a URL uses a relative server URL, it is resolved **relative to the specification URL**.
+
+## Import a specification protected by Basic Auth
+
+In **Start with OpenAPI** for a new collection, or **OpenAPI / API Specifications** for an existing collection, enter the URL, select **Specification authentication → Basic Auth**, and enter Username and Password. Use **Start from URL** or **Synchronize** to load a JSON/YAML specification. The eye button reveals or hides the password.
+
+This authentication is **only for downloading the specification**, separate from generated API request authentication. Credentials are reused for the same collection and URL during the current app session only. Changing the URL or closing the app clears them. They are not included in saved workspaces, collection exports, or Git sharing. Enter them again after restarting.
+
+For HTTP 401, check the username/password; for HTTP 403, check specification access permissions. Use the authentication fields rather than embedding `user:password@` in the URL. HTTPS is recommended. Redirects remain disabled.

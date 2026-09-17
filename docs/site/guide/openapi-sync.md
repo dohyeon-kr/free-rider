@@ -36,3 +36,11 @@ Headers, Query, 응답 스키마는 항목별로 비교합니다. 문자열 Body
 선택한 Environment의 `baseUrl`이 비어 있으면 명세의 server URL을 등록하도록 제안할 수 있습니다.
 
 URL로 가져온 명세에서 상대 server URL을 사용하면 **명세 URL을 기준**으로 해석합니다.
+
+## Basic Auth로 보호된 명세 가져오기
+
+새 컬렉션의 **OpenAPI로 시작하기** 또는 기존 컬렉션의 **OpenAPI / API Specifications**에서 URL을 입력한 다음, **Specification authentication → Basic Auth**를 선택하고 Username과 Password를 입력하세요. **URL로 시작** 또는 **Synchronize**로 JSON/YAML 명세를 불러옵니다. 비밀번호 옆 눈 버튼으로 값을 확인할 수 있습니다.
+
+이 인증은 **명세 파일 다운로드 전용**이며, 생성된 API 요청의 Auth와 별개입니다. 인증 정보는 같은 컬렉션과 URL에서 앱 실행 중에만 재사용하고, URL 변경 또는 앱 종료 시 삭제합니다. 워크스페이스 저장, 컬렉션 Export, Git 공유에는 포함되지 않습니다. 재실행 후에는 다시 입력하세요.
+
+HTTP 401은 아이디/비밀번호를, HTTP 403은 명세 접근 권한을 확인하세요. URL에 `user:password@`를 넣지 말고 인증 입력란을 사용하세요. HTTPS 사용을 권장하며, 리다이렉트는 기존과 동일하게 허용하지 않습니다.

@@ -14,6 +14,7 @@ async function start() {
   await fs.writeFile(specPath,JSON.stringify({openapi:"3.0.3",info:{title:"File fixture",version:"1"},paths:{"/file-test":{get:{summary:"File endpoint",responses:{"200":{description:"OK"}}}}}}));
   server = http.createServer((req, res) => {
     res.setHeader("Content-Type", "application/json");
+    if (require("./spec-auth-smoke.cjs").serve(req, res)) return;
     if (req.url === "/spec") return res.end(JSON.stringify({
       openapi:"3.0.3",info:{title:"Fixture",version:"1"},
       servers:[{url:"/api"}],paths:{"/review-test":{get:{summary:"Review fixture",responses:{"200":{description:"OK"}}}}}
@@ -282,6 +283,7 @@ async function run(win) {
   await js(`document.querySelector('#gitButton').click();[...document.querySelectorAll('button')].find(b=>b.textContent==='Open repository folder').click()`);
   await poll(()=>js(`document.querySelector('[data-view=git]').textContent.includes('최근 컬렉션 커밋')`));
   await screenshot("git");
+  await require("./spec-auth-smoke.cjs").run({ js, poll, baseUrl, win });
   server.close();
   await fs.rm(path.dirname(workspacePath),{recursive:true,force:true});
   return "Native tabs, Network panel, runner login chain with Cookie Jar, inherited auth, assertions, environments and IPC passed";
