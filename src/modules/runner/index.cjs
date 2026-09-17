@@ -77,7 +77,7 @@ function fetchHeaders(headers, body) {
       if (key.toLowerCase() === "content-type") delete next[key];
   return next;
 }
-async function execute(request, variables, signal, scripts = {}, environment = variables, resolveFile, fetcher = fetch) {
+async function execute(request, variables, signal, interceptors = {}, environment = variables, resolveFile, fetcher = fetch) {
   let p = prepare(request, variables);
   const
     start = performance.now();
@@ -87,9 +87,9 @@ async function execute(request, variables, signal, scripts = {}, environment = v
     for(const [key,value] of Object.entries(result.changes)) {changes[key]=value;deleted.delete(key);}
     logs.push(...result.logs);
   };
-  if(scripts.enabled) {
+  if(interceptors.enabled) {
     try {
-      const before=await runScript(scripts.before,{req:p,vars:variables,env:environment},signal);
+      const before=await runScript(interceptors.before,{req:p,vars:variables,env:environment},signal);
       p=before.req;
       const target=new URL(p.url);
       if(!["http:","https:"].includes(target.protocol) || target.username || target.password) throw Error("전처리 URL은 인증정보 없는 HTTP/HTTPS 주소여야 합니다.");
@@ -97,7 +97,7 @@ async function execute(request, variables, signal, scripts = {}, environment = v
       if(!/^[!#$%&'*+.^_`|~0-9A-Z-]+$/.test(p.method) || ["CONNECT","TRACE","TRACK"].includes(p.method)) throw Error("지원하지 않는 HTTP 메서드입니다.");
       if(["GET","HEAD"].includes(p.method)) p.body=undefined;
       capture(before);
-    } catch(error) {throw Error("전처리: "+error.message);}
+    } catch(error) {throw Error("Before Request interceptor: "+error.message);}
   }
   const requestHeaders = fetchHeaders(p.headers, p.body);
   const response = await fetchText(p.url, {
@@ -115,13 +115,13 @@ async function execute(request, variables, signal, scripts = {}, environment = v
       ? extract(response.body, request.extract)
       : {};
   } catch(error) {scriptError="응답 추출: "+error.message;}
-  if(scripts.enabled) {
+  if(interceptors.enabled) {
     try {
       const afterVars={...variables,...changes,...values};
       for(const key of deleted)delete afterVars[key];
-      const after=await runScript(scripts.after,{req:p,res:response,vars:afterVars,env:environment},signal);
+      const after=await runScript(interceptors.after,{req:p,res:response,vars:afterVars,env:environment},signal);
       capture(after);
-    } catch(error) {scriptError="후처리: "+error.message;}
+    } catch(error) {scriptError="After Response interceptor: "+error.message;}
   }
   return {
     ...response,
