@@ -13,6 +13,9 @@ hero:
       text: Get Started
       link: /en/guide/getting-started
     - theme: alt
+      text: Install with Homebrew
+      link: /en/guide/getting-started#homebrew
+    - theme: alt
       text: Download Latest
       link: https://github.com/dohyeon-kr/free-rider/releases/latest
 
@@ -43,7 +46,7 @@ Free Rider writes and runs API requests like Postman or Bruno, but focuses on **
 - Collection Runner based on saved requests
 - Review and selectively apply OpenAPI 3.x JSON/YAML changes
 - Collection file diff / commit workflow
-- macOS arm64 / x64 distribution and automatic updates
+- macOS arm64 / x64 distribution, Homebrew Cask installation, and automatic updates
 
 ::: tip New to Free Rider?
 Start with [Getting Started](/en/guide/getting-started), then continue with [Environments and Vars](/en/guide/variables-and-scripts) and [OpenAPI Sync](/en/guide/openapi-sync).
