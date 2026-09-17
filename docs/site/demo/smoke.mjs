@@ -61,7 +61,7 @@ try {
   await frame.locator('textarea[aria-label="Request body"]').fill('{"email":"playground@example.test","password":"demo-only"}');
   await frame.locator('#sendRequest').click();
   await frame.locator('.response-body').filter({ hasText: 'playground@example.test' }).waitFor();
-  await page.getByTestId('renderer-demo').screenshot({ path: resolve(artifacts, 'desktop-login.png') });
+  await page.getByTestId('renderer-demo').screenshot({ style: '.VPNav { visibility: hidden !important; }', path: resolve(artifacts, 'desktop-login.png') });
 
   await page.getByTestId('demo-scenario-profile').click();
   await frame.locator('.request-heading strong').filter({ hasText: 'Profile' }).waitFor();
@@ -82,7 +82,7 @@ try {
   await frame.locator('.response-body').filter({ hasText: 'FR-1042' }).waitFor();
   const orders = JSON.parse(await frame.locator('.response-body').innerText());
   assert.equal(orders.data.length, 1);
-  await page.getByTestId('renderer-demo').screenshot({ path: resolve(artifacts, 'desktop-orders.png') });
+  await page.getByTestId('renderer-demo').screenshot({ style: '.VPNav { visibility: hidden !important; }', path: resolve(artifacts, 'desktop-orders.png') });
 
   await frame.locator('#requestUrl').fill('https://example.com/orders');
   await frame.locator('#sendRequest').click();
@@ -98,7 +98,13 @@ try {
 
   await page.locator('.hero .actions a.ghost').click();
   await page.waitForURL('**/guide/getting-started');
+  // VitePress changes history before its async route finishes rendering.
+  // Wait for the old landing to unmount before requesting the next navigation.
+  await page.locator('.VPDoc h1').waitFor();
+  await page.getByTestId('renderer-demo').waitFor({ state: 'detached' });
   await page.goBack();
+  await page.waitForURL(base);
+  await page.getByTestId('renderer-demo').waitFor({ state: 'visible' });
   await page.getByTestId('renderer-demo').scrollIntoViewIfNeeded();
   await page.frameLocator('[data-demo-frame]').locator('html[data-demo-ready="true"]').waitFor();
   assert.equal(await page.locator('[data-demo-frame]').count(), 1);
@@ -109,14 +115,14 @@ try {
   assert.ok(await page.frameLocator('[data-demo-frame]').locator('html').evaluate(element => element.scrollWidth <= window.innerWidth + 1), 'No iframe document overflow at 390px');
   await page.frameLocator('[data-demo-frame]').locator('#sendRequest').click();
   await page.frameLocator('[data-demo-frame]').locator('.response-body').filter({ hasText: 'demo-token' }).waitFor();
-  await page.getByTestId('renderer-demo').screenshot({ path: resolve(artifacts, 'mobile.png') });
+  await page.getByTestId('renderer-demo').screenshot({ style: '.VPNav { visibility: hidden !important; }', path: resolve(artifacts, 'mobile.png') });
 
   await page.setViewportSize({ width: 1440, height: 1080 });
   await page.goto(`${base}en/`);
   await page.getByTestId('renderer-demo').scrollIntoViewIfNeeded();
   await page.frameLocator('[data-demo-frame]').locator('html[data-demo-ready="true"]').waitFor();
   assert.match(await page.getByTestId('demo-scenario-login').innerText(), /Login/);
-  await page.getByTestId('renderer-demo').screenshot({ path: resolve(artifacts, 'english.png') });
+  await page.getByTestId('renderer-demo').screenshot({ style: '.VPNav { visibility: hidden !important; }', path: resolve(artifacts, 'english.png') });
   assert.deepEqual(errors, [], 'No browser errors');
   assert.deepEqual(outgoing, [], 'The embedded renderer made no external requests');
   await writeFile(resolve(artifacts, 'result.json'), JSON.stringify({ passed: true, checks: ['real renderer bootstrap', 'login JSON edit', 'token handoff', 'query edit', 'unauthorized response', 'external URL blocked', 'reset isolation', 'client-side navigation', '390px mobile', 'English copy', 'zero browser errors', 'no external demo requests'] }, null, 2));
