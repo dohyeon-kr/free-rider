@@ -3,6 +3,7 @@ import LandingHome from './components/LandingHome.vue'
 import './custom.css'
 import './landing-dark.css'
 import './typography.css'
+import './brand.css'
 
 function applyLandingHeroCopy() {
   const title = document.querySelector('.landing .hero h1')

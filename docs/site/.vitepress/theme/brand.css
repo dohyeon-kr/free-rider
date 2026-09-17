@@ -1,0 +1,19 @@
+/* The transparent desktop app icon is also the documentation's brand mark. */
+.VPNavBarTitle .logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* Decorative artwork stays in normal flow so it cannot cover the hero copy
+   or the product demo. Vite rewrites this public URL using the Pages base. */
+.landing .hero-inner::before {
+  content: '';
+  display: block;
+  width: clamp(144px, 20vw, 224px);
+  aspect-ratio: 1;
+  margin: 0 auto 20px;
+  background: url('/free-rider-app-icon.png') center / contain no-repeat;
+  pointer-events: none;
+}
