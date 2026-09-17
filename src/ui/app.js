@@ -1,4 +1,5 @@
 import { createGitRepositoryDialog } from "./git-create.js";
+import { hasSyncChanges, offerSyncCommit } from "./git-sync-commit.mjs";
 import { methodPicker } from "./method-picker.js";
 import { preview, applyReview } from "../modules/sync/review.mjs";
 import { reviewView } from "./sync-review.js";
@@ -1628,10 +1629,19 @@ async function applySync(col, result, selected) {
   if(!col.requests.length) next.title=result.title || col.title;
   if(next.runPlan) next.runPlan=next.runPlan.filter(item=>next.requests.some(r=>r.id===item.id));
   const n=result.counts;
+  const changesApplied = hasSyncChanges(col, next);
   next.lastSync=new Date().toLocaleString()+" · "+n.added+" 추가 · "+n.updated+" 수정 · "+n.removed+" 삭제";
   await saveCollectionTransaction(col,next);
   selected.forEach(id=>drafts.discard(col.id,id));
   syncReviews.delete(col.id);render();status(col.lastSync);
+  const offerCommit = () => {
+    const repository = gitInfo.get(col.id);
+    if (!changesApplied || !repository?.root || !state.collections.includes(col)) return;
+    offerSyncCommit({
+      collection: col, repository, counts: n, api, modal, status,
+      onCommitted(info) { gitInfo.set(col.id, info); render(); },
+    });
+  };
   const target = env(col);
   if (!String(target.values.baseUrl || "").trim() && result.baseUrl) {
     let proposed = result.baseUrl;
@@ -1647,6 +1657,10 @@ async function applySync(col, result, selected) {
       mark(col); render();
       status(target.name + " 환경에 baseUrl을 등록했습니다. 저장 버튼으로 보관하세요.");
     }, "등록");
+    // The baseUrl dialog must finish (confirm OR cancel) before offering Git.
+    $("dialog").addEventListener("close", () => action(offerCommit), { once: true });
+  } else {
+    offerCommit();
   }
 }
 function endpointPicker(col) {
