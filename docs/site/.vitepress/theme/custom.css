@@ -33,6 +33,11 @@
   letter-spacing: -0.045em;
 }
 
+.VPHomeHero .image-src {
+  border-radius: 28px;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.34);
+}
+
 .VPHomeFeatures .VPFeature {
   border-color: var(--vp-c-border);
   background: linear-gradient(180deg, #242424, #1d1d1d);

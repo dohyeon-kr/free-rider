@@ -5,6 +5,9 @@ hero:
   name: Free Rider
   text: API 작업을 파일과 Git 가까이에.
   tagline: 서버와 계정 없이 요청 작성, 환경별 변수, 전후처리, OpenAPI 변경 검토와 로컬 Git 작업까지 처리하는 macOS API 클라이언트입니다.
+  image:
+    src: /free-rider-hero.webp
+    alt: Free Rider 라이더 캐릭터
   actions:
     - theme: brand
       text: 시작하기
