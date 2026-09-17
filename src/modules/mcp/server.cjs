@@ -1,7 +1,13 @@
+const http = require("node:http");
+
 const MODERN_VERSION = "2026-07-28";
 const LEGACY_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const SERVER_INFO_META = "io.modelcontextprotocol/serverInfo";
 const PROTOCOL_VERSION_META = "io.modelcontextprotocol/protocolVersion";
+const DEFAULT_HOST = "127.0.0.1";
+const DEFAULT_PORT = 48173;
+const DEFAULT_PATH = "/mcp";
+const MAX_BODY_BYTES = 1024 * 1024;
 
 function jsonText(value) {
   return [{ type: "text", text: JSON.stringify(value, null, 2) }];
@@ -41,7 +47,7 @@ function toolDefinitions() {
     },
     {
       name: "get_request",
-      description: "Read one saved Free Rider request, including its URL, headers, body, auth, variables and assertions.",
+      description: "Read one saved Free Rider request, including URL, headers, body, auth, variables and assertions.",
       inputSchema: {
         type: "object",
         properties: {
@@ -54,7 +60,7 @@ function toolDefinitions() {
     },
     {
       name: "send_request",
-      description: "Execute one saved Free Rider request with a saved environment. Uses the collection and global pre/post scripts stored in the workspace.",
+      description: "Execute one saved Free Rider request with a saved environment and the workspace's global pre/post scripts.",
       inputSchema: {
         type: "object",
         properties: {
@@ -68,7 +74,7 @@ function toolDefinitions() {
     },
     {
       name: "list_network_history",
-      description: "List recent Free Rider network history as compact summaries. Use get_network_entry for full request/response details.",
+      description: "List recent Free Rider network history as compact summaries. Use get_network_entry for full details.",
       inputSchema: {
         type: "object",
         properties: { limit: { type: "integer", minimum: 1, maximum: 200 } },
@@ -103,18 +109,8 @@ function createMcpServer(options) {
   const serverInfo = { name, version };
   const capabilities = { tools: {} };
   const instructions =
-    "Free Rider exposes saved API collections, requests and recent network history. " +
-    "Use list tools before selecting ids. Environment values stay local unless a request execution needs them.";
-
-  function protocolVersion(message) {
-    return message?.params?._meta?.[PROTOCOL_VERSION_META];
-  }
-
-  function isModern(message) {
-    const meta = message?.params?._meta;
-    return message?.method === "server/discover" ||
-      !!(meta && Object.hasOwn(meta, PROTOCOL_VERSION_META));
-  }
+    "Free Rider exposes the currently open API workspace and recent network history. " +
+    "Use list tools before selecting ids. Environment values are not returned by list tools.";
 
   function stamp(result, modern, cacheable = false) {
     if (!modern) return result;
@@ -217,30 +213,19 @@ function createMcpServer(options) {
     throw Error(`Unknown tool: ${name}`);
   }
 
-  async function handle(message) {
+  async function handle(message, context = {}) {
     if (!message || message.jsonrpc !== "2.0" || typeof message.method !== "string") {
       return message?.id === undefined
         ? null
         : { jsonrpc: "2.0", id: message?.id ?? null, error: { code: -32600, message: "Invalid Request" } };
     }
-
     if (message.id === undefined) return null;
-    const modern = isModern(message);
+
+    const modern =
+      context.protocolVersion === MODERN_VERSION ||
+      message.params?._meta?.[PROTOCOL_VERSION_META] === MODERN_VERSION;
 
     try {
-      const requestedModernVersion = protocolVersion(message);
-      if (modern && requestedModernVersion && requestedModernVersion !== MODERN_VERSION) {
-        return {
-          jsonrpc: "2.0",
-          id: message.id,
-          error: {
-            code: -32022,
-            message: `Unsupported protocol version: ${requestedModernVersion}`,
-            data: { supported: [MODERN_VERSION], requested: requestedModernVersion },
-          },
-        };
-      }
-
       if (message.method === "server/discover") {
         return {
           jsonrpc: "2.0",
@@ -265,12 +250,7 @@ function createMcpServer(options) {
         return {
           jsonrpc: "2.0",
           id: message.id,
-          result: {
-            protocolVersion,
-            capabilities,
-            serverInfo,
-            instructions,
-          },
+          result: { protocolVersion, capabilities, serverInfo, instructions },
         };
       }
 
@@ -325,52 +305,209 @@ function createMcpServer(options) {
   return { handle, tools: toolDefinitions() };
 }
 
-function serveStdio(server, options = {}) {
-  const input = options.input || process.stdin;
-  const output = options.output || process.stdout;
-  const log = options.log || ((...args) => console.error(...args));
-  let buffer = "";
-  let chain = Promise.resolve();
+function errorResponse(id, code, message, data) {
+  return {
+    jsonrpc: "2.0",
+    id: id ?? null,
+    error: { code, message, ...(data === undefined ? {} : { data }) },
+  };
+}
 
-  function write(message) {
-    if (!message) return;
-    output.write(JSON.stringify(message) + "\n");
+function requestName(message) {
+  if (message?.method === "tools/call" || message?.method === "prompts/get")
+    return message.params?.name;
+  if (message?.method === "resources/read") return message.params?.uri;
+  return undefined;
+}
+
+function allowedOrigin(origin) {
+  if (!origin) return true;
+  try {
+    const hostname = new URL(origin).hostname;
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
+async function readJson(req) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > MAX_BODY_BYTES) throw Object.assign(Error("Request body too large."), { statusCode: 413 });
+    chunks.push(chunk);
+  }
+  if (!chunks.length) throw Object.assign(Error("Request body is required."), { statusCode: 400 });
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+function validateProtocolRequest(req, message) {
+  const headerVersion = req.headers["mcp-protocol-version"];
+  const metaVersion = message?.params?._meta?.[PROTOCOL_VERSION_META];
+  const known = new Set([MODERN_VERSION, ...LEGACY_VERSIONS]);
+
+  for (const requested of [headerVersion, metaVersion]) {
+    if (requested && !known.has(requested)) {
+      return {
+        status: 400,
+        response: errorResponse(message?.id, -32022, "Unsupported protocol version", {
+          supported: [MODERN_VERSION, ...LEGACY_VERSIONS],
+          requested,
+        }),
+      };
+    }
   }
 
-  input.setEncoding?.("utf8");
-  input.on("data", (chunk) => {
-    buffer += chunk;
-    let newline;
-    while ((newline = buffer.indexOf("\n")) >= 0) {
-      const line = buffer.slice(0, newline).trim();
-      buffer = buffer.slice(newline + 1);
-      if (!line) continue;
-      chain = chain.then(async () => {
-        let message;
-        try {
-          message = JSON.parse(line);
-        } catch {
-          write({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
-          return;
-        }
-        try {
-          write(await server.handle(message));
-        } catch (error) {
-          log("MCP request failed", error);
-          if (message?.id !== undefined)
-            write({ jsonrpc: "2.0", id: message.id, error: { code: -32603, message: "Internal error" } });
-        }
+  const modern = headerVersion === MODERN_VERSION || metaVersion === MODERN_VERSION;
+  if (!modern) return { protocolVersion: headerVersion || metaVersion || "2025-03-26" };
+
+  if (headerVersion !== MODERN_VERSION || metaVersion !== MODERN_VERSION) {
+    return {
+      status: 400,
+      response: errorResponse(message?.id, -32020, "Header mismatch", {
+        header: headerVersion || null,
+        body: metaVersion || null,
+      }),
+    };
+  }
+
+  const methodHeader = req.headers["mcp-method"];
+  if (methodHeader !== message?.method) {
+    return {
+      status: 400,
+      response: errorResponse(message?.id, -32020, "Header mismatch", {
+        header: methodHeader || null,
+        body: message?.method || null,
+      }),
+    };
+  }
+
+  const expectedName = requestName(message);
+  if (expectedName !== undefined && req.headers["mcp-name"] !== String(expectedName)) {
+    return {
+      status: 400,
+      response: errorResponse(message?.id, -32020, "Header mismatch", {
+        header: req.headers["mcp-name"] || null,
+        body: expectedName,
+      }),
+    };
+  }
+
+  return { protocolVersion: MODERN_VERSION };
+}
+
+function createLocalMcpHttpServer(rpc, options = {}) {
+  const host = options.host || DEFAULT_HOST;
+  const port = options.port || DEFAULT_PORT;
+  const endpointPath = options.path || DEFAULT_PATH;
+  let server = null;
+
+  function status() {
+    const address = server?.address();
+    return {
+      enabled: !!server,
+      host,
+      port: typeof address === "object" && address ? address.port : port,
+      url: server ? `http://${host}:${typeof address === "object" && address ? address.port : port}${endpointPath}` : "",
+    };
+  }
+
+  async function start() {
+    if (server) return status();
+    server = http.createServer(async (req, res) => {
+      const url = new URL(req.url || "/", `http://${req.headers.host || `${host}:${port}`}`);
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+
+      if (url.pathname !== endpointPath) {
+        res.writeHead(404).end();
+        return;
+      }
+      if (!allowedOrigin(req.headers.origin)) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(errorResponse(null, -32600, "Forbidden origin")));
+        return;
+      }
+      if (req.method === "GET") {
+        res.writeHead(405, { Allow: "POST" }).end();
+        return;
+      }
+      if (req.method !== "POST") {
+        res.writeHead(405, { Allow: "POST" }).end();
+        return;
+      }
+      if (!String(req.headers["content-type"] || "").toLowerCase().startsWith("application/json")) {
+        res.writeHead(415).end();
+        return;
+      }
+
+      let message;
+      try {
+        message = await readJson(req);
+      } catch (error) {
+        const statusCode = error.statusCode || (error instanceof SyntaxError ? 400 : 500);
+        res.writeHead(statusCode, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(errorResponse(null, error instanceof SyntaxError ? -32700 : -32600, error.message)));
+        return;
+      }
+
+      const validation = validateProtocolRequest(req, message);
+      if (validation.response) {
+        res.writeHead(validation.status, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(validation.response));
+        return;
+      }
+
+      const response = await rpc.handle(message, { protocolVersion: validation.protocolVersion });
+      if (!response) {
+        res.writeHead(202).end();
+        return;
+      }
+
+      let statusCode = 200;
+      if (validation.protocolVersion === MODERN_VERSION && response.error?.code === -32601)
+        statusCode = 404;
+      res.writeHead(statusCode, {
+        "Content-Type": "application/json",
+        "MCP-Protocol-Version": validation.protocolVersion,
       });
-    }
-  });
-  input.on("error", (error) => log("MCP stdin error", error));
-  return chain;
+      res.end(JSON.stringify(response));
+    });
+
+    await new Promise((resolve, reject) => {
+      const onError = (error) => {
+        server = null;
+        reject(error);
+      };
+      server.once("error", onError);
+      server.listen(port, host, () => {
+        server.off("error", onError);
+        resolve();
+      });
+    });
+    return status();
+  }
+
+  async function stop() {
+    if (!server) return status();
+    const current = server;
+    server = null;
+    await new Promise((resolve, reject) => current.close((error) => (error ? reject(error) : resolve())));
+    return status();
+  }
+
+  return { start, stop, status };
 }
 
 module.exports = {
   MODERN_VERSION,
   LEGACY_VERSIONS,
+  DEFAULT_HOST,
+  DEFAULT_PORT,
+  DEFAULT_PATH,
   createMcpServer,
-  serveStdio,
+  createLocalMcpHttpServer,
   toolDefinitions,
+  validateProtocolRequest,
 };
