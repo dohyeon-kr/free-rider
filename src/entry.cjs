@@ -52,6 +52,34 @@ async function loadWorkspace() {
   return (await callApp("workspace-load")) || { collections: [] };
 }
 
+async function loadGeneratedSpec({ collection }) {
+  if (collection.sourceFile) {
+    const result = await callApp("sync-spec-file", collection.sourceFile);
+    return {
+      generated: result.requests || [],
+      title: result.title || collection.title || "",
+      baseUrl: result.baseUrl || "",
+    };
+  }
+  if (String(collection.source || "").trim()) {
+    return callApp("sync-spec", collection.source, collection.requests || [], undefined);
+  }
+  throw Error("Collection has no linked OpenAPI specification.");
+}
+
+async function saveWorkspace(state) {
+  return callApp("workspace-save", state);
+}
+
+function hasUnsavedChanges() {
+  return appWindow().isDocumentEdited?.() === true;
+}
+
+async function reloadWorkspace() {
+  const win = appWindow();
+  if (!win.isDestroyed()) win.webContents.reload();
+}
+
 async function saveCollectionInterceptors({ collectionId, interceptors }) {
   const win = appWindow();
   if (win.isDocumentEdited?.())
@@ -105,6 +133,10 @@ const rpc = createMcpServer({
   runSavedRequest,
   loadNetworkHistory: () => callApp("network-history"),
   saveCollectionInterceptors,
+  loadGeneratedSpec,
+  saveWorkspace,
+  hasUnsavedChanges,
+  reloadWorkspace,
 });
 const mcp = createLocalMcpHttpServer(rpc);
 

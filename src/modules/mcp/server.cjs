@@ -1,4 +1,8 @@
 const http = require("node:http");
+const {
+  openApiToolDefinitions,
+  createOpenApiReviewTools,
+} = require("./openapi-review.cjs");
 
 const MODERN_VERSION = "2026-07-28";
 const LEGACY_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
@@ -152,6 +156,7 @@ function toolDefinitions() {
         additionalProperties: false,
       },
     },
+    ...openApiToolDefinitions(),
   ];
 }
 
@@ -170,12 +175,14 @@ function createMcpServer(options) {
   if (typeof saveCollectionInterceptors !== "function")
     throw Error("saveCollectionInterceptors is required.");
 
+  const openApiReview = createOpenApiReviewTools(options);
   const serverInfo = { name, version };
   const capabilities = { tools: {} };
   const instructions =
     "Free Rider exposes the saved API workspace and recent network history. " +
     "Use list tools before selecting ids. Environment values are not returned by list tools. " +
-    "Read collection interceptors before patching them; interceptor writes require the app to have no unsaved UI changes.";
+    "Read collection interceptors before patching them; interceptor writes require the app to have no unsaved UI changes. " +
+    "Use review_openapi before apply_openapi_review and resolve every selected conflict explicitly.";
 
   function stamp(result, modern, cacheable = false) {
     if (!modern) return result;
@@ -300,6 +307,8 @@ function createMcpServer(options) {
       if (!entry) throw Error(`Network entry not found: ${id}`);
       return entry;
     }
+
+    if (openApiReview.has(name)) return openApiReview.call(name, args);
 
     throw Error(`Unknown tool: ${name}`);
   }

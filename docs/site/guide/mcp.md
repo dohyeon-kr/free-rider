@@ -14,7 +14,7 @@ Free Rider는 앱이 실행 중일 때 로컬 MCP 서버를 열 수 있습니다
 서버가 켜지면 버튼에 `MCP :48173`이 표시됩니다.
 
 ::: tip 저장 후 사용
-MCP는 저장된 워크스페이스를 기준으로 컬렉션, 요청, 환경, Interceptor 설정을 읽습니다. 편집 중인 변경 내용을 AI에서 바로 사용하거나 MCP로 Interceptor를 변경하려면 먼저 워크스페이스를 저장하세요.
+MCP는 저장된 워크스페이스를 기준으로 컬렉션, 요청, 환경, Interceptor 설정을 읽습니다. 편집 중인 변경 내용을 AI에서 바로 사용하거나 MCP로 Interceptor/OpenAPI 변경을 반영하려면 먼저 워크스페이스를 저장하세요.
 :::
 
 ## 제공 도구
@@ -26,6 +26,8 @@ MCP는 저장된 워크스페이스를 기준으로 컬렉션, 요청, 환경, I
 | `get_request` | 저장된 요청 상세 조회 |
 | `get_collection_interceptors` | 컬렉션의 Before Request / After Response Interceptor 설정과 코드 조회 |
 | `set_collection_interceptors` | 컬렉션 Interceptor 활성화 여부와 코드를 부분 수정 후 저장 |
+| `review_openapi` | 연결된 OpenAPI 명세와 저장된 요청의 변경·충돌을 검토하고 임시 `reviewId` 발급 |
+| `apply_openapi_review` | 검토 결과에서 선택한 엔드포인트만 반영하고 충돌 처리 방식을 명시적으로 적용 |
 | `send_request` | 저장된 요청 실행 |
 | `list_network_history` | 최근 네트워크 기록 요약 조회 |
 | `get_network_entry` | 네트워크 기록 상세 조회 |
@@ -66,6 +68,45 @@ Interceptor 코드에서 사용할 수 있는 `req`, `res`, `ctx` API는 [Script
 ::: warning Interceptor 코드와 비밀값
 `get_collection_interceptors`는 저장된 Interceptor 코드 원문을 반환합니다. 토큰이나 비밀번호를 코드에 직접 넣지 말고 Environment/Vars를 사용하세요.
 :::
+
+## OpenAPI 변경 검토
+
+MCP에서 OpenAPI 동기화는 **검토와 반영을 분리한 2단계 흐름**입니다. 연결된 명세를 읽었다고 요청이 바로 바뀌지 않습니다.
+
+먼저 `review_openapi`에 컬렉션 ID를 전달합니다.
+
+```json
+{
+  "collectionId": "collection-id"
+}
+```
+
+응답에는 약 10분 동안 유효한 `reviewId`, 추가·수정·삭제·충돌 개수, 엔드포인트별 변경 필드가 포함됩니다. 기존 요청을 로컬에서 수정한 필드와 새 명세가 동시에 바뀌면 `conflict: true`로 표시됩니다.
+
+반영할 때는 `apply_openapi_review`에 **선택한 엔드포인트 ID만** 전달합니다.
+
+```json
+{
+  "reviewId": "review-id",
+  "selectedIds": ["GET /users", "POST /users"],
+  "resolutions": [
+    {
+      "requestId": "GET /users",
+      "field": "description",
+      "choice": "incoming"
+    }
+  ]
+}
+```
+
+- 선택하지 않은 추가·수정·삭제는 반영하지 않음
+- 선택한 변경에 충돌이 있으면 각 필드마다 `local` 또는 `incoming`을 명시해야 함
+- 검토 뒤 워크스페이스가 바뀌었거나 `reviewId`가 만료되면 다시 검토해야 함
+- 앱에 저장하지 않은 편집이 있으면 검토와 반영 모두 중단됨
+- 명세의 `baseUrl`이 필요하면 `suggestedBaseUrl`로만 반환하며 Environment를 자동 수정하지 않음
+- 반영에 성공하면 직전 명세 반영 상태를 `syncUndo`로 보관하고 앱을 저장된 상태로 다시 읽음
+
+연결된 로컬 OpenAPI 파일이 있으면 해당 파일을 우선 사용하고, 아니면 컬렉션에 저장된 Specification URL을 사용합니다. UI에서 일시적으로 입력한 인증 정보가 필요한 명세 URL은 MCP에 인증 값을 노출하지 않으므로 앱의 OpenAPI 화면에서 검토하세요.
 
 ## MCP 연결 handoff prompt
 
