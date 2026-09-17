@@ -1,3 +1,5 @@
+import { trackWorkspaceState } from "./workspace-state.mjs";
+
 export class RequestDrafts {
   entries = new Map();
   key(cid, id) { return JSON.stringify([cid, id]); }
@@ -12,6 +14,7 @@ export class RequestDrafts {
   }
   discard(cid, id) { this.entries.delete(this.key(cid, id)); }
   snapshot(state, only = null) {
+    trackWorkspaceState(state);
     const next = structuredClone(state);
     for (const col of next.collections)
       col.requests = col.requests.map(request => {
