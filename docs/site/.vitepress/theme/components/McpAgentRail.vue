@@ -8,11 +8,12 @@ const active = ref(false)
 const paused = ref(false)
 const playing = computed(() => active.value && !paused.value)
 const providers = [
-  { name: 'ChatGPT', icon: withBase('/brands/chatgpt.svg') },
-  { name: 'Claude', icon: withBase('/brands/claude.svg') }
+  { name: 'Codex', icon: withBase('/brands/codex.svg'), className: 'is-codex' },
+  { name: 'Claude Code', icon: withBase('/brands/claude.svg'), className: 'is-claude-code' },
+  { name: 'Gemini CLI', icon: withBase('/brands/gemini.svg'), className: 'is-gemini' },
+  { name: 'Cursor', icon: withBase('/brands/cursor.svg'), className: 'is-cursor' }
 ]
-// The two-pitch reset is invisible: the repeated neighbors are identical.
-const carriers = Array.from({ length: 7 }, (_, index) => providers[index % providers.length])
+const carriers = Array.from({ length: 10 }, (_, index) => providers[(index - 2 + providers.length) % providers.length])
 let stop = () => {}
 onMounted(() => { stop = watchRailActivity(root.value, value => { active.value = value }) })
 onUnmounted(() => stop())
@@ -35,16 +36,15 @@ onUnmounted(() => stop())
         <div class="mcp-rail-track">
           <div v-for="(provider, index) in carriers" :key="index" class="mcp-rail-carrier">
             <i class="mcp-rail-wheel" />
-            <div class="mcp-rail-tile" :class="{ 'is-gpt': index === 2, 'is-claude': index === 3 }">
+            <div class="mcp-rail-tile" :class="index >= 2 && index <= 5 ? provider.className : ''">
               <img :src="provider.icon" alt="" width="30" height="30" decoding="async">
               <b>{{ provider.name }}</b>
             </div>
           </div>
         </div>
         <div class="mcp-rail-provider">
-          <span class="mcp-rail-name is-gpt">ChatGPT</span>
-          <span class="mcp-rail-name is-claude">Claude</span>
-          <span class="mcp-rail-static-name">ChatGPT · Claude</span>
+          <span v-for="provider in providers" :key="provider.name" class="mcp-rail-name" :class="provider.className">{{ provider.name }}</span>
+          <span class="mcp-rail-static-name">Codex · Claude Code · Gemini CLI · Cursor</span>
           <small>via MCP</small>
         </div>
       </div>
@@ -57,7 +57,7 @@ onUnmounted(() => stop())
       <div class="mcp-rail-wire"><i class="mcp-rail-signal" /></div>
       <div class="mcp-rail-api"><span>{ }</span> Your API <small>200 OK</small></div>
     </div>
-    <figcaption>ChatGPT / Claude → Free Rider MCP → Your API<span>연결 흐름 예시</span></figcaption>
+    <figcaption>Codex / Claude Code / Gemini CLI / Cursor → Free Rider MCP → Your API<span>연결 흐름 예시</span></figcaption>
   </figure>
 </template>
 
