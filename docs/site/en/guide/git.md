@@ -18,6 +18,20 @@ Creating a repository does not save a collection or make a commit. Continue with
 
 This creates a local repository only, not a hosted GitHub repository or a remote Push / Pull connection.
 
+## Optional commit after synchronization
+
+After OpenAPI changes are actually applied to a collection with a connected Git repository, Free Rider asks whether to commit the result. Both URL and local-spec synchronization use this flow. Preview-only operations, unchanged results, and failed workspace saves do not trigger the offer.
+
+The dialog shows the repository, branch, change counts, and an editable commit message. **저장 후 커밋** (Save and commit) exports the shareable collection and commits only `open-api.collection.json`. **건너뛰기** (Skip), or Escape, preserves the applied sync without running the unapproved Git save/commit. Enter in the message input does not automatically approve a commit.
+
+When a `baseUrl` registration dialog is needed, it finishes first; either confirming or canceling it proceeds to the commit offer. Connections belonging to other collections do not trigger a prompt.
+
+::: warning The whole saved collection is committed
+This can include earlier uncommitted collection changes, not just the synchronization changes. Environment values are excluded using the existing sharing rules, but credentials written directly in requests can be included. Other staged files are preserved and no remote push is performed.
+:::
+
+If the saved file matches HEAD, no empty commit is created. A commit failure never rolls back the applied workspace synchronization. The dialog preserves the message and allows retry; any collection file already saved or staged remains intact. If the connected repository or branch changed after the prompt, refresh the Git view and commit there instead.
+
 ## Basic flow
 
 1. Select a local Git repository.

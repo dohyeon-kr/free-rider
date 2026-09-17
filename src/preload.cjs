@@ -30,6 +30,7 @@ for (const name of [
   "git-save",
   "git-diff",
   "git-commit",
+  "git-sync-commit",
   "workspace-load",
   "workspace-save",
   "set-dirty",

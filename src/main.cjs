@@ -416,6 +416,9 @@ handle("git-save", (value) =>
 );
 handle("git-diff", (id) => gitFor(id).diff());
 handle("git-commit", (id, message) => gitFor(id).commit(message));
+require("./modules/git/sync-commit.cjs").registerGitSyncCommit(
+  handle, id => git.get(id), shareCollection,
+);
 handle("workspace-load", async () => {
   const value=await workspace.load() || (process.argv.includes("--smoke-test") ? require("./smoke.cjs").fixture() : null);
   for(const col of value?.collections || []) if(col.sourceFile) specFiles.add(col.sourceFile);
