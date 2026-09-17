@@ -10,6 +10,7 @@ const links = {
   github: 'https://github.com/dohyeon-kr/free-rider',
   releases: 'https://github.com/dohyeon-kr/free-rider/releases/latest'
 }
+const brandIcon = withBase('/free-rider-app-icon.png')
 
 const armDownload = ref(links.releases)
 const intelDownload = ref(links.releases)
@@ -65,7 +66,7 @@ onMounted(async () => {
             </div>
             <div class="app-layout">
               <aside class="sidebar">
-                <strong><span>F</span> Store API</strong>
+                <strong><img class="brand-icon brand-icon-sidebar" :src="brandIcon" alt="" aria-hidden="true" /> Store API</strong>
                 <small>COLLECTION</small>
                 <p>⌄ Authentication</p>
                 <p class="active"><em>POST</em> Login</p>
@@ -181,7 +182,7 @@ onMounted(async () => {
           <div class="agent-flow">
             <article><span>AI</span><div><b>Agent</b><small>ChatGPT · Claude · Codex</small></div></article>
             <i class="dots">•••</i>
-            <article><span class="rider">F</span><div><b>Free Rider</b><small>MCP server</small></div></article>
+            <article><img class="brand-icon brand-icon-agent" :src="brandIcon" alt="" aria-hidden="true" /><div><b>Free Rider</b><small>MCP server</small></div></article>
             <i class="dots">•••</i>
             <strong>↯ Your API</strong>
           </div>
@@ -216,7 +217,7 @@ onMounted(async () => {
 
     <section class="open-source">
       <div class="shell open-source-inner">
-        <div class="os-mark"><span>F</span></div>
+        <div class="os-mark"><img class="brand-icon brand-icon-os" :src="brandIcon" alt="" aria-hidden="true" /></div>
         <small>Why “Free Rider”?</small>
         <h2>All free.<br><span>Open source.</span></h2>
         <p>무료 플랜이 있는 제품이 아니라, 제품 전체를 무료로 공개합니다.<br>계정 없이 시작하고, 데이터는 내 컴퓨터에 두고, 필요하면 소스까지 직접 바꾸세요.</p>
@@ -247,6 +248,7 @@ onMounted(async () => {
 
 <style scoped>
 .landing { --lime:#d7ff66; --violet:#9177ff; --ink:#101214; --muted:#6d7276; overflow:hidden; color:var(--ink); background:#f7f7f3; }
+.brand-icon { display:block; flex-shrink:0; object-fit:contain; }
 .shell { width:min(1180px, calc(100% - 48px)); margin:0 auto; }
 .hero { position:relative; min-height:920px; padding:116px 0 92px; overflow:hidden; color:white; background:#0d0f10; }
 .hero-grid { position:absolute; inset:0; opacity:.18; background-image:linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px); background-size:72px 72px; mask-image:linear-gradient(#000,transparent 78%); }
@@ -282,7 +284,7 @@ onMounted(async () => {
 .app-layout { display:grid; grid-template-columns:210px 1fr; min-height:500px; }
 .sidebar { padding:18px 12px; border-right:1px solid rgba(255,255,255,.065); background:#141618; }
 .sidebar strong { display:flex; align-items:center; gap:9px; margin-bottom:24px; color:rgba(255,255,255,.8); font-size:12px; }
-.sidebar strong span { display:grid; place-items:center; width:24px; height:24px; border-radius:7px; color:#171a14; background:var(--lime); font-weight:900; }
+.brand-icon-sidebar { width:24px; height:24px; }
 .sidebar>small { display:block; margin:22px 7px 8px; color:rgba(255,255,255,.24); font-size:9px; font-weight:900; letter-spacing:.11em; }
 .sidebar p { display:flex; align-items:center; gap:8px; min-height:30px; margin:0; padding:0 7px; border-radius:7px; color:rgba(255,255,255,.46); font-size:10px; }
 .sidebar p.active { color:#fff; background:rgba(255,255,255,.065); }
@@ -384,7 +386,7 @@ onMounted(async () => {
 .agent-flow { display:grid; justify-items:center; }
 .agent-flow article { display:flex; align-items:center; gap:12px; width:220px; padding:15px; border:1px solid rgba(45,42,68,.09); border-radius:17px; background:rgba(255,255,255,.72); box-shadow:inset 0 1px #fff,0 14px 38px rgba(66,57,110,.09); }
 .agent-flow article>span { display:grid; place-items:center; width:42px; height:42px; border-radius:12px; color:#fff; background:linear-gradient(135deg,#8975ff,#6bb5ff); font-size:11px; font-weight:900; }
-.agent-flow article>span.rider { color:#1b2017; background:var(--lime); }
+.brand-icon-agent { width:42px; height:42px; }
 .agent-flow b,.agent-flow small { display:block; }
 .agent-flow b { color:#303238; font-size:12px; }
 .agent-flow small { color:#929399; font-size:9px; }
@@ -436,7 +438,7 @@ onMounted(async () => {
 .open-source::before { content:""; position:absolute; width:720px; height:720px; top:-450px; left:calc(50% - 360px); border-radius:50%; background:radial-gradient(circle,rgba(215,255,102,.44),rgba(145,119,255,.12) 43%,transparent 70%); filter:blur(15px); }
 .open-source-inner { position:relative; z-index:1; }
 .os-mark { display:grid; place-items:center; width:76px; height:76px; margin:0 auto 27px; border:1px solid rgba(43,47,40,.08); border-radius:24px; background:linear-gradient(145deg,#f9f9f4,#e4e8da); box-shadow:14px 14px 30px rgba(82,89,65,.12),-14px -14px 30px #fff,inset 0 1px #fff; transform:rotate(-4deg); }
-.os-mark span { display:grid; place-items:center; width:48px; height:48px; border-radius:15px; color:#181b15; background:var(--lime); font-size:24px; font-weight:950; }
+.brand-icon-os { width:48px; height:48px; }
 .open-source h2 { font-size:clamp(58px,8vw,106px); }
 .open-source h2 span { color:#8276cf; }
 .open-source p { margin:28px auto 0; color:#6c706b; font-size:16px; line-height:1.75; }

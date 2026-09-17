@@ -26,6 +26,17 @@ test('documentation uses the exact transparent app icon, without re-encoding', t
   assert.ok(icon.includes(Buffer.from('tRNS')), 'PNG transparency is preserved')
 })
 
+test('landing uses the app icon for every Free Rider brand mark', () => {
+  const landing = readFileSync(new URL('../.vitepress/theme/components/LandingHome.vue', import.meta.url), 'utf8')
+  assert.doesNotMatch(landing, />\s*F\s*</, 'single-letter F placeholder brand marks must not return')
+  assert.doesNotMatch(landing, /class=["']rider["']/, 'legacy rider placeholder class must not return')
+  assert.match(landing, /const brandIcon = withBase\(['"]\/free-rider-app-icon\.png['"]\)/)
+  assert.equal((landing.match(/:src=["']brandIcon["']/g) ?? []).length, 3)
+  assert.match(landing, /brand-icon-sidebar/)
+  assert.match(landing, /brand-icon-agent/)
+  assert.match(landing, /brand-icon-os/)
+})
+
 test('repeated preparation remains byte-identical', t => {
   const publicDir = temporaryDirectory(t)
   prepareBrandAssets({ publicDir })
