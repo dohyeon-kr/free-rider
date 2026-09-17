@@ -19,16 +19,32 @@ Pro / Premium / Team / Enterprise 같은 유료 기능 등급을 만들지 않�
 
 ## 설치
 
-Homebrew를 사용한다면 Cask 설치를 권장합니다.
+### Homebrew (권장)
+
+Homebrew를 사용한다면 Cask로 설치할 수 있습니다. 처음 한 번 Free Rider 저장소를 tap으로 연결한 뒤 설치합니다.
 
 ```sh
 brew tap dohyeon-kr/free-rider https://github.com/dohyeon-kr/free-rider.git
 brew install --cask dohyeon-kr/free-rider/free-rider
 ```
 
-직접 설치하려면 [최신 GitHub Release](https://github.com/dohyeon-kr/free-rider/releases/latest)에서 Apple Silicon(`arm64`) 또는 Intel(`x64`) DMG/ZIP을 받습니다. Free Rider는 Electron 44 기반이라 macOS 13 Ventura 이상이 필요합니다.
+Homebrew 6부터 비공식 tap은 명시적인 신뢰가 필요합니다. 위처럼 **fully-qualified Cask 이름**으로 설치하면 전체 tap이 아니라 Free Rider Cask만 신뢰합니다.
 
-새 릴리즈가 배포되면 `Casks/free-rider.rb`의 버전과 아키텍처별 SHA-256도 릴리즈 워크플로에서 자동 갱신됩니다. 자세한 설치·업데이트 방법은 [시작하기 문서](https://dohyeon-kr.github.io/free-rider/guide/getting-started)를 참고하세요.
+업데이트와 삭제도 일반적인 Homebrew 명령으로 처리할 수 있습니다.
+
+```sh
+brew update
+brew upgrade --cask dohyeon-kr/free-rider/free-rider
+brew uninstall --cask free-rider
+```
+
+새 릴리즈가 배포되면 `Casks/free-rider.rb`의 버전과 Apple Silicon / Intel DMG SHA-256도 릴리즈 워크플로에서 자동 갱신됩니다.
+
+### 직접 다운로드
+
+[최신 GitHub Release](https://github.com/dohyeon-kr/free-rider/releases/latest)에서 Apple Silicon(`arm64`) 또는 Intel(`x64`) DMG/ZIP을 받을 수도 있습니다. Free Rider는 Electron 44 기반이라 macOS 13 Ventura 이상이 필요합니다.
+
+자세한 설치·업데이트 방법은 [시작하기 문서](https://dohyeon-kr.github.io/free-rider/guide/getting-started)를 참고하세요.
 
 ## 실행
 
