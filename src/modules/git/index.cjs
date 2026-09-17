@@ -3,14 +3,62 @@ const { promisify } = require("node:util");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const run = promisify(execFile);
+function gitEnvironment() {
+  // A GUI launched from a Git hook must not inherit another repository's paths.
+  return Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")));
+}
+function validateFolderName(name) {
+  if (
+    typeof name !== "string" || !name || name !== name.trim() ||
+    name === "." || name === ".." || name.toLowerCase() === ".git" ||
+    /[\\/<>:"|?*\u0000-\u001f\u007f]/.test(name) || /[. ]$/.test(name) ||
+    /^(con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i.test(name) ||
+    Buffer.byteLength(name, "utf8") > 255
+  ) throw Error("폴더명이 올바르지 않습니다. 경로 구분자, 예약 이름, 앞뒤 공백 없이 새 폴더명을 입력하세요.");
+  return name;
+}
 // No shell, no network operations, no arbitrary paths supplied by the renderer.
 class GitWorkspace {
   #root;
+  async create(parent, folderName) {
+    const name = validateFolderName(folderName);
+    let directory;
+    try {
+      const root = await fs.realpath(parent);
+      if (!(await fs.stat(root)).isDirectory()) throw Error("Not a directory");
+      directory = path.join(root, name);
+    } catch {
+      throw Error("상위 폴더를 다시 선택하세요.");
+    }
+    // Exclusive mkdir rejects existing folders, files and even dangling symlinks.
+    // Never use recursive mkdir or reinitialize an existing path here.
+    try { await fs.mkdir(directory); }
+    catch (error) {
+      if (error.code === "EEXIST") throw Error("같은 이름의 파일 또는 폴더가 이미 존재합니다.");
+      throw Error("폴더를 만들 수 없습니다. 상위 폴더의 접근 권한을 확인하세요.", { cause: error });
+    }
+    try {
+      await run("git", ["-C", directory, "init", "--initial-branch=main"], {
+        timeout: 15000, env: gitEnvironment(),
+      });
+      // Only replace the live connection after initialization AND status succeed.
+      const next = new GitWorkspace();
+      const info = await next.open(directory);
+      this.#root = info.root;
+      return info;
+    } catch (error) {
+      // Do not recursively delete: another process may have added user files.
+      let removed = false;
+      try { await fs.rmdir(directory); removed = true; } catch {}
+      const detail = removed ? "" : " 생성된 폴더는 보존했습니다: " + directory;
+      throw Error("Git 저장소를 만들지 못했습니다. Git 설치와 폴더 권한을 확인하세요." + detail, { cause: error });
+    }
+  }
   async open(directory) {
     const { stdout } = await run(
       "git",
       ["-C", directory, "rev-parse", "--show-toplevel"],
-      { timeout: 10000 },
+      { timeout: 10000, env: gitEnvironment() },
     );
     this.#root = stdout.trim();
     return this.status();
@@ -20,6 +68,7 @@ class GitWorkspace {
     return (
       await run("git", ["-C", this.#root, ...args], {
         timeout: 15000,
+        env: gitEnvironment(),
         maxBuffer: 1024 * 1024,
       })
     ).stdout;
@@ -82,4 +131,4 @@ class GitWorkspace {
     return this.status();
   }
 }
-module.exports = { GitWorkspace };
+module.exports = { GitWorkspace, validateFolderName };
