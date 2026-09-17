@@ -1,5 +1,7 @@
 node_modules/
 .vitepress/cache/
 .vitepress/dist/
+.vitepress/demo-artifacts/
+public/demo/
 # Generated from the desktop app's build/icon-source artwork.
 public/free-rider-app-icon.png
