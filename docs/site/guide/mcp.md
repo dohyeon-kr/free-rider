@@ -30,37 +30,41 @@ MCP는 저장된 워크스페이스를 기준으로 컬렉션, 요청, 환경을
 
 `list_collections`는 환경 변수 값을 반환하지 않습니다. `send_request`는 Free Rider 본체의 요청 실행 핸들러를 사용하므로 앱과 같은 쿠키 세션, 전후처리, assertion 실행 흐름을 탑니다.
 
-## MCP handoff prompt
+## MCP 연결 handoff prompt
 
-MCP를 연결한 AI 에이전트에게 아래 프롬프트를 그대로 넘기면 Free Rider의 컬렉션과 네트워크 기록을 기준으로 작업을 시작할 수 있습니다. 마지막의 `작업 목표`만 바꿔서 사용하세요.
-
-```text
-Free Rider MCP 서버가 연결되어 있다. 이 서버를 현재 API 워크스페이스의 source of truth로 사용해 작업하라.
-
-작업 규칙:
-1. 컬렉션, 요청, 환경 ID를 추측하지 말고 먼저 list_collections를 호출한다.
-2. 대상 컬렉션을 찾은 뒤 list_requests로 요청 목록을 확인한다.
-3. 요청의 URL, 헤더, body, auth, 변수, assertion을 확인해야 하면 get_request를 사용한다.
-4. 실제 API 호출이 필요한 경우에만 send_request를 사용한다. 환경이 명시되지 않았다면 임의의 environmentId를 선택하지 않는다.
-5. 최근 실패나 실제 실행 결과를 조사할 때는 list_network_history로 후보를 찾고 get_network_entry로 상세 내용을 확인한다.
-6. list 도구에 환경 변수 값이 노출되지 않는 것은 정상이다. 숨겨진 값을 추측하거나 출력하려 하지 않는다.
-7. Free Rider MCP는 저장된 워크스페이스를 읽는다. 사용자가 방금 수정한 내용이 보이지 않으면 먼저 워크스페이스 저장 여부를 확인하도록 안내한다.
-8. API 응답, 상태 코드, assertion 결과나 오류는 MCP에서 확인한 사실과 추론을 구분해서 설명한다. 확인하지 않은 응답을 만들어내지 않는다.
-9. 작업을 마치면 어떤 컬렉션/요청을 확인했고, 무엇을 실행했으며, 핵심 결과가 무엇인지 짧게 요약한다.
-
-작업 목표:
-[여기에 원하는 작업을 입력]
-```
-
-### 예시
+다른 AI 에이전트나 IDE에게 **Free Rider MCP 연결 작업 자체**를 맡길 때 아래 프롬프트를 그대로 전달하세요.
 
 ```text
-작업 목표:
-로그인 요청을 찾고 현재 저장된 설정을 확인한 다음 실행해줘. 실패하면 최근 네트워크 기록까지 확인해서 원인을 좁혀줘. 요청이나 환경 설정을 임의로 변경하지는 마.
+현재 로컬에서 Free Rider 앱의 MCP 서버를 켜 둔 상태다. 이 환경에서 Free Rider MCP를 현재 사용 중인 AI 에이전트/IDE에 연결해줘.
+
+연결 정보:
+- 이름: free-rider
+- transport: Streamable HTTP
+- URL: http://127.0.0.1:48173/mcp
+- 인증: 없음
+- 네트워크 범위: localhost only
+
+요구사항:
+1. 현재 클라이언트가 사용하는 MCP 설정 방식과 설정 파일 위치를 먼저 확인한다.
+2. 클라이언트별 설정 형식을 추측하지 말고, 현재 환경에서 지원하는 Streamable HTTP MCP 설정 형식으로 직접 추가한다.
+3. 이 서버는 이미 실행 중인 HTTP MCP 서버이므로 stdio, npx, 별도 MCP 서버 프로세스를 만들지 않는다.
+4. 설정 변경 권한이 있다면 직접 반영하고, 필요한 경우 MCP 설정 reload 또는 클라이언트 재시작 단계까지 수행한다.
+5. 연결 후 tools/list 또는 클라이언트의 MCP 도구 목록에서 Free Rider 도구가 노출되는지 확인한다.
+6. 가능하면 읽기 전용 검증으로 list_collections까지 호출해 연결을 확인한다. 연결 테스트만을 위해 send_request를 실행하지 않는다.
+7. 연결에 실패하면 URL 접근 가능 여부, transport 지원 여부, MCP protocol 협상 결과를 순서대로 확인한다.
+8. 작업이 끝나면 변경한 설정 파일/설정 항목과 연결 검증 결과를 짧게 알려준다.
+
+Free Rider에서 기대되는 도구:
+- list_collections
+- list_requests
+- get_request
+- send_request
+- list_network_history
+- get_network_entry
 ```
 
-::: tip 에이전트에게 상태 넘기기
-긴 작업을 다른 에이전트로 넘길 때는 `확인한 collectionId/requestId`, `사용한 environmentId`, `마지막 실행 결과`, `관련 network entry id`를 handoff 내용에 함께 남기면 같은 탐색을 반복하지 않아도 됩니다.
+::: tip 로컬 실행 환경 확인
+Free Rider MCP는 `127.0.0.1`에만 열립니다. AI 에이전트나 IDE가 별도 VM, 컨테이너, 원격 서버에서 실행된다면 그 환경의 `127.0.0.1`은 Free Rider가 실행 중인 Mac을 가리키지 않으므로 직접 연결되지 않습니다.
 :::
 
 ## 보안 범위
