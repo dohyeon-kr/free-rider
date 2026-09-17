@@ -2,6 +2,9 @@ import { methodPicker } from "./method-picker.js";
 import { preview, applyReview } from "../modules/sync/review.mjs";
 import { reviewView } from "./sync-review.js";
 const syncReviews = new Map();
+import { specAuthEditor } from "./spec-auth.js";
+import { SpecAuthSession } from "./spec-auth-state.mjs";
+const specAuths = new SpecAuthSession();
 import { runPlan, addToRun, executionRequests } from "./run-plan.mjs";
 import { RequestDrafts } from "./drafts.mjs";
 const drafts = new RequestDrafts();
@@ -1516,6 +1519,7 @@ function environments(col) {
   return root;
 }
 function specView(col) {
+  const auth = specAuthEditor(specAuths.get(col.id, col.source), value => specAuths.set(col.id, col.source, value));
   const root = el("div", { class: "view-inner", "data-view": "spec" });
   root.append(
     el(
@@ -1542,19 +1546,22 @@ function specView(col) {
       input(
         col.source,
         (v) => {
+          const changed = String(col.source || "").trim() !== v.trim();
           col.source = v;
+          if (changed) auth.reset();
           mark(col);
         },
         { placeholder: "https://api.example.com/openapi.json" },
       ),
     ),
+    auth.element,
     button(
       "↻ Synchronize",
       () =>
         action(async () => {
           if (!col.source) throw Error("Enter an OpenAPI URL.");
           status("Synchronizing specification…");
-          const result = await api["sync-spec"](col.source, col.requests);
+          const result = await api["sync-spec"](col.source, col.requests, auth.value());
           beginSyncReview(col, result);
         }),
       { class: "primary" },
@@ -1887,6 +1894,7 @@ function startBlankCollection() {
 }
 function startOpenApiCollection() {
   let source = "";
+  const auth = specAuthEditor();
   modal(
     "OpenAPI로 시작하기",
     el(
@@ -1895,10 +1903,14 @@ function startOpenApiCollection() {
       el("p", { class: "muted", text: "OpenAPI 3.x 파일 또는 URL에서 새 컬렉션을 시작합니다." }),
       field(
         "Specification URL",
-        input(source, (value) => (source = value), {
+        input(source, (value) => {
+          if (source.trim() !== value.trim()) auth.reset();
+          source = value;
+        }, {
           placeholder: "https://api.example.com/openapi.json",
         }),
       ),
+      auth.element,
       el(
         "div",
         { class: "actions" },
@@ -1919,9 +1931,10 @@ function startOpenApiCollection() {
       source = source.trim();
       if (!source) throw Error("OpenAPI URL을 입력하거나 파일을 선택하세요.");
       status("OpenAPI 명세를 불러오는 중…");
-      const result = await api["sync-spec"](source, []);
+      const result = await api["sync-spec"](source, [], auth.value());
       const col = collection(result.title || "OpenAPI Collection");
       col.source = source;
+      specAuths.set(col.id, source, auth.value());
       addCollection(col, "spec");
       beginSyncReview(col, result);
     },
