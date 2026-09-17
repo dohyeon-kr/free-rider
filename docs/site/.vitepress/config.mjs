@@ -3,15 +3,15 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   lang: 'ko-KR',
   title: 'Free Rider',
-  description: '서버와 계정 없이 사용하는 로컬 우선 API 클라이언트',
+  description: '모든 기능을 무료로 공개하는 오픈소스 로컬 우선 API 클라이언트',
   base: '/free-rider/',
   lastUpdated: true,
   appearance: 'dark',
   cleanUrls: true,
   head: [
-    ['meta', { name: 'theme-color', content: '#151515' }],
-    ['meta', { property: 'og:title', content: 'Free Rider Docs' }],
-    ['meta', { property: 'og:description', content: 'Local-first, Git-friendly API client documentation' }]
+    ['meta', { name: 'theme-color', content: '#0d0f10' }],
+    ['meta', { property: 'og:title', content: 'Free Rider — All-free Open Source API Client' }],
+    ['meta', { property: 'og:description', content: 'All-free, open-source, local-first API client for requests, OpenAPI, Git and MCP.' }]
   ],
   themeConfig: {
     siteTitle: 'Free Rider',
@@ -70,7 +70,7 @@ export default defineConfig({
       text: '마지막 수정'
     },
     footer: {
-      message: 'Local-first. Git-friendly. No account required.',
+      message: 'All free. Open source. Local-first.',
       copyright: 'Free Rider'
     }
   }
