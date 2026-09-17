@@ -10,7 +10,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "dist:mac": "electron-builder --mac --publish never",
+    "prepare:icon": "node scripts/prepare-icon.cjs",
+    "dist:mac": "npm run prepare:icon && electron-builder --mac --publish never",
     "test:electron": "electron . --smoke-test"
   },
   "dependencies": {
