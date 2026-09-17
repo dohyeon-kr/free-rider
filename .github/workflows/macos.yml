@@ -88,6 +88,7 @@ jobs:
             --package=@semantic-release/github@12.0.9 \
             --package=@semantic-release/git@11.0.1 \
             --package=@semantic-release/exec@7.1.0 \
+            --package=type-fest@5.9.0 \
             semantic-release
 
           if [[ -s .semantic-release-tag ]]; then
