@@ -5,6 +5,16 @@
 - 문서: https://dohyeon-kr.github.io/free-rider/
 - 릴리즈: https://github.com/dohyeon-kr/free-rider/releases
 
+## All Free
+
+**Free Rider의 공식 기능은 전부 무료이며, 소스 코드는 공개합니다. 그래서 Free Rider입니다.**
+
+Pro / Premium / Team / Enterprise 같은 유료 기능 등급을 만들지 않고, 결제로 기능을 잠금 해제하는 구조도 두지 않습니다. 후원이나 유료 지원이 생기더라도 제품 기능 접근권과 연결하지 않습니다.
+
+코드는 `AGPL-3.0-only`로 공개합니다. 수정본을 배포하거나 네트워크 서비스로 제공할 때도 소스 공개 의무가 이어지는 강한 카피레프트 라이선스입니다. 라이선스 자체는 상업적 이용을 허용하며, “공식 Free Rider는 모든 기능을 무료로 제공한다”는 원칙은 프로젝트 운영 정책입니다.
+
+자세한 원칙은 [All Free Policy](./ALL_FREE.md), 라이선스 전문은 [LICENSE](./LICENSE)를 참고하세요.
+
 ## 실행
 
 ```sh
