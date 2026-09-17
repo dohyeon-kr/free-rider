@@ -36,12 +36,20 @@ Git 파일을 저장했지만 HEAD와 차이가 없으면 빈 커밋을 만들�
 
 1. 로컬 Git 저장소를 선택합니다.
 2. 컬렉션 파일을 저장합니다.
-3. Free Rider에서 diff를 확인합니다.
+3. Free Rider에서 **View Diff**로 현재 변경을 확인합니다.
 4. 컬렉션 변경을 commit합니다.
 
 Free Rider의 Git 작업은 `open-api.collection.json`만 commit 대상으로 다룹니다. 이미 stage된 다른 파일은 포함하지 않습니다.
 
 최근 컬렉션 commit도 화면에서 확인할 수 있습니다.
+
+## Diff 검토 잠금
+
+커밋은 마지막으로 **View Diff**에서 확인한 `open-api.collection.json`과 같은 상태일 때만 실행됩니다. Diff를 확인한 뒤 컬렉션 파일, 현재 브랜치 또는 HEAD가 바뀌면 커밋을 중단하고 다시 Diff를 확인하도록 안내합니다. 다른 Git 클라이언트나 CLI가 저장소를 수정한 경우도 동일합니다.
+
+**Save collection to repository**를 다시 실행하면 이전 검토도 무효화됩니다. 저장 후 최신 Diff를 한 번 더 확인하면 됩니다. 단순 **Refresh**는 파일이나 Git 위치를 바꾸지 않으므로 검토 상태를 무효화하지 않습니다.
+
+컬렉션 저장은 같은 저장소 안의 임시 파일에 먼저 완성한 뒤 원래 파일로 원자적으로 교체합니다. 저장 도중 실패해 기존 `open-api.collection.json`이 일부만 기록되는 상황을 피하고, 대상이 심볼릭 링크라면 덮어쓰지 않습니다.
 
 ## Push와 Pull
 

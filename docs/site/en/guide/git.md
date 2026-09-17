@@ -36,12 +36,20 @@ If the saved file matches HEAD, no empty commit is created. A commit failure nev
 
 1. Select a local Git repository.
 2. Save the collection file.
-3. Review the diff in Free Rider.
+3. Review the current changes with **View Diff** in Free Rider.
 4. Commit the collection changes.
 
 Free Rider Git operations only commit `open-api.collection.json`. Other files already staged in the repository are not included.
 
 Recent collection commits are also visible in the UI.
+
+## Diff review lock
+
+A commit is allowed only when `open-api.collection.json` still matches the state most recently reviewed with **View Diff**. If the collection file, current branch, or HEAD changes after review, Free Rider stops the commit and asks you to review the diff again. The same rule applies when another Git client or CLI modifies the repository.
+
+Running **Save collection to repository** again invalidates the earlier review. Review the latest diff once more after saving. A simple **Refresh** does not change the file or Git position, so it does not invalidate the review.
+
+Collection saves are written to a temporary file inside the same repository and then atomically renamed over the destination. This avoids leaving a partially written `open-api.collection.json` if a save is interrupted, and symlink targets are still rejected instead of being overwritten.
 
 ## Push and Pull
 
