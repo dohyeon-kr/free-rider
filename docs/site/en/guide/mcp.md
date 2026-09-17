@@ -34,34 +34,7 @@ MCP reads collections, requests, and Environments from the saved workspace. Save
 
 Give the following prompt to another AI agent or IDE when you want it to **configure the Free Rider MCP connection itself**.
 
-```text
-The Free Rider app's MCP server is already running locally. Connect Free Rider MCP to the AI agent/IDE currently in use in this environment.
-
-Connection information:
-- Name: free-rider
-- Transport: Streamable HTTP
-- URL: http://127.0.0.1:48173/mcp
-- Authentication: none
-- Network scope: localhost only
-
-Requirements:
-1. First identify how the current client configures MCP and where its MCP configuration is stored.
-2. Do not guess a client-specific format. Add the server using the Streamable HTTP MCP configuration format supported by the current environment.
-3. This is an already-running HTTP MCP server. Do not create a stdio, npx, or separate MCP server process.
-4. If you have permission to change settings, apply the configuration directly and perform any required MCP reload or client restart step.
-5. After connecting, verify that Free Rider tools appear through tools/list or the client's MCP tool list.
-6. When possible, perform a read-only validation by calling list_collections. Do not call send_request only to test the connection.
-7. If the connection fails, check URL reachability, transport support, and MCP protocol negotiation in that order.
-8. At the end, briefly report the configuration file/setting changed and the connection verification result.
-
-Expected Free Rider tools:
-- list_collections
-- list_requests
-- get_request
-- send_request
-- list_network_history
-- get_network_entry
-```
+<McpHandoffPrompt locale="en" />
 
 ::: tip Check where the client is running
 Free Rider MCP listens only on `127.0.0.1`. If the AI agent or IDE runs inside a separate VM, container, or remote server, that environment's `127.0.0.1` does not point to the Mac running Free Rider, so it cannot connect directly.
