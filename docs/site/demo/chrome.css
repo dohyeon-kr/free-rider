@@ -1,0 +1,56 @@
+/* Presentation overrides only. The request editor itself comes from src/ui/app.js. */
+:root[data-free-rider-demo] {
+  --gold: #d7ff66;
+  --line: #303436;
+  --sidebar: 220px;
+  background: #151718;
+  color: #d3d7d5;
+  font-size: 12px;
+  -webkit-font-smoothing: antialiased;
+}
+[data-free-rider-demo] body { min-width: 0; }
+[data-free-rider-demo] .titlebar { display: none; }
+[data-free-rider-demo] .workspace { height: calc(100dvh - 28px); }
+[data-free-rider-demo] aside { background: #111415; }
+[data-free-rider-demo] main { min-width: 0; background: #191c1d; }
+[data-free-rider-demo] .collection-toolbar { gap: 8px; }
+[data-free-rider-demo] .toolbar-actions { min-width: 0; }
+[data-free-rider-demo] :is(#gitButton, #runnerButton, #envButton, #mcpButton, #updateButton, #announcementButton, #announcementPanel, #shortcuts, #branchStatus) { display: none; }
+[data-free-rider-demo] :is(button, input, textarea, select) { border-radius: 7px; }
+[data-free-rider-demo] :is(input, textarea, select):focus { border-color: #d7ff66; outline: 1px solid #d7ff6633; }
+[data-free-rider-demo] button:focus-visible { outline: 2px solid #d7ff66; outline-offset: 2px; }
+[data-free-rider-demo] #sendRequest { color: #151c0c; background: #d7ff66; border-color: #d7ff66; font-weight: 750; min-width: 76px; }
+[data-free-rider-demo] #sendRequest:hover { background: #e4ff97; }
+[data-free-rider-demo] .request-heading { min-width: 0; }
+[data-free-rider-demo] .request-heading > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-free-rider-demo] .tree-row.selected { background: #d7ff660d; }
+[data-free-rider-demo] .request-content { min-width: 0; }
+[data-free-rider-demo] .response-body { font-size: 12px; line-height: 1.75; color: #ccdace; }
+[data-free-rider-demo] .empty-response { color: #a6afa9; font-size: 12px; }
+[data-free-rider-demo] .response-toolbar { gap: 8px; }
+[data-free-rider-demo] .response-tools { flex-shrink: 0; }
+[data-free-rider-demo] footer { background: #101314; }
+[data-free-rider-demo] #status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+[data-free-rider-demo] #appVersion { color: #a2b38e; font-size: 9px; letter-spacing: .06em; white-space: nowrap; }
+[data-free-rider-demo] dialog { width: min(640px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px); }
+@media (max-width: 760px) {
+  [data-free-rider-demo] .workspace { grid-template-columns: minmax(0, 1fr); }
+  [data-free-rider-demo] .workspace > aside,
+  [data-free-rider-demo] #sidebarResizer { display: none; }
+  [data-free-rider-demo] .collection-toolbar { padding-inline: 10px; }
+  [data-free-rider-demo] #newRequest { display: none; }
+  [data-free-rider-demo] .request-heading { padding-inline: 10px; }
+  [data-free-rider-demo] .request-heading > span:first-child { display: none; }
+  [data-free-rider-demo] .request-split.horizontal { flex-direction: column; }
+  [data-free-rider-demo] .request-pane .tabs,
+  [data-free-rider-demo] .response-pane .tabs { min-width: 0; overflow-x: auto; white-space: nowrap; }
+  [data-free-rider-demo] .response-toolbar { flex-wrap: wrap; }
+  [data-free-rider-demo] .response-tools { width: 100%; justify-content: flex-end; }
+  [data-free-rider-demo] :is(input, textarea, select) { font-size: 16px; }
+  [data-free-rider-demo] #appVersion { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-free-rider-demo] *, [data-free-rider-demo] *::before, [data-free-rider-demo] *::after {
+    animation: none !important; transition: none !important; scroll-behavior: auto !important;
+  }
+}

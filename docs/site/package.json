@@ -2,11 +2,16 @@
   "name": "free-rider-docs",
   "private": true,
   "scripts": {
+    "predev": "node demo/build.mjs",
     "dev": "vitepress",
+    "prebuild": "node demo/build.mjs",
     "build": "vitepress build",
-    "preview": "vitepress preview"
+    "preview": "vitepress preview",
+    "test:demo": "node --test demo/*.test.mjs",
+    "smoke:demo": "node demo/smoke.mjs"
   },
   "devDependencies": {
-    "vitepress": "1.6.4"
+    "vitepress": "1.6.4",
+    "playwright": "1.58.0"
   }
 }

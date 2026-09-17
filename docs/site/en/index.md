@@ -31,6 +31,8 @@ features:
     details: Run saved requests in sequence with stop-on-failure, manual stop, and per-request results.
 ---
 
+<RendererDemo />
+
 ## What Free Rider covers
 
 Free Rider writes and runs API requests like Postman or Bruno, but focuses on **local files and Git-based collaboration** rather than server synchronization.
