@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { withBase } from 'vitepress'
+import McpAgentRail from './McpAgentRail.vue'
 
 const links = {
   start: withBase('/guide/getting-started'),
@@ -178,13 +179,7 @@ onMounted(async () => {
         </header>
 
         <div class="mcp-demo">
-          <div class="agent-flow">
-            <article><span>AI</span><div><b>Agent</b><small>ChatGPT · Claude · Codex</small></div></article>
-            <i class="dots">•••</i>
-            <article><span class="rider">F</span><div><b>Free Rider</b><small>MCP server</small></div></article>
-            <i class="dots">•••</i>
-            <strong>↯ Your API</strong>
-          </div>
+          <McpAgentRail />
           <article class="terminal">
             <header><span class="traffic"><i /><i /><i /></span><b>MCP handoff</b><small>connected</small></header>
             <div>
