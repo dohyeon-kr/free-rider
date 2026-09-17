@@ -34,13 +34,13 @@ if (trigger) {
         </label>
         <label class="realtime-field" id="realtimeHeadersField">
           <span>Headers <small>한 줄에 Key: Value</small></span>
-          <textarea id="realtimeHeaders" rows="4" spellcheck="false" placeholder="Authorization: Bearer {{token}}"></textarea>
+          <textarea id="realtimeHeaders" rows="4" spellcheck="false" placeholder="Authorization: Bearer token"></textarea>
         </label>
         <label class="realtime-field" id="realtimeProtocolsField" hidden>
           <span>Subprotocols <small>쉼표로 구분</small></span>
           <input id="realtimeProtocols" spellcheck="false" autocomplete="off" placeholder="graphql-ws, chat" />
         </label>
-        <p class="realtime-note" id="realtimeWsNote" hidden>WebSocket 사용자 정의 헤더는 표준 WebSocket API 제약으로 지원하지 않습니다. 인증은 쿼리 파라미터, 쿠키 또는 서브프로토콜을 사용하세요.</p>
+        <p class="realtime-note" id="realtimeWsNote" hidden>WebSocket 사용자 정의 헤더는 표준 WebSocket API 제약으로 지원하지 않습니다. 인증은 쿼리 파라미터 또는 서브프로토콜을 사용하세요.</p>
         <div class="realtime-connect-row">
           <label class="realtime-check"><input id="realtimeReconnect" type="checkbox" checked /> 자동 재연결</label>
           <span id="realtimeState" class="realtime-state idle">대기</span>
