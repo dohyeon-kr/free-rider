@@ -196,6 +196,10 @@ jobs:
           RELEASE_TAG: ${{ needs.release.outputs.tag }}
         shell: bash
         run: |
+          VERSIONED_DMG=$(find dist -maxdepth 1 -name 'Free-Rider-*-mac-${{ matrix.arch }}.dmg' -print -quit)
+          test -n "$VERSIONED_DMG"
+          cp "$VERSIONED_DMG" "dist/Free-Rider-mac-${{ matrix.arch }}.dmg"
+
           gh release upload "$RELEASE_TAG" \
             dist/*.dmg \
             dist/*.zip \
