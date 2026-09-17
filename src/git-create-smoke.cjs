@@ -9,7 +9,8 @@ async function run({ js, poll, win, gitPath }) {
   async function openForm() {
     await js(`document.querySelector('#gitButton').click(); document.querySelector('#gitCreateRepository').click(); document.querySelector('#gitCreateChooseParent').click()`);
     await poll(() => js(`!!document.querySelector('#gitCreateParent')?.value && !document.querySelector('#dialogConfirm').disabled`));
-    await js(`const input=document.querySelector('#gitCreateFolderName'); input.value=${JSON.stringify(folderName)}; input.dispatchEvent(new Event('input',{bubbles:true}));`);
+    // executeJavaScript shares the page's global lexical scope between calls.
+    await js(`{ const input=document.querySelector('#gitCreateFolderName'); input.value=${JSON.stringify(folderName)}; input.dispatchEvent(new Event('input',{bubbles:true})); }`);
   }
   await openForm();
   assert.equal(await js(`document.querySelector('#gitCreatePreview').textContent`), target);
