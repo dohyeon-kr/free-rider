@@ -1,10 +1,14 @@
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { app, BrowserWindow, ipcMain } = require("electron");
+const { app, BrowserWindow, ipcMain, net, shell } = require("electron");
 const {
   createMcpServer,
   createLocalMcpHttpServer,
 } = require("./modules/mcp/server.cjs");
+const {
+  loadAnnouncements,
+  isAllowedAnnouncementUrl,
+} = require("./modules/announcements.cjs");
 
 const capturedHandlers = new Map();
 const registerHandle = ipcMain.handle.bind(ipcMain);
@@ -83,6 +87,25 @@ registerHandle("mcp-state", async (event) => {
 registerHandle("mcp-toggle", async (event, enabled) => {
   validateRenderer(event);
   return enabled ? mcp.start() : mcp.stop();
+});
+
+const ANNOUNCEMENT_CACHE_MS = 5 * 60 * 1000;
+let announcementCache = { at: 0, items: [] };
+
+registerHandle("announcement-list", async (event) => {
+  validateRenderer(event);
+  if (announcementCache.at && Date.now() - announcementCache.at < ANNOUNCEMENT_CACHE_MS)
+    return announcementCache.items;
+  const items = await loadAnnouncements((url, options) => net.fetch(url, options));
+  announcementCache = { at: Date.now(), items };
+  return items;
+});
+
+registerHandle("announcement-open", async (event, url) => {
+  validateRenderer(event);
+  if (!isAllowedAnnouncementUrl(url)) throw Error("허용되지 않은 공지 링크입니다.");
+  await shell.openExternal(String(url));
+  return true;
 });
 
 app.on("before-quit", () => {

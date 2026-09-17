@@ -34,6 +34,8 @@ for (const name of [
   "copy",
   "mcp-state",
   "mcp-toggle",
+  "announcement-list",
+  "announcement-open",
   "update-state",
   "update-check",
   "update-install",
