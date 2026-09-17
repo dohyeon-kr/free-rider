@@ -23,6 +23,8 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm test
+      - name: Validate Homebrew cask syntax
+        run: ruby -c Casks/free-rider.rb
 
   release:
     if: ${{ github.event_name != 'pull_request' }}
@@ -222,3 +224,76 @@ jobs:
         run: |
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
           echo "### Published $RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+  update-homebrew-cask:
+    needs: [release, publish-release]
+    if: ${{ needs.release.outputs.released == 'true' && needs.publish-release.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Render cask from published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        shell: bash
+        run: |
+          rm -rf .homebrew-release
+          mkdir -p .homebrew-release
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'SHA256SUMS-*.txt' \
+            --dir .homebrew-release
+
+          VERSION="${RELEASE_TAG#v}"
+          ARM_SHA=$(awk '$2 ~ /mac-arm64\.dmg$/ { print $1 }' .homebrew-release/SHA256SUMS-arm64.txt)
+          INTEL_SHA=$(awk '$2 ~ /mac-x64\.dmg$/ { print $1 }' .homebrew-release/SHA256SUMS-x64.txt)
+
+          [[ "$ARM_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "Invalid arm64 checksum: $ARM_SHA" >&2; exit 1; }
+          [[ "$INTEL_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "Invalid x64 checksum: $INTEL_SHA" >&2; exit 1; }
+
+          mkdir -p Casks
+          cat > Casks/free-rider.rb <<EOF
+          cask "free-rider" do
+            arch arm: "arm64", intel: "x64"
+
+            version "$VERSION"
+            sha256 arm:   "$ARM_SHA",
+                   intel: "$INTEL_SHA"
+
+            url "https://github.com/dohyeon-kr/free-rider/releases/download/v#{version}/Free-Rider-#{version}-mac-#{arch}.dmg",
+                verified: "github.com/dohyeon-kr/free-rider/"
+            name "Free Rider"
+            desc "All-free, open-source, local-first API client"
+            homepage "https://dohyeon-kr.github.io/free-rider/"
+
+            auto_updates true
+            depends_on macos: ">= :ventura"
+
+            app "Free Rider.app"
+          end
+          EOF
+
+          ruby -c Casks/free-rider.rb
+          echo "### Homebrew cask rendered for $RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit cask update
+        env:
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        shell: bash
+        run: |
+          if git diff --quiet -- Casks/free-rider.rb; then
+            echo "Cask is already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/free-rider.rb
+          git commit -m "chore(homebrew): update cask to $RELEASE_TAG [skip ci]"
+          git push origin HEAD:main
