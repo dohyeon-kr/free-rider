@@ -92,7 +92,7 @@ async function execute(request, variables, signal, interceptors = {}, environmen
       const before=await runScript(interceptors.before,{req:p,vars:variables,env:environment},signal);
       p=before.req;
       const target=new URL(p.url);
-      if(!["http:","https:"].includes(target.protocol) || target.username || target.password) throw Error("전처리 URL은 인증정보 없는 HTTP/HTTPS 주소여야 합니다.");
+      if(!["http:","https:"].includes(target.protocol) || target.username || target.password) throw Error("Before Request interceptor URL은 인증정보 없는 HTTP/HTTPS 주소여야 합니다.");
       p.method=String(p.method).toUpperCase();
       if(!/^[!#$%&'*+.^_`|~0-9A-Z-]+$/.test(p.method) || ["CONNECT","TRACE","TRACK"].includes(p.method)) throw Error("지원하지 않는 HTTP 메서드입니다.");
       if(["GET","HEAD"].includes(p.method)) p.body=undefined;
