@@ -32,7 +32,7 @@ MCP는 저장된 워크스페이스를 기준으로 컬렉션, 요청, 환경을
 
 ## MCP 연결 handoff prompt
 
-다른 AI 에이전트나 IDE에게 Free Rider MCP 연결 작업 자체를 맡길 때 아래 프롬프트를 그대로 전달하세요.
+다른 AI 에이전트나 IDE에게 **Free Rider MCP 연결 작업 자체**를 맡길 때 아래 프롬프트를 그대로 전달하세요.
 
 ```text
 현재 로컬에서 Free Rider 앱의 MCP 서버를 켜 둔 상태다. 이 환경에서 Free Rider MCP를 현재 사용 중인 AI 에이전트/IDE에 연결해줘.
@@ -63,7 +63,7 @@ Free Rider에서 기대되는 도구:
 - get_network_entry
 ```
 
-::: tip
+::: tip 로컬 실행 환경 확인
 Free Rider MCP는 `127.0.0.1`에만 열립니다. AI 에이전트나 IDE가 별도 VM, 컨테이너, 원격 서버에서 실행된다면 그 환경의 `127.0.0.1`은 Free Rider가 실행 중인 Mac을 가리키지 않으므로 직접 연결되지 않습니다.
 :::
 
