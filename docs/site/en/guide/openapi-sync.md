@@ -15,11 +15,25 @@ Bundle specifications that contain external `$ref` references before importing t
 1. **Connect** — connect an OpenAPI file or URL.
 2. **Sync** — build a change review list. Requests are not modified at this stage.
 3. **Compare** — expand an endpoint and compare the previous specification / current request / new specification.
-4. **Resolve conflicts** — choose whether to keep the current value or apply the specification value.
-5. **Apply selected changes** — apply only checked endpoints. Deletion candidates are unchecked by default.
-6. **Save and restore** — changes are committed after a successful save, and the previous applied state can be restored.
+4. **Check compatibility** — changes that can break existing callers or response handling are marked `BREAKING`.
+5. **Resolve conflicts** — choose whether to keep the current value or apply the specification value.
+6. **Apply selected changes** — apply only checked endpoints. Deletion candidates are unchecked by default.
+7. **Save and restore** — changes are committed after a successful save, and the previous applied state can be restored.
 
 Changes cannot be applied while unresolved conflicts remain.
+
+## Breaking change detection
+
+The sync review flags compatibility risks before they are applied, including:
+
+- removal of an existing operation
+- a newly required parameter or an optional parameter becoming required
+- request parameter / body schema type changes or narrowed enum values
+- a request body or object property becoming required
+- removal of an existing 2xx success response or response media type
+- removal of an existing response property or a response schema type change
+
+A `BREAKING` marker is a review warning, not an automatic block. Inspect the reasons and apply only the endpoints you intend to update. Deletion candidates remain unchecked by default.
 
 ## Comparison granularity
 
