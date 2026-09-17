@@ -1,7 +1,7 @@
 ---
 layout: home
 title: Free Rider
-description: All-free, open-source, local-first API client for macOS
+description: Ride on your API for Free — all-free, open-source, local-first API client for macOS
 ---
 
 <LandingHome />
