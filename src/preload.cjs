@@ -41,6 +41,9 @@ for (const name of [
   "announcement-open",
   "docs-reference-get",
   "docs-reference-open",
+  "realtime-open",
+  "realtime-send",
+  "realtime-close",
   "update-state",
   "update-check",
   "update-install",
@@ -60,5 +63,10 @@ api.onNetworkEntry = (callback) => {
   const listener = (_event, value) => callback(value);
   ipcRenderer.on("network-entry", listener);
   return () => ipcRenderer.removeListener("network-entry", listener);
+};
+api.onRealtimeEvent = (callback) => {
+  const listener = (_event, value) => callback(value);
+  ipcRenderer.on("realtime-event", listener);
+  return () => ipcRenderer.removeListener("realtime-event", listener);
 };
 contextBridge.exposeInMainWorld("client", api);
