@@ -405,6 +405,7 @@ handle("save-collection", async (value) => {
   );
   return true;
 });
+require("./modules/git/create-ipc.cjs").registerGitCreation(handle, chooseOpen, gitFor);
 handle("git-open", async (id) => {
   const r = await chooseOpen({ properties: ["openDirectory"] });
   return r.canceled ? null : gitFor(id).open(r.filePaths[0]);
