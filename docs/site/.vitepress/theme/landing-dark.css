@@ -1,4 +1,4 @@
-/* Landing page: keep every section on the same black canvas. */
+/* Dark landing art direction: one black canvas, richer product depth, no hero artwork. */
 .VPHome,
 .VPHomeContent,
 .VPHome .vp-doc,
@@ -7,7 +7,13 @@
 }
 
 .landing {
+  --fr-line: rgba(255, 255, 255, 0.1);
+  --fr-line-soft: rgba(255, 255, 255, 0.06);
+  --fr-surface: rgba(19, 19, 20, 0.94);
+  --fr-surface-strong: rgba(11, 11, 12, 0.98);
+  --fr-muted: rgba(255, 255, 255, 0.54);
   color: #f5f5f5 !important;
+  overflow: clip;
 }
 
 .landing .hero,
@@ -23,9 +29,251 @@
   border-color: #222 !important;
 }
 
+/* Hero: atmospheric light only. No raster artwork. */
+.landing .hero {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 50% 37%, rgba(121, 92, 255, 0.13), transparent 31rem),
+    radial-gradient(circle at 20% 24%, rgba(215, 255, 102, 0.07), transparent 24rem),
+    linear-gradient(180deg, #050505 0%, #070708 58%, #050505 100%) !important;
+}
+
+.landing .hero::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 260px;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(180deg, transparent, #050505 90%);
+  z-index: -1;
+}
+
+.landing .hero-grid {
+  opacity: 0.22 !important;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent 82%);
+}
+
+.landing .orb {
+  filter: blur(18px);
+  opacity: 0.48 !important;
+}
+
+.landing .eyebrow {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(14px);
+}
+
+.landing .hero h1 {
+  color: #fff !important;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.landing .hero h1 span {
+  color: transparent !important;
+  background: linear-gradient(105deg, #ffffff 4%, #c8b8ff 49%, #d7ff66 104%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.landing :is(.hero-copy, .section-head p, .feature-head p, .bento-card > p, .open-source p, .final-card p) {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.landing .hero-copy {
+  color: rgba(255, 255, 255, 0.58) !important;
+  text-wrap: pretty;
+}
+
+.landing .hero-meta {
+  color: rgba(255, 255, 255, 0.38) !important;
+}
+
+.landing .hero-meta a {
+  color: rgba(255, 255, 255, 0.76) !important;
+}
+
+/* Buttons feel physical, but stay restrained. */
+.landing .actions .button,
+.landing .light-button {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.12),
+    0 10px 30px rgba(0, 0, 0, 0.24) !important;
+  transition: transform 160ms ease, border-color 160ms ease, filter 160ms ease;
+}
+
+.landing .actions .button:hover,
+.landing .light-button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  filter: brightness(1.06);
+}
+
+.landing .actions .button.primary {
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.34),
+    0 14px 40px rgba(215, 255, 102, 0.1) !important;
+}
+
+.landing .actions .button.secondary,
+.landing .actions .button.ghost {
+  color: rgba(255, 255, 255, 0.82) !important;
+  background: linear-gradient(180deg, rgba(34, 34, 36, 0.94), rgba(18, 18, 19, 0.94)) !important;
+}
+
+/* Product UI: make the existing mockup the hero artwork. */
+.landing .product-stage {
+  position: relative;
+  isolation: isolate;
+  margin-top: 68px !important;
+  perspective: 1600px;
+}
+
+.landing .stage-glow {
+  opacity: 1 !important;
+  background:
+    radial-gradient(ellipse at 50% 54%, rgba(119, 89, 255, 0.2), transparent 47%),
+    radial-gradient(ellipse at 35% 65%, rgba(215, 255, 102, 0.08), transparent 33%) !important;
+  filter: blur(18px);
+}
+
+.landing .app-window {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  background: linear-gradient(155deg, rgba(24, 24, 27, 0.98), rgba(7, 7, 8, 0.99)) !important;
+  box-shadow:
+    0 58px 130px rgba(0, 0, 0, 0.68),
+    0 18px 42px rgba(0, 0, 0, 0.48),
+    inset 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 -1px rgba(255, 255, 255, 0.035) !important;
+  transform: rotateX(1.4deg) translateZ(0);
+  transform-origin: center top;
+}
+
+.landing .app-window::before {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  content: '';
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.055), transparent 22%, transparent 72%, rgba(128, 99, 255, 0.035)),
+    radial-gradient(circle at 70% 0%, rgba(255, 255, 255, 0.04), transparent 30%);
+}
+
+.landing .window-bar {
+  border-bottom: 1px solid var(--fr-line-soft) !important;
+  background: linear-gradient(180deg, rgba(34, 34, 37, 0.98), rgba(20, 20, 22, 0.98)) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.065);
+}
+
+.landing .window-bar b {
+  color: rgba(255, 255, 255, 0.87) !important;
+}
+
+.landing .window-bar .local {
+  border: 1px solid rgba(215, 255, 102, 0.13);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: rgba(255, 255, 255, 0.54) !important;
+  background: rgba(215, 255, 102, 0.035);
+}
+
+.landing .sidebar {
+  border-right: 1px solid var(--fr-line-soft) !important;
+  background: linear-gradient(180deg, rgba(18, 18, 20, 0.98), rgba(11, 11, 12, 0.98)) !important;
+}
+
+.landing .sidebar > strong span {
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.2), 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.landing .sidebar p {
+  color: rgba(255, 255, 255, 0.52) !important;
+  border: 1px solid transparent;
+}
+
+.landing .sidebar p.active {
+  color: rgba(255, 255, 255, 0.93) !important;
+  border-color: rgba(215, 255, 102, 0.1) !important;
+  background: linear-gradient(90deg, rgba(215, 255, 102, 0.1), rgba(215, 255, 102, 0.025)) !important;
+  box-shadow: inset 3px 0 #d7ff66;
+}
+
+.landing .request-pane {
+  background:
+    radial-gradient(circle at 85% -5%, rgba(119, 89, 255, 0.07), transparent 28%),
+    #0b0b0c !important;
+}
+
+.landing .request-bar {
+  border-bottom: 1px solid var(--fr-line-soft) !important;
+  background: rgba(13, 13, 14, 0.84) !important;
+}
+
+.landing .request-bar code {
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.025) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.035);
+}
+
+.landing .request-bar button {
+  border: 1px solid rgba(215, 255, 102, 0.24) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.2), 0 8px 24px rgba(215, 255, 102, 0.08);
+}
+
+.landing .tabs {
+  border-bottom-color: var(--fr-line-soft) !important;
+}
+
+.landing .tabs span {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.landing .tabs .selected {
+  color: #fff !important;
+}
+
+.landing .tabs .selected::after {
+  box-shadow: 0 0 18px rgba(215, 255, 102, 0.28);
+}
+
+.landing .code-block {
+  border-color: rgba(255, 255, 255, 0.055) !important;
+  background: linear-gradient(180deg, rgba(15, 15, 17, 0.96), rgba(9, 9, 10, 0.98)) !important;
+}
+
+.landing .response-head {
+  border-color: var(--fr-line-soft) !important;
+  background: rgba(255, 255, 255, 0.018) !important;
+}
+
+.landing .response-head b {
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: #bffb8d !important;
+  background: rgba(114, 235, 126, 0.08);
+}
+
+.landing .float-card {
+  border: 1px solid rgba(255, 255, 255, 0.13) !important;
+  background: linear-gradient(145deg, rgba(33, 33, 36, 0.9), rgba(15, 15, 17, 0.94)) !important;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.5), inset 0 1px rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(20px);
+}
+
+/* Workflow rail and sections. */
 .landing .rail {
   border-top: 1px solid #171717 !important;
   border-bottom: 1px solid #222 !important;
+  background: rgba(10, 10, 11, 0.88) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
 }
 
 .landing .rail small,
@@ -34,11 +282,24 @@
 .landing .feature-head p,
 .landing .open-source p,
 .landing .bento-card > p {
-  color: rgba(255, 255, 255, 0.52) !important;
+  color: var(--fr-muted) !important;
 }
 
 .landing .rail-inner i {
   background: #4a4a4a !important;
+}
+
+.landing .section {
+  position: relative;
+}
+
+.landing .section::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.09), transparent);
 }
 
 .landing .section-head small,
@@ -53,6 +314,7 @@
 .landing .open-source h2,
 .landing .final-card h2 {
   color: #fff !important;
+  text-wrap: balance;
 }
 
 .landing .section-head h2 span,
@@ -62,10 +324,12 @@
 }
 
 .landing .text-link {
-  color: rgba(255, 255, 255, 0.84) !important;
+  color: rgba(255, 255, 255, 0.82) !important;
+  text-decoration-color: rgba(215, 255, 102, 0.34) !important;
+  text-underline-offset: 5px;
 }
 
-/* Turn the former light cards into charcoal glass cards. */
+/* Shared glass language. */
 .landing .glass,
 .landing .agent-flow article,
 .landing .agent-flow > strong,
@@ -78,8 +342,29 @@
 .landing .os-mark,
 .landing .pills span {
   border-color: #2b2b2b !important;
-  background: linear-gradient(180deg, rgba(31, 31, 31, 0.96), rgba(20, 20, 20, 0.96)) !important;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06), 0 24px 70px rgba(0, 0, 0, 0.28) !important;
+  background: linear-gradient(160deg, rgba(31, 31, 33, 0.96), rgba(15, 15, 16, 0.97)) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.065), 0 24px 70px rgba(0, 0, 0, 0.3) !important;
+}
+
+.landing .glass,
+.landing .bento-card,
+.landing .diff-card,
+.landing .terminal,
+.landing .final-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.landing .glass::before,
+.landing .bento-card::before,
+.landing .diff-card::before,
+.landing .terminal::before,
+.landing .final-card::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.035), transparent 24%);
 }
 
 .landing .glass header,
@@ -120,11 +405,28 @@
   color: rgba(255, 255, 255, 0.88) !important;
 }
 
+.landing .diff-card,
+.landing .terminal {
+  border-color: rgba(255, 255, 255, 0.11) !important;
+  background: linear-gradient(155deg, rgba(22, 22, 24, 0.98), rgba(10, 10, 11, 0.99)) !important;
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.42), inset 0 1px rgba(255, 255, 255, 0.07) !important;
+}
+
+.landing .bento-card {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.landing .bento-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 30px 80px rgba(0, 0, 0, 0.42) !important;
+}
+
 .landing .soft-icon {
   border-color: #333 !important;
   color: #d7ff66 !important;
-  background: linear-gradient(145deg, #252525, #141414) !important;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06) !important;
+  background: linear-gradient(145deg, #29292b, #111112) !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.09), 0 9px 22px rgba(0, 0, 0, 0.28) !important;
 }
 
 .landing .runner::before {
@@ -137,7 +439,7 @@
 }
 
 .landing .open-source::before {
-  opacity: 0.34;
+  opacity: 0.26;
 }
 
 .landing .os-mark {
@@ -148,11 +450,38 @@
   color: #f5f5f5 !important;
   border-color: #343434 !important;
   background: linear-gradient(#252525, #181818) !important;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 10px 24px rgba(0, 0, 0, 0.24) !important;
 }
 
 .landing .final-card {
-  border: 1px solid #242424;
-  background: #090909 !important;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.52) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background:
+    radial-gradient(circle at 80% 20%, rgba(119, 89, 255, 0.08), transparent 30%),
+    linear-gradient(155deg, #111112, #080809) !important;
+  box-shadow: 0 34px 100px rgba(0, 0, 0, 0.55), inset 0 1px rgba(255, 255, 255, 0.06) !important;
+}
+
+@media (max-width: 800px) {
+  .landing .product-stage {
+    margin-top: 48px !important;
+  }
+
+  .landing .app-window {
+    transform: none;
+  }
+
+  .landing .float-card {
+    backdrop-filter: blur(12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing .actions .button,
+  .landing .bento-card {
+    transition: none !important;
+  }
+
+  .landing .actions .button:hover,
+  .landing .bento-card:hover {
+    transform: none !important;
+  }
 }
