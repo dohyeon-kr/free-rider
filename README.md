@@ -96,9 +96,25 @@ API:
 
 macOS Squirrel 자동 업데이트는 Developer ID 서명이 필수이므로 ad-hoc/개발 빌드에서는 자동 업데이트를 비활성화합니다. 새 버전 다운로드가 끝나면 앱 하단에서 설치 및 재시작할 수 있습니다.
 
-## 문서 배포
+## 문서 개발·배포
 
-`docs/site/`의 정적 문서는 `.github/workflows/docs.yml`의 GitHub Pages Actions 워크플로로 배포합니다. `actions/configure-pages`, `actions/upload-pages-artifact`, `actions/deploy-pages`를 사용하므로 별도의 `gh-pages` 브랜치는 만들지 않습니다. GitHub Pages 저장소 설정의 Source는 `GitHub Actions`로 설정합니다.
+문서는 `docs/site/`의 VitePress 프로젝트로 관리합니다.
+
+```sh
+cd docs/site
+npm install
+npm run dev
+```
+
+프로덕션 빌드는 다음과 같습니다.
+
+```sh
+cd docs/site
+npm run build
+npm run preview
+```
+
+`.github/workflows/docs.yml`은 Pull Request에서 VitePress 빌드를 검증하고, `main`의 문서 변경에서는 `docs/site/.vitepress/dist`를 GitHub Pages에 배포합니다. 별도의 `gh-pages` 브랜치는 사용하지 않습니다. GitHub Pages 저장소 설정의 Source는 `GitHub Actions`로 설정합니다.
 
 ## 검증과 빌드
 
