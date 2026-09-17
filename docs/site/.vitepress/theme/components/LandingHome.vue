@@ -43,8 +43,8 @@ onMounted(async () => {
         <div class="eyebrow"><i /> All-free · Open source · Local-first</div>
         <h1>API work should live<br><span>next to your code.</span></h1>
         <p class="hero-copy">
-          Free Rider는 계정, 유료 플랜, 클라우드 워크스페이스 없이 시작하는 오픈소스 API 클라이언트입니다.
-          요청부터 OpenAPI, Git, MCP까지 전부 무료로 사용하세요.
+          Free Rider는 계정도, 유료 플랜도, 클라우드 워크스페이스도 필요 없는 오픈소스 API 클라이언트입니다.
+          요청 작성부터 OpenAPI 동기화, Git 연동, MCP까지 모든 기능을 무료로 쓸 수 있습니다.
         </p>
 
         <div class="actions">
@@ -115,8 +115,8 @@ onMounted(async () => {
     <section class="section light">
       <div class="shell">
         <header class="section-head">
-          <div><small>01 · OpenAPI</small><h2>명세를 읽는 데서 끝내지 말고,<br><span>바로 작업 가능한 요청으로.</span></h2></div>
-          <p>OpenAPI를 가져오면 request type, required field, request/response schema까지 보존합니다. 변경은 바로 덮어쓰지 않고 검토한 뒤 선택적으로 반영합니다.</p>
+          <div><small>01 · OpenAPI</small><h2>명세를 읽는 데서 끝내지 말고,<br><span>바로 실행할 수 있는 요청으로.</span></h2></div>
+          <p>OpenAPI를 가져오면 요청 타입, 필수 필드, 요청·응답 스키마까지 그대로 보존합니다. 변경 사항은 바로 덮어쓰지 않고 검토한 뒤 필요한 것만 반영합니다.</p>
         </header>
 
         <div class="openapi-demo">
@@ -149,7 +149,7 @@ onMounted(async () => {
       <div class="shell">
         <header class="section-head on-dark">
           <div><small>02 · Git-native</small><h2>Your API collections<br><span>are just files.</span></h2></div>
-          <p>컬렉션은 로컬 파일로 저장됩니다. 공유할 설정과 로컬 비밀값을 분리하고, 바뀐 내용만 diff로 확인해 그대로 커밋하세요.</p>
+          <p>컬렉션은 로컬 파일로 저장됩니다. 팀과 공유할 설정과 로컬에만 둘 비밀값을 분리하고, 변경 사항은 diff로 확인한 뒤 그대로 커밋할 수 있습니다.</p>
         </header>
 
         <div class="git-demo">
@@ -175,8 +175,8 @@ onMounted(async () => {
     <section class="section lavender">
       <div class="shell">
         <header class="section-head">
-          <div><small>03 · MCP</small><h2>AI에게 API를 설명하지 말고,<br><span>실제로 실행하게.</span></h2></div>
-          <p>MCP를 통해 AI 에이전트가 Free Rider의 저장된 요청과 컬렉션을 사용할 수 있습니다. 사람이 만든 API 작업 공간을 그대로 에이전트에게 넘겨주세요.</p>
+          <div><small>03 · MCP</small><h2>AI에게 API를 설명하지 말고,<br><span>직접 실행하게.</span></h2></div>
+          <p>MCP를 연결하면 AI 에이전트가 Free Rider에 저장된 요청과 컬렉션을 직접 사용할 수 있습니다. API 작업 공간을 다시 설명하지 말고 그대로 에이전트에 넘기세요.</p>
         </header>
 
         <div class="mcp-demo">
@@ -199,13 +199,13 @@ onMounted(async () => {
 
     <section class="section features">
       <div class="shell">
-        <header class="feature-head"><small>Everything included</small><h2>작은 기능까지도<br><span>유료 벽 뒤에 두지 않습니다.</span></h2><p>Free Rider의 기능은 전부 무료이며, 소스도 공개합니다.</p></header>
+        <header class="feature-head"><small>Everything included</small><h2>작은 기능 하나도<br><span>유료로 잠그지 않습니다.</span></h2><p>Free Rider는 모든 기능과 소스 코드를 무료로 공개합니다.</p></header>
         <div class="bento">
-          <article class="bento-card wide"><span class="soft-icon">↺</span><h3>Request History</h3><p>저장하지 않고 실행한 요청도 다시 열고 컬렉션으로 보낼 수 있습니다.</p><div class="history"><p><b>GET</b><span>/products</span><small>200 · 124ms</small></p><p><b class="post">POST</b><span>/orders</span><small>201 · 203ms</small></p><p><b>GET</b><span>/users/me</span><small>200 · 89ms</small></p></div></article>
-          <article class="bento-card"><span class="soft-icon">◎</span><h3>Cookie Jar</h3><p>Set-Cookie를 다음 요청에 자동으로 이어갑니다.</p><div class="cookie"><b>session</b><span>••••••••••</span><em>Secure</em></div></article>
-          <article class="bento-card"><span class="soft-icon">⚡</span><h3>Interceptors</h3><p>컬렉션별 전후처리를 한 곳에서 관리합니다.</p><div class="flow"><span>req</span><i>→</i><b>auth</b><i>→</i><b>log</b><i>→</i><span>res</span></div></article>
-          <article class="bento-card"><span class="soft-icon">▶</span><h3>Collection Runner</h3><p>여러 요청을 순서대로 실행하고 결과를 한눈에 봅니다.</p><div class="runner"><i class="done" /><i class="done" /><i class="now" /><i /><small>3 / 4</small></div></article>
-          <article class="bento-card wide"><span class="soft-icon">{ }</span><h3>Vars & Environments</h3><p>환경값, 요청별 Vars, 실행 중 캡처 값을 계층적으로 조합합니다.</p><div class="vars"><code><b>baseUrl</b> https://api.local</code><code><b>authToken</b> ••••••••••••</code><code><b>userId</b> usr_9f82a</code></div></article>
+          <article class="bento-card wide"><span class="soft-icon">↺</span><h3>Request History</h3><p>저장하지 않고 실행한 요청도 기록에서 다시 열어 컬렉션에 저장할 수 있습니다.</p><div class="history"><p><b>GET</b><span>/products</span><small>200 · 124ms</small></p><p><b class="post">POST</b><span>/orders</span><small>201 · 203ms</small></p><p><b>GET</b><span>/users/me</span><small>200 · 89ms</small></p></div></article>
+          <article class="bento-card"><span class="soft-icon">◎</span><h3>Cookie Jar</h3><p>응답의 Set-Cookie를 기억해 다음 요청에도 자동으로 적용합니다.</p><div class="cookie"><b>session</b><span>••••••••••</span><em>Secure</em></div></article>
+          <article class="bento-card"><span class="soft-icon">⚡</span><h3>Interceptors</h3><p>컬렉션별 전처리와 후처리를 한 곳에서 관리합니다.</p><div class="flow"><span>req</span><i>→</i><b>auth</b><i>→</i><b>log</b><i>→</i><span>res</span></div></article>
+          <article class="bento-card"><span class="soft-icon">▶</span><h3>Collection Runner</h3><p>여러 요청을 순서대로 실행하고 결과를 한눈에 확인합니다.</p><div class="runner"><i class="done" /><i class="done" /><i class="now" /><i /><small>3 / 4</small></div></article>
+          <article class="bento-card wide"><span class="soft-icon">{ }</span><h3>Vars & Environments</h3><p>환경 변수, 요청별 변수, 실행 중 캡처한 값을 계층적으로 조합합니다.</p><div class="vars"><code><b>baseUrl</b> https://api.local</code><code><b>authToken</b> ••••••••••••</code><code><b>userId</b> usr_9f82a</code></div></article>
         </div>
       </div>
     </section>
@@ -215,7 +215,7 @@ onMounted(async () => {
         <div class="os-mark"><img class="brand-icon brand-icon-os" :src="brandIcon" alt="" aria-hidden="true" /></div>
         <small>Why “Free Rider”?</small>
         <h2>All free.<br><span>Open source.</span></h2>
-        <p>무료 플랜이 있는 제품이 아니라, 제품 전체를 무료로 공개합니다.<br>계정 없이 시작하고, 데이터는 내 컴퓨터에 두고, 필요하면 소스까지 직접 바꾸세요.</p>
+        <p>일부 기능만 무료인 제품이 아닙니다. 처음부터 모든 기능과 소스를 무료로 공개합니다.<br>계정 없이 바로 시작할 수 있고, 데이터는 내 컴퓨터에 남습니다. 필요하면 소스도 직접 바꿀 수 있습니다.</p>
         <div class="pills"><span>✓ All features free</span><span>✓ Open source</span><span>✓ Local-first</span><span>✓ No account</span></div>
         <div class="actions center"><a class="button primary" :href="links.github">View source on GitHub ↗</a><a class="button light-button" :href="links.start">Get started</a></div>
       </div>
@@ -227,7 +227,7 @@ onMounted(async () => {
           <div class="final-glow" aria-hidden="true" />
           <small>Ride free.</small>
           <h2>Your APIs.<br>Your files. <span>Your rules.</span></h2>
-          <p>Free Rider를 내려받고 첫 요청을 보내보세요.</p>
+          <p>Free Rider를 내려받고 바로 첫 요청을 보내보세요.</p>
           <div class="actions center"><a class="button primary" :href="armDownload">Apple Silicon</a><a class="button secondary" :href="intelDownload">Intel Mac</a><a class="button ghost" :href="links.releases">All releases ↗</a></div>
         </div>
       </div>
