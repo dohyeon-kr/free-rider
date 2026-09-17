@@ -7,6 +7,12 @@ import { RequestDrafts } from "./drafts.mjs";
 const drafts = new RequestDrafts();
 import { isCurl, parseCurl } from "../modules/curl/index.mjs";
 import { $, el, button, input, select, textarea, field, table } from "./dom.js";
+import {
+  openApiBadge,
+  parameterSchemaView,
+  requestBodySchemaView,
+  responseSchemaView,
+} from "./openapi-schema.js";
 import { collection, request, normalize, rowList } from "./model.js";
 const api = window.client;
 let state = {
@@ -798,6 +804,7 @@ function requestView(col, r) {
       { class: "request-heading" },
       el("span", { text: col.title + " / " + (r.group || "Requests") }),
       el("strong", { text: r.name }),
+      openApiBadge(r),
       r.removed
         ? el("span", { class: "pill", text: "Removed from specification" })
         : null,
@@ -869,8 +876,14 @@ function requestView(col, r) {
     ),
   );
   const content = el("div", { class: "request-content" });
-  if (current === "params") content.append(kv(r, "query", col));
+  if (current === "params") {
+    const schema = parameterSchemaView(r, ["path", "query", "cookie"]);
+    if (schema) content.append(schema);
+    content.append(kv(r, "query", col));
+  }
   if (current === "headers") {
+    const schema = parameterSchemaView(r, "header");
+    if (schema) content.append(schema);
     content.append(kv(r, "headers", col));
     if (rowList(col.headers).length)
       content.append(
@@ -881,6 +894,8 @@ function requestView(col, r) {
       );
   }
   if (current === "body") {
+    const schema = requestBodySchemaView(r);
+    if (schema) content.append(schema);
     content.append(
       el(
         "div",
@@ -1134,6 +1149,9 @@ function responseView(col, r) {
         [
           ["body", "Body"],
           ["headers", "Headers"],
+          ...(r.openapi || Object.keys(r.responses || {}).length
+            ? [["schema", "Schema"]]
+            : []),
           ["tests", "Tests"],
           ["history", "History"],
           ["console", "콘솔"],
@@ -1174,6 +1192,10 @@ function responseView(col, r) {
           text: "No requests sent in this session.",
         }),
       );
+    return root;
+  }
+  if (tab === "schema") {
+    root.append(responseSchemaView(r));
     return root;
   }
   if (!res) {
