@@ -1,4 +1,5 @@
 import { closeOrder, getTabTargetIndexes } from "./tab-actions.mjs";
+import { commitWorkspaceMutation } from "./workspace-state.mjs";
 
 const api = window.client;
 const $ = (id) => document.getElementById(id);
@@ -186,26 +187,24 @@ function isCollectionActionsDialog() {
 
 async function deleteCurrentCollection(title) {
   try {
+    // Flush drafts first. RequestDrafts.snapshot also captures the app's live state
+    // so the mutation below updates the same object the renderer is using.
     await saveWorkspace();
-    const snapshot = await api["workspace-load"]();
-    if (!snapshot || !Array.isArray(snapshot.collections)) throw new Error("워크스페이스를 불러오지 못했습니다.");
+    await commitWorkspaceMutation((snapshot) => {
+      if (!snapshot || !Array.isArray(snapshot.collections)) throw new Error("워크스페이스를 불러오지 못했습니다.");
 
-    const cid = snapshot.activeCollection;
-    const target = snapshot.collections.find((collection) => collection.id === cid);
-    if (!target) throw new Error("삭제할 컬렉션을 찾을 수 없습니다.");
+      const cid = snapshot.activeCollection;
+      const target = snapshot.collections.find((collection) => collection.id === cid);
+      if (!target) throw new Error("삭제할 컬렉션을 찾을 수 없습니다.");
 
-    snapshot.collections = snapshot.collections.filter((collection) => collection.id !== cid);
-    snapshot.tabs = (snapshot.tabs || []).filter((tab) => tab.cid !== cid);
-    delete snapshot.selectedEnvironments?.[cid];
-    snapshot.collapsed = (snapshot.collapsed || []).filter((value) => value !== cid && !String(value).startsWith(cid + ":"));
+      snapshot.collections = snapshot.collections.filter((collection) => collection.id !== cid);
+      snapshot.tabs = (snapshot.tabs || []).filter((tab) => tab.cid !== cid);
+      delete snapshot.selectedEnvironments?.[cid];
 
-    if (snapshot.activeCollection === cid) snapshot.activeCollection = snapshot.collections[0]?.id || null;
-    if (!snapshot.tabs.some((tab) => `${tab.cid}|${tab.kind}|${tab.id || ""}` === snapshot.activeTab)) snapshot.activeTab = null;
-
-    await api["workspace-save"](snapshot);
-    await api["set-dirty"](false);
+      if (snapshot.activeCollection === cid) snapshot.activeCollection = snapshot.collections[0]?.id || null;
+      if (!snapshot.tabs.some((tab) => `${tab.cid}|${tab.kind}|${tab.id || ""}` === snapshot.activeTab)) snapshot.activeTab = null;
+    }, saveWorkspace);
     setStatus(`${title} 컬렉션을 삭제했습니다.`);
-    location.reload();
   } catch (error) {
     setStatus(error.message);
   }
