@@ -27,8 +27,7 @@ export function rides(col) {
   if (!Array.isArray(col.rides)) {
     const legacy = Array.isArray(col.runPlan) ? col.runPlan : [];
     const ride = newRide("Ride 1");
-    ride.stopOnFailure =
-      col.stopOnFailure === undefined ? true : !!col.stopOnFailure;
+    ride.stopOnFailure = !!col.stopOnFailure;
     ride.steps = legacy
       .filter((item) => item?.enabled && valid.has(item.id))
       .map((item) => ({ id: id("step"), requestId: item.id }));
@@ -153,7 +152,7 @@ export function executionSteps(col, rideId = null) {
       stepId: step.id,
       request: col.requests.find((request) => request.id === step.requestId),
     }))
-    .filter(({ request }) => isHttpRequest(request))
+    .filter(({ request }) => request && isHttpRequest(request))
     .map(({ stepId, request }) => ({
       stepId,
       request: structuredClone(request),
