@@ -18,7 +18,13 @@ import {
   requestBodySchemaView,
   responseSchemaView,
 } from "./openapi-schema.js";
-import { collection, request, normalize, rowList } from "./model.js";
+import {
+  collection,
+  request,
+  normalize,
+  rowList,
+  requestTypeLabel,
+} from "./model.js";
 const api = window.client;
 let state = {
     collections: [collection("My API Collection")],
@@ -37,7 +43,9 @@ let state = {
   stopRun = false,
   runnerResults = new Map(),
   gitInfo = new Map(),
-  subtabs = new Map();
+  subtabs = new Map(),
+  realtimeSessions = new Map(),
+  realtimeById = new Map();
 const key = (t) => `${t.cid}|${t.kind}|${t.id || ""}`;
 const c = () =>
   state.collections.find((c) => c.id === state.activeCollection) ||
@@ -142,13 +150,63 @@ function newRequest(group = "") {
     $("newCollection").click();
     return;
   }
-  askName("New HTTP Request", "", (name) => {
-    const r = request(group);
-    r.name = name;
-    col.requests.push(r);
-    mark(col);
-    open("request", r.id, col);
-  });
+  let name = "";
+  let type = "http";
+  const picker = el("div", { class: "request-type-picker" });
+  const options = [
+    ["http", "HTTP", "일반 REST / HTTP 요청"],
+    ["sse", "SSE", "Server-Sent Events 스트림"],
+    ["websocket", "WebSocket", "양방향 실시간 연결"],
+  ];
+  const draw = () => {
+    picker.replaceChildren(
+      ...options.map(([value, title, description]) =>
+        el(
+          "button",
+          {
+            type: "button",
+            class: "request-type-option " + (type === value ? "active" : ""),
+            "aria-pressed": String(type === value),
+            onClick: () => {
+              type = value;
+              draw();
+            },
+          },
+          el("strong", { text: title }),
+          el("span", { text: description }),
+        ),
+      ),
+    );
+  };
+  draw();
+  modal(
+    "새 요청",
+    el(
+      "div",
+      { class: "new-request-form" },
+      picker,
+      field(
+        "이름",
+        input(name, (value) => (name = value), {
+          id: "dialogName",
+          required: true,
+          placeholder: "Request name",
+        }),
+      ),
+    ),
+    () => {
+      if (!name.trim()) {
+        status("요청 이름을 입력하세요.");
+        return false;
+      }
+      const r = request(group, type);
+      r.name = name.trim();
+      col.requests.push(r);
+      mark(col);
+      open("request", r.id, col);
+    },
+    "생성",
+  );
 }
 function collectionMenu(col) {
   state.activeCollection = col.id;
