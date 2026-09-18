@@ -208,7 +208,25 @@ const realtime = createRealtimeManager({
 
 registerHandle("realtime-open", async (event, config) => {
   validateRenderer(event);
-  return realtime.open(config);
+  let prepared = config || {};
+  if (prepared.request) {
+    const resolved = await callApp(
+      "realtime-prepare",
+      prepared.request,
+      prepared.environment,
+      prepared.collection,
+    );
+    prepared = {
+      ...prepared,
+      url: resolved.url,
+      // Browser-compatible WebSocket transport cannot attach custom headers yet.
+      headers: prepared.kind === "sse" ? resolved.headers : {},
+    };
+    delete prepared.request;
+    delete prepared.environment;
+    delete prepared.collection;
+  }
+  return realtime.open(prepared);
 });
 registerHandle("realtime-send", async (event, id, data) => {
   validateRenderer(event);
