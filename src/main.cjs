@@ -24,7 +24,6 @@ const {
 const { WorkspaceStore } = require("./modules/workspace/index.cjs");
 const {
   effectiveRequest,
-  assertions,
   rows,
 } = require("./modules/runner/context.cjs");
 const {
@@ -208,7 +207,6 @@ async function runRequest(request, environment, collection, interceptors) {
     const result = {
       ...r,
       variables: Object.keys(r.variables),
-      tests: assertions(r, request.assertions),
     };
     const currentCookies = await apiSession.cookies.get({ url: preparedRequest.url });
     const entry = {
