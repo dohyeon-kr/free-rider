@@ -103,7 +103,7 @@ export function parseCurl(text) {
     header('Content-Type', json ? 'application/json' : 'application/x-www-form-urlencoded');
   if (json && !headers.some(h => h.key.toLowerCase() === 'accept')) header('Accept', 'application/json');
   // Keep URL query bytes intact (including duplicate and empty values).
-  return { url: get ? parsed.href : url, method, headers, query: [], body,
+  return { type: "http", url: get ? parsed.href : url, method, headers, query: [], body,
     bodyType: !data.length || get ? 'none' : headers.some(h => h.key.toLowerCase() === 'content-type' && h.value.includes('json')) ? 'json' : 'text',
     auth: false, authConfig };
 }

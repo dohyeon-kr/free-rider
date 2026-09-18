@@ -25,7 +25,9 @@ const { WorkspaceStore } = require("./modules/workspace/index.cjs");
 const {
   effectiveRequest,
   assertions,
+  rows,
 } = require("./modules/runner/context.cjs");
+const { interpolate } = require("./modules/runner/request.cjs");
 const { EnvironmentFiles } = require("./modules/env/files.cjs");
 const { createUpdateController } = require("./modules/update/index.cjs");
 const environmentFiles = new EnvironmentFiles();
@@ -260,6 +262,42 @@ async function runRequest(request, environment, collection, interceptors) {
     controller = null;
   }
 }
+function prepareRealtimeRequest(request, environment, collection) {
+  const context = effectiveRequest(collection || {}, request || {});
+  const scope = {
+    ...(environment || {}),
+    values: mergeVariableScopes(
+      context.vars,
+      environment?.values || {},
+      context.scopedVars,
+    ),
+    id: (collection?.id || "default") + ":" + (environment?.id || "default"),
+  };
+  const vars = runtime.resolve(scope);
+  const url = new URL(interpolate(context.request.url || "", vars));
+  for (const [key, value] of rows(context.request.query))
+    if (value !== "") url.searchParams.append(key, interpolate(value, vars));
+  const headers = Object.fromEntries(
+    rows(context.request.headers).map(([key, value]) => [
+      key,
+      interpolate(value, vars),
+    ]),
+  );
+  const auth = context.request.authConfig;
+  if (auth?.type === "bearer")
+    headers.Authorization =
+      "Bearer " + interpolate(auth.token || "{{token}}", vars);
+  if (auth?.type === "basic")
+    headers.Authorization =
+      "Basic " +
+      Buffer.from(
+        interpolate(auth.username || "", vars) +
+          ":" +
+          interpolate(auth.password || "", vars),
+      ).toString("base64");
+  return { url: url.toString(), headers };
+}
+
 async function readSpecFile(filename) {
   if(!specFiles.has(filename)) throw Error("명세 파일을 먼저 연결하세요.");
   const stat=await fs.stat(filename);
@@ -284,6 +322,9 @@ handle("sync-spec", async (source, old, auth) => {
 handle("merge-spec", async (old, generated) => synchronize(old, generated));
 handle("send", (request, environment, collection, interceptors) =>
   runRequest(request, environment, collection, interceptors || collection?.interceptors || {}),
+);
+handle("realtime-prepare", (request, environment, collection) =>
+  prepareRealtimeRequest(request, environment, collection),
 );
 handle("network-replay", async (id) => {
   const replay = replayRequests.get(String(id));

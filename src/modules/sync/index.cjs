@@ -204,6 +204,7 @@ function operations(doc) {
         !security.some((requirement) => Object.keys(requirement).length === 0);
       out.push({
         id: method.toUpperCase() + " " + path,
+        type: "http",
         name: op.summary || op.operationId || path,
         group: op.tags?.[0] || "General",
         description: op.description || "",
