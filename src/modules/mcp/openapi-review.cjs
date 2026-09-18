@@ -12,6 +12,42 @@ function requiredString(args, name) {
 function openApiToolDefinitions() {
   return [
     {
+      name: "get_openapi_spec",
+      description:
+        "Read the OpenAPI specification linked to a collection and list its generated operations without modifying the workspace.",
+      inputSchema: {
+        type: "object",
+        properties: { collectionId: { type: "string" } },
+        required: ["collectionId"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "set_openapi_source",
+      description:
+        "Validate and link an HTTP/HTTPS OpenAPI specification URL to a collection without applying endpoint changes. Free Rider must have no unsaved UI changes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          collectionId: { type: "string" },
+          source: { type: "string" },
+        },
+        required: ["collectionId", "source"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "unlink_openapi",
+      description:
+        "Disconnect the linked OpenAPI specification from a collection without deleting saved requests. Free Rider must have no unsaved UI changes.",
+      inputSchema: {
+        type: "object",
+        properties: { collectionId: { type: "string" } },
+        required: ["collectionId"],
+        additionalProperties: false,
+      },
+    },
+    {
       name: "review_openapi",
       description:
         "Review changes between a collection's saved requests and its linked OpenAPI specification without modifying the workspace. Returns a short-lived reviewId for apply_openapi_review.",
@@ -73,6 +109,26 @@ function requestSummary(request = {}) {
   };
 }
 
+function openApiConnection(collection = {}) {
+  if (collection.sourceFile)
+    return { linked: true, sourceType: "file", source: collection.sourceFile };
+  if (String(collection.source || "").trim())
+    return { linked: true, sourceType: "url", source: String(collection.source).trim() };
+  return { linked: false, sourceType: "none", source: "" };
+}
+
+function generatedSpecSummary(collection, generated = {}) {
+  const operations = (generated.generated || generated.requests || []).map(requestSummary);
+  return {
+    collectionId: collection.id,
+    ...openApiConnection(collection),
+    title: generated.title || collection.title || "",
+    baseUrl: generated.baseUrl || "",
+    operationCount: operations.length,
+    operations,
+  };
+}
+
 function reviewSummary(review) {
   const summary = { added: 0, updated: 0, removed: 0, conflicts: 0 };
   for (const change of review.changes || []) {
@@ -121,8 +177,71 @@ function createOpenApiReviewTools(options = {}) {
   function ensureSavedWorkspace() {
     if (hasUnsavedChanges())
       throw Error(
-        "Save the Free Rider workspace before reviewing or applying OpenAPI changes through MCP.",
+        "Save the Free Rider workspace before changing OpenAPI settings or applying OpenAPI changes through MCP.",
       );
+  }
+
+  async function getOpenApiSpec(args) {
+    const collectionId = requiredString(args, "collectionId");
+    const state = await requireBridge("loadWorkspace", loadWorkspace)();
+    const collection = collectionById(state, collectionId);
+    if (!openApiConnection(collection).linked)
+      return generatedSpecSummary(collection);
+    const generated = await requireBridge("loadGeneratedSpec", loadGeneratedSpec)({
+      collection: structuredClone(collection),
+    });
+    return generatedSpecSummary(collection, generated);
+  }
+
+  async function setOpenApiSource(args) {
+    ensureSavedWorkspace();
+    const collectionId = requiredString(args, "collectionId");
+    const source = requiredString(args, "source");
+    const state = await requireBridge("loadWorkspace", loadWorkspace)();
+    ensureSavedWorkspace();
+    const collection = collectionById(state, collectionId);
+    const candidate = structuredClone(collection);
+    candidate.source = source;
+    delete candidate.sourceFile;
+    const generated = await requireBridge("loadGeneratedSpec", loadGeneratedSpec)({
+      collection: candidate,
+    });
+
+    const nextState = structuredClone(state);
+    nextState.collections = nextState.collections.map((item) => {
+      if (item.id !== collectionId) return item;
+      const next = structuredClone(item);
+      next.source = source;
+      delete next.sourceFile;
+      return next;
+    });
+    await requireBridge("saveWorkspace", saveWorkspace)(nextState);
+    reviews.clear();
+    await reloadWorkspace();
+    return generatedSpecSummary(candidate, generated);
+  }
+
+  async function unlinkOpenApi(args) {
+    ensureSavedWorkspace();
+    const collectionId = requiredString(args, "collectionId");
+    const state = await requireBridge("loadWorkspace", loadWorkspace)();
+    ensureSavedWorkspace();
+    const collection = collectionById(state, collectionId);
+    if (!openApiConnection(collection).linked)
+      return generatedSpecSummary(collection);
+
+    const nextState = structuredClone(state);
+    nextState.collections = nextState.collections.map((item) => {
+      if (item.id !== collectionId) return item;
+      const next = structuredClone(item);
+      delete next.source;
+      delete next.sourceFile;
+      return next;
+    });
+    await requireBridge("saveWorkspace", saveWorkspace)(nextState);
+    reviews.clear();
+    await reloadWorkspace();
+    return generatedSpecSummary(collectionById(nextState, collectionId));
   }
 
   function cleanExpiredReviews() {
@@ -262,6 +381,9 @@ function createOpenApiReviewTools(options = {}) {
   }
 
   async function call(name, args = {}) {
+    if (name === "get_openapi_spec") return getOpenApiSpec(args);
+    if (name === "set_openapi_source") return setOpenApiSource(args);
+    if (name === "unlink_openapi") return unlinkOpenApi(args);
     if (name === "review_openapi") return reviewOpenApi(args);
     if (name === "apply_openapi_review") return applyOpenApiReview(args);
     throw Error(`Unknown OpenAPI MCP tool: ${name}`);
