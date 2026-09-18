@@ -1,12 +1,76 @@
 const { rows } = require("./context.cjs");
 const MULTIPART_MARKER = "__freeRiderMultipart";
 
-function interpolate(value, variables) {
-  return String(value).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_, key) => {
+const VARIABLE_PATTERN = /\{\{\s*([^{}]+?)\s*\}\}/g;
+
+function interpolateWith(value, resolve) {
+  return String(value).replace(VARIABLE_PATTERN, (_, key) =>
+    String(resolve(key)),
+  );
+}
+function interpolate(value, variables = {}) {
+  return interpolateWith(value, (key) => {
     if (!Object.hasOwn(variables, key))
       throw Error(`환경변수 ${key}를 설정하세요.`);
-    return String(variables[key]);
+    return variables[key];
   });
+}
+function parameterLocations(request) {
+  return new Map(
+    (request?.openapi?.parameters || [])
+      .filter((parameter) => parameter?.name)
+      .map((parameter) => [String(parameter.name), parameter.in || "query"]),
+  );
+}
+function urlTemplateKeys(request) {
+  const keys = new Set();
+  const target = String(request?.url || "").split(/[?#]/, 1)[0];
+  for (const match of target.matchAll(VARIABLE_PATTERN)) keys.add(match[1]);
+  return keys;
+}
+function resolveRequestVariables(request, variables = {}) {
+  const raw = new Map(
+    rows(request?.query).filter(([, value]) => value !== ""),
+  );
+  const resolved = Object.create(null);
+  const resolving = new Set();
+
+  function resolveParameter(key) {
+    if (Object.hasOwn(resolved, key)) return resolved[key];
+    if (!raw.has(key)) {
+      if (!Object.hasOwn(variables, key))
+        throw Error(`환경변수 ${key}를 설정하세요.`);
+      return variables[key];
+    }
+    if (resolving.has(key))
+      throw Error(`파라미터 ${key}에 순환 참조가 있습니다.`);
+    resolving.add(key);
+    const value = interpolateWith(raw.get(key), (nested) =>
+      raw.has(nested) ? resolveParameter(nested) : interpolate(`{{${nested}}}`, variables),
+    );
+    resolving.delete(key);
+    resolved[key] = value;
+    return value;
+  }
+
+  for (const key of raw.keys()) resolveParameter(key);
+  return { ...variables, ...resolved };
+}
+function resolveRequestTarget(request, variables = {}) {
+  const scopedVariables = resolveRequestVariables(request, variables);
+  const locations = parameterLocations(request);
+  const templateKeys = urlTemplateKeys(request);
+  return {
+    url: interpolate(request?.url || "", scopedVariables),
+    variables: scopedVariables,
+    parameters: rows(request?.query)
+      .filter(([, value]) => value !== "")
+      .map(([key, value]) => ({
+        key,
+        value: interpolate(value, scopedVariables),
+        location: locations.get(key) || (templateKeys.has(key) ? "path" : "query"),
+      })),
+  };
 }
 function prepareMultipart(body, variables) {
   let config;
@@ -45,40 +109,42 @@ function prepareMultipart(body, variables) {
   };
 }
 function prepare(request, variables) {
-  const resolvedUrl = interpolate(request.url, variables);
+  const target = resolveRequestTarget(request, variables);
+  const scopedVariables = target.variables;
   let url;
-  try { url = new URL(resolvedUrl); }
+  try { url = new URL(target.url); }
   catch { throw Error("요청 URL이 올바르지 않습니다. URL 또는 baseUrl 환경변수를 https://호스트 형태의 절대 주소로 설정하세요."); }
   if (!["http:", "https:"].includes(url.protocol))
     throw Error("HTTP/HTTPS URL만 사용할 수 있습니다.");
   if (url.username || url.password)
     throw Error("URL 대신 Authorization 헤더를 사용하세요.");
-  for (const [k, v] of rows(request.query))
-    if (v !== "") url.searchParams.append(k, interpolate(v, variables));
+  for (const parameter of target.parameters)
+    if (parameter.location !== "path")
+      url.searchParams.append(parameter.key, parameter.value);
   const headers = Object.fromEntries(
-    rows(request.headers).map(([k, v]) => [k, interpolate(v, variables)]),
+    rows(request.headers).map(([k, v]) => [k, interpolate(v, scopedVariables)]),
   );
   if (
     request.auth &&
     !Object.keys(headers).some((k) => k.toLowerCase() === "authorization")
   ) {
-    if (!variables.token)
+    if (!scopedVariables.token)
       throw Error(
         "먼저 인증 요청으로 token을 추출하거나 환경변수에 설정하세요.",
       );
-    headers.Authorization = `Bearer ${variables.token}`;
+    headers.Authorization = `Bearer ${scopedVariables.token}`;
   }
   const auth = request.authConfig;
   if (auth?.type === "bearer")
     headers.Authorization =
-      "Bearer " + interpolate(auth.token || "{{token}}", variables);
+      "Bearer " + interpolate(auth.token || "{{token}}", scopedVariables);
   if (auth?.type === "basic")
     headers.Authorization =
       "Basic " +
       Buffer.from(
-        interpolate(auth.username || "", variables) +
+        interpolate(auth.username || "", scopedVariables) +
           ":" +
-          interpolate(auth.password || "", variables),
+          interpolate(auth.password || "", scopedVariables),
       ).toString("base64");
   const method = String(request.method).toUpperCase();
   if (!/^[!#$%&'*+.^_`|~0-9A-Z-]+$/.test(method))
@@ -92,8 +158,8 @@ function prepare(request, variables) {
     body: ["GET", "HEAD"].includes(method)
       ? undefined
       : request.bodyType === "multipart"
-        ? prepareMultipart(request.body, variables)
-        : interpolate(request.body || "", variables),
+        ? prepareMultipart(request.body, scopedVariables)
+        : interpolate(request.body || "", scopedVariables),
   };
 }
 function extract(body, mapping) {
@@ -111,4 +177,12 @@ function extract(body, mapping) {
   }
   return result;
 }
-module.exports = { interpolate, prepare, prepareMultipart, extract, MULTIPART_MARKER };
+module.exports = {
+  interpolate,
+  resolveRequestVariables,
+  resolveRequestTarget,
+  prepare,
+  prepareMultipart,
+  extract,
+  MULTIPART_MARKER,
+};
