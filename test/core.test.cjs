@@ -171,6 +171,20 @@ test("request params feed URL, headers and body before lower variable scopes", (
   assert.equal(p.body, '{"id":"0197f22a-20b2-4e24-ad70-bf452cf8d65f"}');
 });
 
+test("params can read same-name lower scope values without recursive shadowing", () => {
+  const target = resolveRequestTarget(
+    {
+      method: "GET",
+      url: "https://example.com/search",
+      query: [{ key: "token", value: "{{token}}", enabled: true }],
+    },
+    { token: "secret" },
+  );
+  assert.deepEqual(target.parameters, [
+    { key: "token", value: "secret", location: "query" },
+  ]);
+});
+
 test("request target resolution is shared by realtime requests", () => {
   const target = resolveRequestTarget(
     {
