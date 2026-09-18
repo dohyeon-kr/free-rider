@@ -757,6 +757,89 @@ td input:focus {
   border: 0;
   padding: 0 4px;
 }
+.ride-toolbar {
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.ride-toolbar select {
+  min-width: 180px;
+}
+.ride-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  margin: 10px 0 14px;
+  padding: 7px 10px;
+  border: 1px solid #303030;
+  border-radius: 7px;
+  font-family: monospace;
+  font-size: 11px;
+}
+.ride-summary.passed strong {
+  color: #67e8a5;
+}
+.ride-summary.failed strong {
+  color: #ff7b72;
+}
+.ride-summary.running strong {
+  color: var(--gold);
+}
+.ride-summary.stopped strong {
+  color: #aaa;
+}
+.ride-step-index {
+  width: 18px;
+  color: #777;
+  text-align: right;
+  font-family: monospace;
+}
+.ride-step > .text-button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ride-insert-palette {
+  display: grid;
+  gap: 8px;
+}
+.ride-insert-palette > input {
+  width: 100%;
+}
+.endpoint-picker {
+  max-height: min(420px, 55vh);
+  overflow: auto;
+  border-top: 1px solid #303030;
+}
+.endpoint-insert-item {
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.endpoint-insert-item:hover,
+.endpoint-insert-item:focus-visible {
+  background: #1f1f1f;
+}
+.endpoint-insert-name {
+  min-width: 140px;
+  font-weight: 600;
+}
+.endpoint-insert-item small {
+  min-width: 0;
+  overflow: hidden;
+  color: #888;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.endpoint-insert-item .insert-hint {
+  margin-left: auto;
+  color: var(--gold);
+  font-size: 10px;
+}
 .pill {
   color: var(--gold);
   font-size: 10px;
