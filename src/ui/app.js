@@ -1252,6 +1252,8 @@ function realtimeRequestView(col, r) {
         ]
       : [
           ["params", "Params"],
+          ["headers", "Headers"],
+          ["auth", "Auth"],
           ["protocols", "Protocols"],
           ["vars", "Vars"],
           ["messages", "Messages"],
@@ -1274,7 +1276,10 @@ function realtimeRequestView(col, r) {
       kv(r, "headers", col),
       el("p", {
         class: "hint",
-        text: "컬렉션·폴더 헤더와 인증 설정을 상속한 뒤 SSE 연결에 적용합니다.",
+        text:
+          r.type === "sse"
+            ? "컬렉션·폴더 헤더와 인증 설정을 상속한 뒤 SSE 연결에 적용합니다."
+            : "컬렉션·폴더 헤더와 인증 설정을 상속한 뒤 WebSocket handshake에 적용합니다.",
       }),
     );
   }
@@ -1312,7 +1317,7 @@ function realtimeRequestView(col, r) {
       ),
       el("p", {
         class: "hint",
-        text: "현재 WebSocket transport는 사용자 정의 handshake 헤더를 지원하지 않습니다. 인증이 필요하면 쿼리 파라미터나 subprotocol을 사용하세요.",
+        text: "서버가 요구하는 Sec-WebSocket-Protocol 값을 쉼표로 구분해 입력하세요. 인증·커스텀 handshake 헤더는 Headers/Auth 탭에서 설정할 수 있습니다.",
       }),
     );
   }
