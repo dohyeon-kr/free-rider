@@ -5,7 +5,11 @@ const {
   operations,
   synchronize,
 } = require("../src/modules/sync/index.cjs");
-const { prepare, extract } = require("../src/modules/runner/request.cjs");
+const {
+  prepare,
+  extract,
+  resolveRequestTarget,
+} = require("../src/modules/runner/request.cjs");
 const { execute } = require("../src/modules/runner/index.cjs");
 const {
   parseEnv,
@@ -30,6 +34,7 @@ const doc = {
 test("OpenAPI generates runnable parameter templates and rejects unsupported specifications", () => {
   const [r] = operations(parseSpec(JSON.stringify(doc)));
   assert.equal(r.url, "{{baseUrl}}/users/{{id}}");
+  assert.equal(r.query.id, "");
   assert.equal(r.query.limit, "10");
   assert.equal(r.auth, true);
   assert.throws(() => parseSpec('{"swagger":"2.0"}'));
@@ -127,17 +132,65 @@ test("sync updates generated defaults but preserves edits and removed operations
   assert.equal(merged.requests[0].headers["X-New"], "true");
   assert.equal(synchronize(merged.requests, []).requests[0].removed, true);
 });
-test("runner resolves variables and bearer token, encodes query and refuses missing values", () => {
+test("runner resolves params before variables and does not duplicate path params into query", () => {
   const r = operations(doc)[0];
+  r.query.id = "42";
   const p = prepare(r, {
     baseUrl: "https://example.com",
-    id: "42",
+    id: "environment-id",
     token: "abc",
   });
   assert.equal(p.url, "https://example.com/users/42?limit=10");
   assert.equal(p.headers.Authorization, "Bearer abc");
-  assert.throws(() => prepare(r, {}), /환경변수/);
+  assert.throws(() => prepare({ ...r, query: { ...r.query, id: "" } }, {}), /환경변수/);
   assert.throws(() => prepare({ ...r, url: "file:///tmp/a" }, {}));
+});
+
+test("request params feed URL, headers and body before lower variable scopes", () => {
+  const request = {
+    method: "POST",
+    url: "{{baseUrl}}/v2/notices/{{noticeUuid}}",
+    query: [
+      { key: "noticeUuid", value: "0197f22a-20b2-4e24-ad70-bf452cf8d65f", enabled: true },
+      { key: "preview", value: "{{mode}}", enabled: true },
+    ],
+    headers: [{ key: "X-Notice", value: "{{noticeUuid}}", enabled: true }],
+    bodyType: "json",
+    body: '{"id":"{{noticeUuid}}"}',
+  };
+  const p = prepare(request, {
+    baseUrl: "https://example.com",
+    noticeUuid: "environment-value",
+    mode: "full",
+  });
+  assert.equal(
+    p.url,
+    "https://example.com/v2/notices/0197f22a-20b2-4e24-ad70-bf452cf8d65f?preview=full",
+  );
+  assert.equal(p.headers["X-Notice"], "0197f22a-20b2-4e24-ad70-bf452cf8d65f");
+  assert.equal(p.body, '{"id":"0197f22a-20b2-4e24-ad70-bf452cf8d65f"}');
+});
+
+test("request target resolution is shared by realtime requests", () => {
+  const target = resolveRequestTarget(
+    {
+      type: "websocket",
+      url: "wss://example.com/rooms/{{roomId}}",
+      query: [
+        { key: "roomId", value: "alpha", enabled: true },
+        { key: "token", value: "{{accessToken}}", enabled: true },
+      ],
+    },
+    { roomId: "environment-room", accessToken: "secret" },
+  );
+  assert.equal(target.url, "wss://example.com/rooms/alpha");
+  assert.deepEqual(
+    target.parameters.map(({ key, value, location }) => ({ key, value, location })),
+    [
+      { key: "roomId", value: "alpha", location: "path" },
+      { key: "token", value: "secret", location: "query" },
+    ],
+  );
 });
 test("extract token and isolate environments; sharing strips values", () => {
   const values = extract('{"data":{"accessToken":"secret"}}', {
