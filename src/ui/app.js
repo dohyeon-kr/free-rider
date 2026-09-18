@@ -1421,7 +1421,7 @@ function realtimeRequestView(col, r) {
                   message.format || "text",
                 ),
               ),
-            { class: "text-button", disabled: !session.connected },
+            { class: "text-button" },
           ),
           message.format === "json"
             ? button(
