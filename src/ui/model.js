@@ -1,7 +1,16 @@
+export const REQUEST_TYPES = Object.freeze(["http", "sse", "websocket"]);
+
+export function requestTypeLabel(value) {
+  const type = typeof value === "string" ? value : value?.type;
+  if (type === "sse") return "SSE";
+  if (type === "websocket") return "WS";
+  return String(value?.method || "HTTP").toUpperCase();
+}
+
 export function collection(title = "Untitled Collection") {
   return {
     id: crypto.randomUUID(),
-    version: 2,
+    version: 3,
     title,
     source: "",
     description: "",
@@ -20,11 +29,14 @@ export function collection(title = "Untitled Collection") {
     ],
   };
 }
-export function request(group = "") {
+
+export function request(group = "", type = "http") {
+  const normalizedType = REQUEST_TYPES.includes(type) ? type : "http";
   return {
     id: crypto.randomUUID(),
     name: "Untitled Request",
     group,
+    type: normalizedType,
     method: "GET",
     url: "{{baseUrl}}/",
     query: [],
@@ -35,11 +47,14 @@ export function request(group = "") {
     authConfig: { type: "inherit" },
     extract: {},
     assertions: [],
+    sse: { autoReconnect: true },
+    websocket: { protocols: [], autoReconnect: true, messages: [] },
     manual: true,
   };
 }
+
 export function normalize(c) {
-  c.version=2;
+  c.version = 3;
   c.id ||= crypto.randomUUID();
   c.folders ||= [];
   c.vars ||= [];
@@ -56,11 +71,24 @@ export function normalize(c) {
     ? c.environments
     : collection().environments;
   for (const r of c.requests) {
+    if (!REQUEST_TYPES.includes(r.type)) r.type = "http";
     r.assertions ||= [];
     r.vars ||= [];
+    r.query ||= [];
+    r.headers ||= [];
+    r.authConfig ||= { type: "inherit" };
+    r.sse ||= { autoReconnect: true };
+    r.sse.autoReconnect = r.sse.autoReconnect !== false;
+    r.websocket ||= { protocols: [], autoReconnect: true, messages: [] };
+    r.websocket.protocols = Array.isArray(r.websocket.protocols)
+      ? r.websocket.protocols
+      : String(r.websocket.protocols || "").split(",").map((v) => v.trim()).filter(Boolean);
+    r.websocket.autoReconnect = r.websocket.autoReconnect !== false;
+    r.websocket.messages ||= [];
   }
   return c;
 }
+
 export function rowList(value) {
   return Array.isArray(value)
     ? value
