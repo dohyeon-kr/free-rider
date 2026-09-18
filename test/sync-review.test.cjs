@@ -1,14 +1,18 @@
 const test=require("node:test"), assert=require("node:assert/strict");
 test("review preserves unselected baseline and requires explicit conflict resolution",async()=>{
  const {preview,applyReview}=await import("../src/modules/sync/review.mjs");
- const base={id:"GET /a",url:"/a",body:"old"}, next={...base,body:"new"};
- const old=[{...base,body:"mine",assertions:[{value:200}],baseline:base},{id:"GET /b",baseline:{id:"GET /b"}},{id:"manual",manual:true}];
- const generated=[next,{id:"GET /c",url:"/c"}], review=preview(old,generated);
- assert.equal(review.changes[0].fields[0].conflict,true);
+ const base={id:"GET /a",method:"GET",openapi:{path:"/a",method:"GET",parameters:[{name:"page",in:"query",required:false,schema:{type:"integer"}}]}};
+ const next=structuredClone(base);next.openapi.parameters[0].schema.type="string";
+ const local=structuredClone(base);local.openapi.parameters[0].schema.type="boolean";local.assertions=[{value:200}];local.baseline=base;
+ const old=[local,{id:"GET /b",baseline:{id:"GET /b"}},{id:"manual",manual:true}];
+ const generated=[next,{id:"GET /c",method:"GET",openapi:{path:"/c",method:"GET",parameters:[]}}], review=preview(old,generated);
+ const change=review.changes.find(c=>c.id===base.id), field=change.fields.find(f=>f.key==="openapi/parameters/0/schema/type");
+ assert.equal(field.conflict,true);
+ assert.equal(field.local,"boolean");
  assert.deepEqual(applyReview(old,review,[]),old);
  assert.throws(()=>applyReview(old,review,[base.id]),/충돌/);
- const kept=applyReview(old,review,[base.id],{[JSON.stringify([base.id,"body"])]:"local"});
- assert.equal(kept[0].body,"mine");assert.deepEqual(kept[0].baseline,next);
+ const kept=applyReview(old,review,[base.id],{[JSON.stringify([base.id,field.key])]:"local"});
+ assert.equal(kept[0].openapi.parameters[0].schema.type,"boolean");assert.deepEqual(kept[0].baseline,next);
  assert.deepEqual(kept[0].assertions,[{value:200}]);
  assert.equal(preview(kept,generated).changes.some(c=>c.id===base.id),false);
  assert.equal(preview(kept,generated).changes.some(c=>c.id==="GET /c"),true);
@@ -17,25 +21,28 @@ test("review preserves unselected baseline and requires explicit conflict resolu
  assert.equal(deleted.some(r=>r.id==="manual"),true);
  assert.throws(()=>applyReview([...old,{id:"x"}],review,[]),/再|다시/);
 });
-test("incoming fields update while user-only edits remain and JSON ordering is stable",async()=>{
+test("incoming structural fields update while user-only edits remain",async()=>{
  const {preview,applyReview}=await import("../src/modules/sync/review.mjs");
- const base={id:"a",body:"old",name:"old",headers:{a:1,b:2}};
- const old=[{...base,name:"custom",baseline:base}], incoming=[{...base,body:"new",headers:{b:2,a:1}}];
+ const base={id:"a",name:"old",openapi:{path:"/a",method:"GET",parameters:[{name:"page",in:"query",required:false,schema:{type:"integer"}}]}};
+ const old=[{...structuredClone(base),name:"custom",baseline:base}], incoming=[structuredClone(base)];
+ incoming[0].openapi.parameters[0].schema.type="string";
  const review=preview(old,incoming);assert.equal(review.changes[0].fields.length,1);
  const result=applyReview(old,review,["a"]);
- assert.equal(result[0].name,"custom");assert.equal(result[0].body,"new");
+ assert.equal(result[0].name,"custom");assert.equal(result[0].openapi.parameters[0].schema.type,"string");
 });
-test("independent query edits merge and nested schema changes are reviewed separately",async()=>{
+test("query value edits are ignored while nested schema changes are reviewed",async()=>{
  const {preview,applyReview}=await import("../src/modules/sync/review.mjs");
- const base={id:"GET /x",query:{limit:"20",page:"1"},responses:{"200":{type:"object",description:"old"}}};
- const local={...base,query:[{key:"limit",value:"20",enabled:true},{key:"page",value:"7",enabled:true}],baseline:base};
- const next={...base,query:{limit:"50",page:"1"},responses:{"200":{type:"object",description:"new"}}};
+ const base={id:"GET /x",query:{limit:"20",page:"1"},responses:{"200":{description:"ok",content:{"application/json":{schema:{type:"object",properties:{name:{type:"string"}}}}}}},openapi:{path:"/x",method:"GET",parameters:[{name:"limit",in:"query",required:false,schema:{type:"integer"}},{name:"page",in:"query",required:false,schema:{type:"integer"}}]}};
+ const local={...structuredClone(base),query:[{key:"limit",value:"20",enabled:true},{key:"page",value:"7",enabled:true}],baseline:base};
+ const next=structuredClone(base);next.query.limit="50";next.responses["200"].content["application/json"].schema.properties.name.type="number";
  const review=preview([local],[next]);
- assert.deepEqual(review.changes[0].fields.map(f=>f.key),["query/limit","responses/200/description"]);
+ assert.equal(review.changes[0].fields.some(f=>f.key.startsWith("query/")),false);
+ assert.equal(review.changes[0].fields.some(f=>f.key.endsWith("/properties/name/type")),true);
  assert.equal(review.changes[0].fields.some(f=>f.conflict),false);
  const result=applyReview([local],review,[base.id])[0];
- assert.equal(result.query.find(r=>r.key==="limit").value,"50");
+ assert.equal(result.query.find(r=>r.key==="limit").value,"20");
  assert.equal(result.query.find(r=>r.key==="page").value,"7");
+ assert.equal(result.responses["200"].content["application/json"].schema.properties.name.type,"number");
 });
 
 test("removed operations are classified as breaking changes",async()=>{
