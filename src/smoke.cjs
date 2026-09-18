@@ -236,7 +236,7 @@ async function run(win) {
   if ((await js(`document.querySelector('#requestUrl').value`)) !== 'http://localhost:3456/saved')
     throw Error("Save did not commit draft");
 
-  await js(`const url = document.querySelector('#requestUrl'); url.value = 'http://localhost:3456/edited'; url.dispatchEvent(new Event('input',{bubbles:true}))`);
+  await js(`(() => { const url = document.querySelector('#requestUrl'); url.value = 'http://localhost:3456/edited'; url.dispatchEvent(new Event('input',{bubbles:true})); })()`);
   win.webContents.sendInputEvent({
     type: "keyDown",
     keyCode: "Z",
