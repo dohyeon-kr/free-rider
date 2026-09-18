@@ -26,11 +26,14 @@ MCP reads collections, requests, and Environments from the saved workspace. Save
 | `get_request` | Read saved request details |
 | `get_collection_interceptors` | Read the collection's Before Request / After Response Interceptor configuration and source |
 | `set_collection_interceptors` | Patch and save collection Interceptor settings |
+| `get_openapi_spec` | Read the linked OpenAPI source and generated operation summaries |
+| `set_openapi_source` | Validate and link/change an HTTP/HTTPS OpenAPI specification URL without applying endpoint changes |
+| `unlink_openapi` | Disconnect the linked OpenAPI specification without deleting saved requests |
 | `review_openapi` | Review changes and conflicts between saved requests and the linked OpenAPI specification, then issue a temporary `reviewId` |
 | `apply_openapi_review` | Apply only explicitly selected endpoints from a prior review with explicit conflict resolutions |
 | `send_request` | Execute a saved request |
-| `list_network_history` | List recent network history summaries |
-| `get_network_entry` | Read details for a network history entry |
+| `list_network_history` | List and filter recent Network-tab history summaries |
+| `get_network_entry` | Read a redacted Network-tab history entry |
 
 `list_collections` does not return Environment variable values or Interceptor source. `send_request` uses the same request execution handler as the main Free Rider app, including the same cookie session, collection Interceptors, and assertion flow.
 
@@ -63,6 +66,29 @@ See [Script API Reference](/en/reference/script-api) for the `req`, `res`, and `
 ::: warning Interceptor source and secrets
 `get_collection_interceptors` returns the saved script source. Do not hard-code tokens or passwords in scripts; use Environment/Vars instead.
 :::
+
+## Manage the linked OpenAPI specification
+
+Use `get_openapi_spec` to inspect the source currently linked to a collection. It returns the source type, source location, parsed title/base URL, and generated operation summaries without changing saved requests.
+
+```json
+{
+  "collectionId": "collection-id"
+}
+```
+
+Use `set_openapi_source` to link or change an HTTP/HTTPS specification URL.
+
+```json
+{
+  "collectionId": "collection-id",
+  "source": "https://api.example.com/openapi.json"
+}
+```
+
+The URL is fetched and parsed before it is saved. This only changes the linked specification source; it does **not** apply endpoint changes. Run `review_openapi` afterwards to inspect the diff. `unlink_openapi` disconnects the source while keeping the collection's saved requests intact.
+
+Source writes are rejected while the app has unsaved edits. Basic Auth credentials used by the OpenAPI UI are intentionally session-only and are not exposed through MCP, so protected specifications that need those credentials must still be managed from the app. Local specification files can be read when already linked, but linking a new local file remains an explicit file-picker action in the UI.
 
 ## Review OpenAPI changes
 
@@ -102,6 +128,25 @@ Then call `apply_openapi_review` with only the endpoint IDs you actually want to
 - A successful apply preserves the previous sync state in `syncUndo` and reloads the app from the saved workspace.
 
 A linked local OpenAPI file takes precedence over the saved Specification URL. If a URL requires credentials entered only in the OpenAPI UI, use the app's OpenAPI review screen because MCP does not expose those transient credentials.
+
+## Read Network-tab history
+
+`list_network_history` reads the same persisted history shown in the app's Network tab. In addition to `limit`, it can filter by `collectionId`, `requestId`, `method`, exact `status`, minimum timestamp `since` (milliseconds), and free-text `search`.
+
+```json
+{
+  "collectionId": "collection-id",
+  "method": "GET",
+  "status": 200,
+  "since": 1789693200000,
+  "search": "/users",
+  "limit": 50
+}
+```
+
+Use the returned `id` with `get_network_entry` for request/response bodies, headers, cookies, timing, and error details.
+
+For MCP output, common credentials are redacted: Authorization/Cookie/Set-Cookie/API-key style headers, cookie values, credential-like URL query parameters, and credential-like JSON fields such as `password`, `token`, and `secret`. The app's Network tab remains the place to inspect the original local entry when a raw value is genuinely required.
 
 ## MCP connection handoff prompt
 
