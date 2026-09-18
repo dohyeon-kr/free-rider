@@ -826,7 +826,28 @@ function requestView(col, r) {
       r.removed
         ? el("span", { class: "pill", text: "Removed from specification" })
         : null,
-      button("⋯ Request", () => requestMenu(col, r)),
+      el(
+        "div",
+        { class: "request-heading-actions" },
+        (() => {
+          const saveButton = button("", () =>
+            saveRequest({ cid: col.id, kind: "request", id: r.id }), {
+            class: "request-save",
+            title: "요청 저장 · ⌘S",
+            "aria-label": "현재 요청 저장",
+          });
+          saveButton.append(
+            el("span", { "data-lucide": "save" }),
+            el("span", { text: "저장" }),
+          );
+          return saveButton;
+        })(),
+        button("⋯", () => requestMenu(col, r), {
+          class: "request-menu",
+          title: "Request actions",
+          "aria-label": "요청 메뉴",
+        }),
+      ),
     ),
   );
   const urlbar = el(
@@ -1880,9 +1901,28 @@ async function persist(only = null) {
     }
   }
   dirty.clear();
-  const pending = state.collections.some(col => col.requests.some(r => drafts.changed(col.id, r)));
-  await api["set-dirty"](pending);
+  for (const col of state.collections)
+    if (col.requests.some(r => drafts.changed(col.id, r))) dirty.add(col.id);
+  await api["set-dirty"](dirty.size > 0);
   renderTabs();
+}
+async function saveRequest(tab = active()) {
+  if (!tab || tab.kind !== "request") {
+    status("저장할 요청 탭을 선택하세요.");
+    return;
+  }
+  const col = state.collections.find((item) => item.id === tab.cid);
+  const target = col?.requests.find((item) => item.id === tab.id);
+  if (!col || !target) {
+    status("저장할 요청을 찾을 수 없습니다.");
+    return;
+  }
+  await action(async () => {
+    await persist(tab);
+    drafts.discard(col.id, target.id);
+    render();
+    status(target.name + " 요청을 저장했습니다.");
+  });
 }
 async function save() {
   await action(async () => {
@@ -2040,7 +2080,7 @@ $("shortcuts").onclick = () =>
       ...[
         "Send request",
         "⌘ / Ctrl + Enter",
-        "Save workspace",
+        "Save current request",
         "⌘ / Ctrl + S",
         "New request",
         "⌘ / Ctrl + N",
@@ -2055,7 +2095,7 @@ $("shortcuts").onclick = () =>
   );
 api.onShortcut((key) => {
   if ($("dialog").open) return;
-  if (key === "s") save();
+  if (key === "s") saveRequest();
   if (key === "n") newRequest();
   if (key === "w" && active()) closeTab(active());
   if (key === "k") $("search").focus();
@@ -2069,7 +2109,7 @@ document.addEventListener("keydown", (e) => {
   if (!(e.metaKey || e.ctrlKey) || $("dialog").open) return;
   const k = e.key.toLowerCase();
   if (["s", "n", "w", "k", "enter"].includes(k)) e.preventDefault();
-  if (k === "s") save();
+  if (k === "s") saveRequest();
   if (k === "n") newRequest();
   if (k === "w" && active()) closeTab(active());
   if (k === "k") $("search").focus();
