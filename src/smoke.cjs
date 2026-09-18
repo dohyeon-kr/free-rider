@@ -299,9 +299,9 @@ async function run(win) {
   await poll(()=>js(`!!document.querySelector('#reloadSpecFile')`));
   await js(`document.querySelector('#applySyncSelection').click()`);
   await poll(()=>js(`document.querySelector('#tree').textContent.includes('File endpoint')`));
-  await fs.writeFile(specPath,JSON.stringify({openapi:"3.0.3",info:{title:"File fixture",version:"2"},paths:{"/file-test":{get:{summary:"File endpoint changed",responses:{"200":{description:"OK"}}}}}}));
+  await fs.writeFile(specPath,JSON.stringify({openapi:"3.0.3",info:{title:"File fixture",version:"2"},paths:{"/file-test":{get:{summary:"File endpoint",parameters:[{name:"limit",in:"query",required:false,schema:{type:"integer"}}],responses:{"200":{description:"OK"}}}}}}));
   await js(`document.querySelector('#reloadSpecFile').click()`);
-  await poll(()=>js(`document.querySelector('.sync-review')?.textContent.includes('File endpoint changed')`));
+  await poll(()=>js(`document.querySelector('.sync-review')?.textContent.includes('limit')`));
   await js(`document.querySelector('.sync-change summary').click()`);
   await screenshot("sync");
   await js(`document.querySelector('#saveWorkspace').click()`);
