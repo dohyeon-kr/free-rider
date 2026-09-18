@@ -1061,7 +1061,7 @@ function refreshRealtimeDom(key, event = null) {
   }
 }
 
-api.onRealtimeEvent((event) => {
+api.onRealtimeEvent?.((event) => {
   const key = realtimeById.get(event.id);
   if (!key) return;
   const session = realtimeSessions.get(key);
