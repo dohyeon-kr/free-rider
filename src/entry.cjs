@@ -193,6 +193,22 @@ registerHandle("docs-reference-open", async (event) => {
   return true;
 });
 
+function createElectronWebSocket({ url, protocols, headers }) {
+  const requestHeaders = {};
+  let origin;
+  for (const [name, value] of Object.entries(headers || {})) {
+    if (name.toLowerCase() === "origin") origin = value;
+    else requestHeaders[name] = value;
+  }
+  return new net.WebSocket(url, {
+    protocols,
+    headers: requestHeaders,
+    ...(origin ? { origin } : {}),
+    session: appWindow().webContents.session,
+    useSessionCookies: true,
+  });
+}
+
 const realtime = createRealtimeManager({
   emit(value) {
     const win = BrowserWindow.getAllWindows()[0];
@@ -204,6 +220,7 @@ const realtime = createRealtimeManager({
       credentials: "include",
     });
   },
+  createWebSocket: createElectronWebSocket,
 });
 
 registerHandle("realtime-open", async (event, config) => {
@@ -219,8 +236,7 @@ registerHandle("realtime-open", async (event, config) => {
     prepared = {
       ...prepared,
       url: resolved.url,
-      // Browser-compatible WebSocket transport cannot attach custom headers yet.
-      headers: prepared.kind === "sse" ? resolved.headers : {},
+      headers: resolved.headers,
     };
     delete prepared.request;
     delete prepared.environment;
