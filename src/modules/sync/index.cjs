@@ -169,7 +169,8 @@ function operations(doc) {
       let url = "{{baseUrl}}" + path;
       for (const p of params.values()) {
         const val = p.example ?? sample(doc, p.schema);
-        if (p.in === "query") query[p.name] = String(val ?? "");
+        if (p.in === "query" || p.in === "path")
+          query[p.name] = String(val ?? "");
         if (p.in === "header") headers[p.name] = String(val ?? "");
         if (p.in === "path")
           url = url.replace("{" + p.name + "}", "{{" + p.name + "}}");
