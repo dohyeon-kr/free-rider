@@ -236,6 +236,30 @@ async function run(win) {
   if ((await js(`document.querySelector('#requestUrl').value`)) !== 'http://localhost:3456/saved')
     throw Error("Save did not commit draft");
 
+  await js(`const url = document.querySelector('#requestUrl'); url.value = 'http://localhost:3456/edited'; url.dispatchEvent(new Event('input',{bubbles:true}))`);
+  win.webContents.sendInputEvent({
+    type: "keyDown",
+    keyCode: "Z",
+    modifiers: ["meta"],
+  });
+  win.webContents.sendInputEvent({
+    type: "keyUp",
+    keyCode: "Z",
+    modifiers: ["meta"],
+  });
+  await poll(() => js(`document.querySelector('#requestUrl').value === 'http://localhost:3456/saved'`));
+  win.webContents.sendInputEvent({
+    type: "keyDown",
+    keyCode: "Z",
+    modifiers: ["meta", "shift"],
+  });
+  win.webContents.sendInputEvent({
+    type: "keyUp",
+    keyCode: "Z",
+    modifiers: ["meta", "shift"],
+  });
+  await poll(() => js(`document.querySelector('#requestUrl').value === 'http://localhost:3456/edited'`));
+
   await js(`document.querySelector("#collectionHome").click()`);
   await screenshot("collection");
   await js(`[...document.querySelectorAll('#tree .tree-label')].find(e=>e.textContent.includes('Unsaved request')).click(); const invalid = document.querySelector('#requestUrl'); invalid.value='/relative'; invalid.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#sendRequest').click()`);
