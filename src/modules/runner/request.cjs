@@ -1,10 +1,12 @@
 const { rows } = require("./context.cjs");
 const MULTIPART_MARKER = "__freeRiderMultipart";
 
-const VARIABLE_PATTERN = /\{\{\s*([^{}]+?)\s*\}\}/g;
+function variablePattern() {
+  return /\{\{\s*([^{}]+?)\s*\}\}/g;
+}
 
 function interpolateWith(value, resolve) {
-  return String(value).replace(VARIABLE_PATTERN, (_, key) =>
+  return String(value).replace(variablePattern(), (_, key) =>
     String(resolve(key)),
   );
 }
@@ -25,7 +27,7 @@ function parameterLocations(request) {
 function urlTemplateKeys(request) {
   const keys = new Set();
   const target = String(request?.url || "").split(/[?#]/, 1)[0];
-  for (const match of target.matchAll(VARIABLE_PATTERN)) keys.add(match[1]);
+  for (const match of target.matchAll(variablePattern())) keys.add(match[1]);
   return keys;
 }
 function resolveRequestVariables(request, variables = {}) {
