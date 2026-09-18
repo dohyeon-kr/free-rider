@@ -13,6 +13,99 @@ const network = {
   message: "",
 };
 
+const COOKIE_COLUMN_WIDTHS_STORAGE_KEY = "free-rider.network.cookie-column-widths";
+const COOKIE_COLUMNS = [
+  { key: "name", label: "Name", width: 140, min: 80 },
+  { key: "value", label: "Value", width: 340, min: 140 },
+  { key: "domain", label: "Domain", width: 220, min: 120 },
+  { key: "path", label: "Path", width: 120, min: 80 },
+  { key: "flags", label: "Flags", width: 180, min: 110 },
+];
+
+function loadCookieColumnWidths() {
+  const defaults = Object.fromEntries(COOKIE_COLUMNS.map((column) => [column.key, column.width]));
+  try {
+    const saved = JSON.parse(localStorage.getItem(COOKIE_COLUMN_WIDTHS_STORAGE_KEY) || "{}");
+    for (const column of COOKIE_COLUMNS) {
+      const width = Number(saved[column.key]);
+      if (Number.isFinite(width)) defaults[column.key] = Math.max(column.min, Math.round(width));
+    }
+  } catch {
+    // Keep defaults when storage is unavailable or contains invalid data.
+  }
+  return defaults;
+}
+
+function saveCookieColumnWidths(widths) {
+  try {
+    localStorage.setItem(COOKIE_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(widths));
+  } catch {
+    // Column resizing should still work when storage is unavailable.
+  }
+}
+
+const cookieColumnWidths = loadCookieColumnWidths();
+
+function cookieTableWidth() {
+  return COOKIE_COLUMNS.reduce((total, column) => total + cookieColumnWidths[column.key], 0);
+}
+
+function cookieColumnHeader(column, col, table) {
+  const handle = h("span", {
+    class: "network-cookie-resizer",
+    role: "separator",
+    tabindex: "0",
+    "aria-orientation": "vertical",
+    "aria-label": `${column.label} 열 너비 조절`,
+    title: "드래그하여 열 너비 조절 · 더블클릭하여 초기화",
+  });
+  const header = h(
+    "th",
+    {},
+    h("span", { class: "network-cookie-heading", text: column.label }),
+    handle,
+  );
+
+  const applyWidth = (width, persist = true) => {
+    cookieColumnWidths[column.key] = Math.max(column.min, Math.round(width));
+    col.style.width = `${cookieColumnWidths[column.key]}px`;
+    table.style.width = `${cookieTableWidth()}px`;
+    if (persist) saveCookieColumnWidths(cookieColumnWidths);
+  };
+
+  handle.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = cookieColumnWidths[column.key];
+    handle.setPointerCapture(event.pointerId);
+    document.body.classList.add("network-cookie-resizing");
+
+    const move = (moveEvent) => {
+      applyWidth(startWidth + moveEvent.clientX - startX, false);
+    };
+    const finish = () => {
+      saveCookieColumnWidths(cookieColumnWidths);
+      document.body.classList.remove("network-cookie-resizing");
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
+    };
+
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+  });
+
+  handle.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    applyWidth(cookieColumnWidths[column.key] + (event.key === "ArrowRight" ? 16 : -16));
+  });
+
+  handle.addEventListener("dblclick", () => applyWidth(column.width));
+  return header;
+}
+
 function h(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
@@ -149,30 +242,43 @@ function headerTable(headers) {
 
 function cookieTable(cookies) {
   if (!cookies?.length) return h("p", { class: "network-empty", text: "쿠키가 없습니다." });
-  return h(
-    "div",
-    { class: "network-cookie-scroll" },
+
+  const table = h("table", { class: "network-cookie-table" });
+  const columns = COOKIE_COLUMNS.map((column) => {
+    const col = h("col");
+    col.style.width = `${cookieColumnWidths[column.key]}px`;
+    return col;
+  });
+  table.style.width = `${cookieTableWidth()}px`;
+  table.append(
+    h("colgroup", {}, columns),
     h(
-      "table",
-      { class: "network-cookie-table" },
-      h("thead", {}, h("tr", {}, ["Name", "Value", "Domain", "Path", "Flags"].map((label) => h("th", { text: label })))),
-      h("tbody", {}, cookies.map((cookie) => {
-        const flags = [
-          cookie.httpOnly ? "HttpOnly" : "",
-          cookie.secure ? "Secure" : "",
-          cookie.sameSite && cookie.sameSite !== "unspecified" ? `SameSite=${cookie.sameSite}` : "",
-          cookie.session ? "Session" : "",
-        ].filter(Boolean).join(" · ");
-        return h("tr", {},
-          h("td", { text: cookie.name || "" }),
-          h("td", { class: "network-cookie-value", text: cookie.value || "" }),
-          h("td", { text: cookie.domain || "" }),
-          h("td", { text: cookie.path || "/" }),
-          h("td", { text: flags }),
-        );
-      })),
+      "thead",
+      {},
+      h(
+        "tr",
+        {},
+        COOKIE_COLUMNS.map((column, index) => cookieColumnHeader(column, columns[index], table)),
+      ),
     ),
+    h("tbody", {}, cookies.map((cookie) => {
+      const flags = [
+        cookie.httpOnly ? "HttpOnly" : "",
+        cookie.secure ? "Secure" : "",
+        cookie.sameSite && cookie.sameSite !== "unspecified" ? `SameSite=${cookie.sameSite}` : "",
+        cookie.session ? "Session" : "",
+      ].filter(Boolean).join(" · ");
+      return h("tr", {},
+        h("td", { text: cookie.name || "" }),
+        h("td", { class: "network-cookie-value", text: cookie.value || "" }),
+        h("td", { text: cookie.domain || "" }),
+        h("td", { text: cookie.path || "/" }),
+        h("td", { text: flags }),
+      );
+    })),
   );
+
+  return h("div", { class: "network-cookie-scroll" }, table);
 }
 
 function jsonPath(parent, key, array) {
