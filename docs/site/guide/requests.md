@@ -13,7 +13,6 @@
 | Body | 문자열 또는 multipart 본문 |
 | Auth | Bearer / Basic 인증 |
 | Vars | 요청 범위 변수 |
-| Tests | 응답 assertion |
 | Docs | 요청 설명 |
 
 ## URL과 HTTP 메서드
