@@ -111,6 +111,9 @@ test("modern tools/list is stamped and non-cacheable", async () => {
   assert.equal(result.result._meta["io.modelcontextprotocol/serverInfo"].version, "1.2.3");
   assert.ok(result.result.tools.some((tool) => tool.name === "get_collection_interceptors"));
   assert.ok(result.result.tools.some((tool) => tool.name === "set_collection_interceptors"));
+  assert.ok(result.result.tools.some((tool) => tool.name === "get_openapi_spec"));
+  assert.ok(result.result.tools.some((tool) => tool.name === "set_openapi_source"));
+  assert.ok(result.result.tools.some((tool) => tool.name === "unlink_openapi"));
   assert.ok(result.result.tools.some((tool) => tool.name === "review_openapi"));
   assert.ok(result.result.tools.some((tool) => tool.name === "apply_openapi_review"));
 });
@@ -199,6 +202,212 @@ test("send_request delegates ids to the app bridge", async () => {
     environmentId: "env-1",
   });
   assert.equal(JSON.parse(result.result.content[0].text).status, 204);
+});
+
+test("get_openapi_spec reads the linked specification without saving", async () => {
+  const state = openApiWorkspace();
+  let saves = 0;
+  const result = await server({
+    loadWorkspace: async () => structuredClone(state),
+    loadGeneratedSpec: async ({ collection }) => {
+      assert.equal(collection.source, "https://api.example.com/openapi.json");
+      return {
+        generated: [generatedUsers()],
+        title: "Example API",
+        baseUrl: "https://api.example.com",
+      };
+    },
+    saveWorkspace: async () => { saves += 1; },
+  }).handle({
+    jsonrpc: "2.0",
+    id: 30,
+    method: "tools/call",
+    params: { name: "get_openapi_spec", arguments: { collectionId: "collection-1" } },
+  });
+
+  const value = JSON.parse(result.result.content[0].text);
+  assert.equal(value.linked, true);
+  assert.equal(value.sourceType, "url");
+  assert.equal(value.source, "https://api.example.com/openapi.json");
+  assert.equal(value.title, "Example API");
+  assert.equal(value.operationCount, 1);
+  assert.deepEqual(value.operations[0], {
+    id: "GET /users",
+    name: "List users",
+    method: "GET",
+    url: "{{baseUrl}}/users",
+    group: "Users",
+  });
+  assert.equal(saves, 0);
+});
+
+test("set_openapi_source validates and links a URL without changing saved requests, then unlink_openapi disconnects it", async () => {
+  let state = openApiWorkspace();
+  const before = structuredClone(state.collections[0].requests);
+  let reloads = 0;
+  const rpc = server({
+    loadWorkspace: async () => structuredClone(state),
+    loadGeneratedSpec: async ({ collection }) => {
+      assert.equal(collection.sourceFile, undefined);
+      assert.equal(collection.source, "https://next.example.com/openapi.yaml");
+      return {
+        generated: [generatedUsers("Next docs")],
+        title: "Next API",
+        baseUrl: "https://next.example.com",
+      };
+    },
+    saveWorkspace: async (next) => { state = structuredClone(next); },
+    reloadWorkspace: async () => { reloads += 1; },
+  });
+
+  const linked = await rpc.handle({
+    jsonrpc: "2.0",
+    id: 31,
+    method: "tools/call",
+    params: {
+      name: "set_openapi_source",
+      arguments: {
+        collectionId: "collection-1",
+        source: " https://next.example.com/openapi.yaml ",
+      },
+    },
+  });
+  const linkedValue = JSON.parse(linked.result.content[0].text);
+  assert.equal(linkedValue.source, "https://next.example.com/openapi.yaml");
+  assert.equal(linkedValue.operationCount, 1);
+  assert.equal(state.collections[0].source, "https://next.example.com/openapi.yaml");
+  assert.deepEqual(state.collections[0].requests, before);
+  assert.equal(reloads, 1);
+
+  const unlinked = await rpc.handle({
+    jsonrpc: "2.0",
+    id: 32,
+    method: "tools/call",
+    params: { name: "unlink_openapi", arguments: { collectionId: "collection-1" } },
+  });
+  const unlinkedValue = JSON.parse(unlinked.result.content[0].text);
+  assert.equal(unlinkedValue.linked, false);
+  assert.equal(unlinkedValue.sourceType, "none");
+  assert.equal(Object.hasOwn(state.collections[0], "source"), false);
+  assert.deepEqual(state.collections[0].requests, before);
+  assert.equal(reloads, 2);
+});
+
+test("network history can be filtered and summary URLs redact credential-like query parameters", async () => {
+  const entries = [
+    {
+      id: "entry-1",
+      at: 2000,
+      collectionId: "collection-1",
+      collectionTitle: "Example",
+      requestId: "request-1",
+      name: "Users",
+      request: {
+        method: "GET",
+        url: "https://api.example.com/users?access_token=top-secret&cursor=2",
+      },
+      response: { status: 200, elapsed: 18, error: "" },
+    },
+    {
+      id: "entry-2",
+      at: 1000,
+      collectionId: "collection-2",
+      collectionTitle: "Other",
+      requestId: "request-2",
+      name: "Create",
+      request: { method: "POST", url: "https://api.example.com/users" },
+      response: { status: 500, elapsed: 25, error: "boom" },
+    },
+  ];
+  const result = await server({
+    loadNetworkHistory: async () => structuredClone(entries),
+  }).handle({
+    jsonrpc: "2.0",
+    id: 33,
+    method: "tools/call",
+    params: {
+      name: "list_network_history",
+      arguments: {
+        collectionId: "collection-1",
+        method: "get",
+        status: 200,
+        since: 1500,
+        search: "users",
+      },
+    },
+  });
+
+  const value = JSON.parse(result.result.content[0].text);
+  assert.equal(value.length, 1);
+  assert.equal(value[0].id, "entry-1");
+  assert.equal(value[0].method, "GET");
+  assert.equal(value[0].status, 200);
+  assert.equal(value[0].url.includes("top-secret"), false);
+  assert.equal(value[0].url.includes("cursor=2"), true);
+});
+
+test("get_network_entry redacts credential headers, cookies, query parameters and JSON credential fields", async () => {
+  const entry = {
+    id: "entry-secret",
+    at: 2000,
+    request: {
+      method: "POST",
+      url: "https://api.example.com/login?token=query-secret&safe=yes",
+      headers: {
+        Authorization: "Bearer header-secret",
+        "X-Trace-Id": "trace-1",
+        Cookie: "sid=cookie-secret",
+      },
+      body: JSON.stringify({
+        username: "dohyeon",
+        password: "body-secret",
+        nested: { access_token: "nested-secret", safe: "kept" },
+      }),
+    },
+    response: {
+      status: 200,
+      headers: {
+        "Set-Cookie": "sid=response-cookie-secret",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ token: "response-token-secret", ok: true }),
+    },
+    cookies: {
+      request: [{ name: "sid", value: "cookie-secret", domain: "api.example.com" }],
+      current: [{ name: "sid", value: "current-cookie-secret", domain: "api.example.com" }],
+      setCookie: ["sid=response-cookie-secret; HttpOnly"],
+    },
+    timing: { total: 10 },
+  };
+  const result = await server({
+    loadNetworkHistory: async () => [structuredClone(entry)],
+  }).handle({
+    jsonrpc: "2.0",
+    id: 34,
+    method: "tools/call",
+    params: { name: "get_network_entry", arguments: { id: "entry-secret" } },
+  });
+
+  const text = result.result.content[0].text;
+  const value = JSON.parse(text);
+  for (const secret of [
+    "query-secret",
+    "header-secret",
+    "cookie-secret",
+    "body-secret",
+    "nested-secret",
+    "response-cookie-secret",
+    "response-token-secret",
+    "current-cookie-secret",
+  ])
+    assert.equal(text.includes(secret), false, secret);
+  assert.equal(value.request.headers.Authorization, "[REDACTED]");
+  assert.equal(value.request.headers["X-Trace-Id"], "trace-1");
+  assert.equal(value.cookies.request[0].value, "[REDACTED]");
+  assert.equal(value.sensitiveFieldsRedacted, true);
+  assert.match(value.request.body, /"username": "dohyeon"/);
+  assert.match(value.request.body, /"password": "\[REDACTED\]"/);
+  assert.match(value.response.body, /"ok": true/);
 });
 
 test("review_openapi returns a short-lived three-way diff without saving", async () => {
