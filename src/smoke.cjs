@@ -282,8 +282,11 @@ async function run(win) {
     throw Error("Sync undo did not restore previous requests");
   await js(`document.querySelector('#envButton').click()`);
   await poll(()=>js(`document.querySelector('#connectEnvFile')?.getClientRects().length > 0`));
+  const envStatus=await js(`document.querySelector('#status').textContent`);
   await js(`document.querySelector('#connectEnvFile').click()`);
-  await poll(()=>js(`!!document.querySelector('[aria-label="환경 파일 내용"]')`));
+  await poll(()=>js(`!!document.querySelector('[aria-label="환경 파일 내용"]') || document.querySelector('#status').textContent !== ${JSON.stringify(envStatus)}`));
+  if(!(await js(`!!document.querySelector('[aria-label="환경 파일 내용"]')`)))
+    throw Error("Environment file connection failed: "+await js(`document.querySelector('#status').textContent`));
   await js(`const editor=document.querySelector('[aria-label="환경 파일 내용"]');editor.value='BASE_URL=https://changed.example.com';editor.dispatchEvent(new Event('input',{bubbles:true}));[...document.querySelectorAll('button')].find(b=>b.textContent==='파일 저장').click()`);
   await poll(async()=> (await fs.readFile(envPath,"utf8")).includes("changed.example.com"));
   await screenshot("env-file");
