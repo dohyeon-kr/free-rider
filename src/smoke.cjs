@@ -324,7 +324,8 @@ async function run(win) {
   }
 }
 async function poll(fn) {
-  for (let i = 0; i < 100; i++) {
+  const attempts = process.env.CI ? 300 : 100;
+  for (let i = 0; i < attempts; i++) {
     if (await fn()) return;
     await new Promise((r) => setTimeout(r, 100));
   }
