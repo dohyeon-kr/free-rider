@@ -6,9 +6,9 @@ test("review preserves unselected baseline and requires explicit conflict resolu
  const local=structuredClone(base);local.openapi.parameters[0].schema.type="boolean";local.assertions=[{value:200}];local.baseline=base;
  const old=[local,{id:"GET /b",baseline:{id:"GET /b"}},{id:"manual",manual:true}];
  const generated=[next,{id:"GET /c",method:"GET",openapi:{path:"/c",method:"GET",parameters:[]}}], review=preview(old,generated);
- const change=review.changes.find(c=>c.id===base.id), field=change.fields.find(f=>f.key==="openapi/parameters/0/schema/type");
+ const change=review.changes.find(c=>c.id===base.id), field=change.fields.find(f=>f.key==="openapi/parameters");
  assert.equal(field.conflict,true);
- assert.equal(field.local,"boolean");
+ assert.equal(field.local[0].schema.type,"boolean");
  assert.deepEqual(applyReview(old,review,[]),old);
  assert.throws(()=>applyReview(old,review,[base.id]),/충돌/);
  const kept=applyReview(old,review,[base.id],{[JSON.stringify([base.id,field.key])]:"local"});
