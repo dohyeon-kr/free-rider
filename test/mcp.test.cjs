@@ -37,13 +37,20 @@ function openApiRequest(description = "Old docs") {
     description: "Old docs",
     method: "GET",
     url: "{{baseUrl}}/users",
-    query: {},
+    query: { page: "1" },
     headers: {},
     body: "",
     auth: false,
     authConfig: { type: "none" },
     extract: {},
     responses: {},
+    openapi: {
+      path: "/users",
+      method: "GET",
+      parameters: [
+        { name: "page", in: "query", required: false, schema: { type: "integer" } },
+      ],
+    },
   };
   return { ...structuredClone(baseline), description, baseline: structuredClone(baseline) };
 }
@@ -52,6 +59,8 @@ function generatedUsers(description = "Spec docs") {
   const request = openApiRequest("Old docs");
   delete request.baseline;
   request.description = description;
+  request.query.page = "sample";
+  request.openapi.parameters[0].schema.type = "string";
   return request;
 }
 
@@ -511,13 +520,16 @@ test("apply_openapi_review persists only selected changes and suggests a missing
   assert.equal(value.suggestedBaseUrl, "https://api.example.com");
   assert.equal(reloaded, 1);
   assert.equal(state.collections[0].requests.length, 1);
-  assert.equal(state.collections[0].requests[0].description, "Spec docs");
+  assert.equal(state.collections[0].requests[0].description, "Old docs");
+  assert.equal(state.collections[0].requests[0].query.find((row) => row.key === "page").value, "1");
+  assert.equal(state.collections[0].requests[0].openapi.parameters[0].schema.type, "string");
   assert.equal(state.collections[0].syncUndo.requests[0].description, "Old docs");
   assert.match(state.collections[0].lastSync, /1 수정/);
 });
 
 test("apply_openapi_review requires an explicit resolution for selected conflicts", async () => {
   let state = openApiWorkspace("Local docs");
+  state.collections[0].requests[0].openapi.parameters[0].schema.type = "boolean";
   let saves = 0;
   const rpc = server({
     loadWorkspace: async () => structuredClone(state),
@@ -534,7 +546,7 @@ test("apply_openapi_review requires an explicit resolution for selected conflict
   });
   const review = JSON.parse(reviewResult.result.content[0].text);
   assert.equal(review.summary.conflicts, 1);
-  assert.equal(review.changes[0].fields.find((field) => field.key === "description").conflict, true);
+  assert.equal(review.changes[0].fields.find((field) => field.key === "openapi/parameters/0/schema/type").conflict, true);
 
   const blocked = await rpc.handle({
     jsonrpc: "2.0",
@@ -558,12 +570,13 @@ test("apply_openapi_review requires an explicit resolution for selected conflict
       arguments: {
         reviewId: "review-conflict",
         selectedIds: ["GET /users"],
-        resolutions: [{ requestId: "GET /users", field: "description", choice: "incoming" }],
+        resolutions: [{ requestId: "GET /users", field: "openapi/parameters/0/schema/type", choice: "incoming" }],
       },
     },
   });
   assert.equal(applied.result.isError, undefined);
-  assert.equal(state.collections[0].requests[0].description, "Spec docs");
+  assert.equal(state.collections[0].requests[0].description, "Local docs");
+  assert.equal(state.collections[0].requests[0].openapi.parameters[0].schema.type, "string");
   assert.equal(saves, 1);
 });
 
