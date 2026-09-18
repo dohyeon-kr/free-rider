@@ -19,3 +19,18 @@ test("execution list is ordered independently and excludes without deleting requ
   col.requests=col.requests.filter(x=>x.id!=="a");
   assert.deepEqual(runPlan(col).map(x=>x.id),["b"]);
 });
+
+
+test("runner excludes SSE and WebSocket requests", async () => {
+  const {runPlan,addToRun,executionRequests} = await import("../src/ui/run-plan.mjs");
+  const col={requests:[
+    {id:"http",type:"http",url:"/"},
+    {id:"sse",type:"sse",url:"/events"},
+    {id:"ws",type:"websocket",url:"ws://localhost"},
+  ]};
+  assert.deepEqual(runPlan(col).map(x=>x.id),["http"]);
+  addToRun(col,["sse","ws"]);
+  assert.deepEqual(col.runPlan.map(x=>x.id),["http"]);
+  col.runPlan[0].enabled=true;
+  assert.deepEqual(executionRequests(col).map(x=>x.id),["http"]);
+});

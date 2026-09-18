@@ -1,0 +1,248 @@
+.method.SSE {
+  color: #d6a36f;
+}
+
+.method.WS {
+  color: #9fa7e6;
+}
+
+.new-request-form {
+  display: grid;
+  gap: 18px;
+  min-width: min(520px, 72vw);
+}
+
+.request-type-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.request-type-option {
+  min-height: 92px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 7px;
+  text-align: left;
+  border-color: #363a43;
+  background: #191b20;
+}
+
+.request-type-option strong {
+  font-size: 13px;
+  color: #ddd;
+}
+
+.request-type-option span {
+  font-size: 11px;
+  line-height: 1.45;
+  color: #858b96;
+}
+
+.request-type-option.active {
+  border-color: var(--gold);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent);
+  background: #202018;
+}
+
+.realtime-request-view {
+  min-height: 0;
+}
+
+.realtime-urlbar {
+  align-items: center;
+}
+
+.realtime-url-kind {
+  min-width: 54px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--line);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+.realtime-request-state {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid #383c44;
+  border-radius: 999px;
+  font-size: 10px;
+  color: #858b96;
+}
+
+.realtime-request-state.ok {
+  color: #80c797;
+  border-color: #31513c;
+}
+
+.realtime-request-state.pending {
+  color: #d8b45c;
+  border-color: #5a4a24;
+}
+
+.realtime-request-state.error {
+  color: #e38d82;
+  border-color: #633a35;
+}
+
+.realtime-request-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(420px, 1.15fr);
+  flex: 1;
+  min-height: 0;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.realtime-config-pane {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+  padding-right: 14px;
+}
+
+.realtime-config-content {
+  padding-right: 8px;
+}
+
+.realtime-setting {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.realtime-setting input {
+  accent-color: var(--gold);
+}
+
+.realtime-request-dashboard {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: 14px;
+}
+
+.realtime-dashboard-toolbar {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-bottom: 1px solid var(--line);
+}
+
+.realtime-dashboard-toolbar strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: #d2d2d2;
+}
+
+.realtime-dashboard-toolbar .realtime-count {
+  margin-right: auto;
+  font-size: 10px;
+  color: #737983;
+}
+
+.realtime-dashboard-toolbar button {
+  border: 0;
+  padding: 4px 6px;
+  font-size: 10px;
+}
+
+.realtime-request-log {
+  flex: 1;
+  min-height: 120px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px 0;
+  list-style: none;
+}
+
+.realtime-request-event {
+  padding: 8px 6px;
+  border-bottom: 1px solid #2b2e34;
+}
+
+.realtime-request-event-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #717782;
+}
+
+.realtime-request-event-meta time {
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+.realtime-direction {
+  width: 12px;
+  text-align: center;
+  color: #a9afb9;
+}
+
+.realtime-event-type {
+  color: #c4c8cf;
+  font-weight: 600;
+}
+
+.realtime-event-bytes {
+  margin-left: auto;
+}
+
+.realtime-request-event pre {
+  margin: 6px 0 0 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 11px/1.6 ui-monospace, Menlo, monospace;
+  color: #b8c4bd;
+}
+
+.realtime-request-event.type-error pre {
+  color: #e38d82;
+}
+
+.realtime-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.realtime-composer textarea {
+  min-height: 92px;
+  max-height: 220px;
+  margin: 0;
+}
+
+.realtime-composer button {
+  min-width: 84px;
+}
+
+@media (max-width: 980px) {
+  .request-type-picker,
+  .realtime-request-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .realtime-config-pane {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    padding-right: 0;
+    padding-bottom: 10px;
+  }
+
+  .realtime-request-dashboard {
+    padding-left: 0;
+  }
+}

@@ -18,7 +18,13 @@ import {
   requestBodySchemaView,
   responseSchemaView,
 } from "./openapi-schema.js";
-import { collection, request, normalize, rowList } from "./model.js";
+import {
+  collection,
+  request,
+  normalize,
+  rowList,
+  requestTypeLabel,
+} from "./model.js";
 import {
   collapseEntireTree,
   expandEntireTree,
@@ -42,7 +48,9 @@ let state = {
   stopRun = false,
   runnerResults = new Map(),
   gitInfo = new Map(),
-  subtabs = new Map();
+  subtabs = new Map(),
+  realtimeSessions = new Map(),
+  realtimeById = new Map();
 const key = (t) => `${t.cid}|${t.kind}|${t.id || ""}`;
 const c = () =>
   state.collections.find((c) => c.id === state.activeCollection) ||
@@ -147,13 +155,63 @@ function newRequest(group = "") {
     $("newCollection").click();
     return;
   }
-  askName("New HTTP Request", "", (name) => {
-    const r = request(group);
-    r.name = name;
-    col.requests.push(r);
-    mark(col);
-    open("request", r.id, col);
-  });
+  let name = "";
+  let type = "http";
+  const picker = el("div", { class: "request-type-picker" });
+  const options = [
+    ["http", "HTTP", "일반 REST / HTTP 요청"],
+    ["sse", "SSE", "Server-Sent Events 스트림"],
+    ["websocket", "WebSocket", "양방향 실시간 연결"],
+  ];
+  const draw = () => {
+    picker.replaceChildren(
+      ...options.map(([value, title, description]) =>
+        el(
+          "button",
+          {
+            type: "button",
+            class: "request-type-option " + (type === value ? "active" : ""),
+            "aria-pressed": String(type === value),
+            onClick: () => {
+              type = value;
+              draw();
+            },
+          },
+          el("strong", { text: title }),
+          el("span", { text: description }),
+        ),
+      ),
+    );
+  };
+  draw();
+  modal(
+    "새 요청",
+    el(
+      "div",
+      { class: "new-request-form" },
+      picker,
+      field(
+        "이름",
+        input(name, (value) => (name = value), {
+          id: "dialogName",
+          required: true,
+          placeholder: "Request name",
+        }),
+      ),
+    ),
+    () => {
+      if (!name.trim()) {
+        status("요청 이름을 입력하세요.");
+        return false;
+      }
+      const r = request(group, type);
+      r.name = name.trim();
+      col.requests.push(r);
+      mark(col);
+      open("request", r.id, col);
+    },
+    "생성",
+  );
 }
 function collectionMenu(col) {
   state.activeCollection = col.id;
@@ -250,7 +308,7 @@ function renderTree() {
   updateTreeCollapseControl(search);
   for (const col of state.collections) {
     const match = (r) =>
-      `${r.name} ${r.url} ${r.method} ${r.group}`
+      `${r.name} ${r.url} ${r.method || ""} ${r.type || "http"} ${r.group}`
         .toLowerCase()
         .includes(search);
     const matches = col.requests.filter(match);
@@ -339,7 +397,7 @@ function renderTree() {
           title: req.url,
         });
         b.append(
-          el("span", { class: "method " + req.method, text: req.method }),
+          requestBadge(req),
           el("span", { text: req.name + (req.removed ? " ⚠" : "") }),
         );
         r.append(b);
@@ -349,6 +407,16 @@ function renderTree() {
     draw(tree);
   }
 }
+function requestBadge(r) {
+  const type = r?.type || "http";
+  const tone =
+    type === "sse" ? "SSE" : type === "websocket" ? "WS" : r?.method || "GET";
+  return el("span", {
+    class: "method " + tone,
+    text: requestTypeLabel(r || { type: "http", method: "HTTP" }),
+  });
+}
+
 function tabTitle(t) {
   const col = state.collections.find((c) => c.id === t.cid);
   if (t.kind === "request") {
@@ -391,7 +459,7 @@ function renderTabs() {
     });
     if (t.kind === "request") {
       const r = col.requests.find((r) => r.id === t.id);
-      tab.append(el("span", { class: "method " + r?.method, text: r?.method }));
+      tab.append(requestBadge(r));
     }
     tab.append(el("span", { class: "label", text: tabTitle(t) }));
     if (t.kind === "request" ? col.requests.some(r => r.id === t.id && drafts.changed(t.cid, r)) : dirty.has(t.cid))
@@ -826,9 +894,518 @@ function folderView(col, path) {
     );
   return root;
 }
+function realtimeKey(col, r) {
+  return col.id + ":" + r.id;
+}
+
+function realtimeState(col, r) {
+  const key = realtimeKey(col, r);
+  let value = realtimeSessions.get(key);
+  if (!value || value.kind !== r.type) {
+    value = {
+      key,
+      kind: r.type,
+      id: null,
+      status: "idle",
+      connected: false,
+      events: [],
+      paused: false,
+      message: "",
+      startedAt: 0,
+    };
+    realtimeSessions.set(key, value);
+  }
+  return value;
+}
+
+function realtimeStatusLabel(session) {
+  return {
+    idle: "대기",
+    connecting: "연결 중",
+    open: "연결됨",
+    reconnecting: "재연결 중",
+    error: "오류",
+    closed: "종료",
+  }[session.status] || session.status;
+}
+
+function realtimeEventElement(event, kind) {
+  const item = el("li", {
+    class: "realtime-request-event type-" + event.type,
+  });
+  const direction =
+    event.type === "sent" ? "→" : event.type === "message" ? "←" : "●";
+  const label =
+    kind === "sse" && event.type === "message" && event.event
+      ? event.event
+      : event.type;
+  item.append(
+    el(
+      "div",
+      { class: "realtime-request-event-meta" },
+      el("time", {
+        text: new Date(event.at || Date.now()).toLocaleTimeString(),
+      }),
+      el("span", { class: "realtime-direction", text: direction }),
+      el("span", { class: "realtime-event-type", text: label }),
+      event.bytes
+        ? el("span", {
+            class: "realtime-event-bytes",
+            text: Number(event.bytes).toLocaleString() + " B",
+          })
+        : null,
+    ),
+  );
+  let body = "";
+  if (event.type === "message" || event.type === "sent") {
+    body = String(event.data ?? "");
+    if (!event.binary) {
+      try {
+        body = JSON.stringify(JSON.parse(body), null, 2);
+      } catch {}
+    } else {
+      body = "[binary · base64]\n" + body;
+    }
+  } else if (event.type === "error") {
+    body = event.message || "연결 오류";
+  } else if (event.type === "open") {
+    body = event.status
+      ? "HTTP " + event.status
+      : event.protocol
+        ? "protocol " + event.protocol
+        : "연결됨";
+  } else if (event.type === "reconnecting") {
+    body = (event.retry || 3000) + "ms 후 다시 연결";
+  } else if (event.type === "closed") {
+    body = event.reason || "연결 종료";
+  }
+  if (body) item.append(el("pre", { text: body }));
+  return item;
+}
+
+function realtimeRoot(key) {
+  return [...document.querySelectorAll("[data-realtime-key]")].find(
+    (node) => node.dataset.realtimeKey === key,
+  );
+}
+
+function refreshRealtimeDom(key, event = null) {
+  const session = realtimeSessions.get(key);
+  const root = realtimeRoot(key);
+  if (!session || !root) return;
+  const stateNode = root.querySelector("[data-role='realtime-state']");
+  const connectButton = root.querySelector("[data-role='realtime-connect']");
+  const sendButton = root.querySelector("[data-role='realtime-send']");
+  const countNode = root.querySelector("[data-role='realtime-count']");
+  const list = root.querySelector("[data-role='realtime-log']");
+  if (stateNode) {
+    stateNode.textContent = realtimeStatusLabel(session);
+    stateNode.className =
+      "realtime-request-state " +
+      (session.connected
+        ? "ok"
+        : ["connecting", "reconnecting"].includes(session.status)
+          ? "pending"
+          : session.status === "error"
+            ? "error"
+            : "idle");
+  }
+  if (connectButton)
+    connectButton.textContent = session.id ? "연결 끊기" : "연결";
+  if (sendButton) sendButton.disabled = !session.connected;
+  if (countNode) {
+    const count = session.events.filter((item) =>
+      ["message", "sent"].includes(item.type),
+    ).length;
+    countNode.textContent =
+      count.toLocaleString() +
+      (session.kind === "sse" ? " events" : " messages");
+  }
+  if (event && list && !session.paused) {
+    list.append(realtimeEventElement(event, session.kind));
+    while (list.children.length > 300) list.firstElementChild?.remove();
+    list.scrollTop = list.scrollHeight;
+  }
+}
+
+api.onRealtimeEvent?.((event) => {
+  const key = realtimeById.get(event.id);
+  if (!key) return;
+  const session = realtimeSessions.get(key);
+  if (!session) return;
+  session.events.push(event);
+  session.events = session.events.slice(-300);
+  if (event.type === "open") {
+    session.status = "open";
+    session.connected = true;
+    session.startedAt ||= event.at || Date.now();
+  } else if (event.type === "connecting" || event.type === "reconnecting") {
+    session.status = event.type;
+    session.connected = false;
+  } else if (event.type === "error") {
+    session.status = "error";
+  } else if (event.type === "closed") {
+    session.status = "closed";
+    session.connected = false;
+    session.id = null;
+    realtimeById.delete(event.id);
+  }
+  refreshRealtimeDom(key, event);
+});
+
+async function toggleRealtimeConnection(col, r) {
+  const session = realtimeState(col, r);
+  if (session.id) {
+    const id = session.id;
+    await api["realtime-close"](id);
+    realtimeById.delete(id);
+    session.id = null;
+    session.connected = false;
+    session.status = "closed";
+    refreshRealtimeDom(session.key);
+    return;
+  }
+  session.status = "connecting";
+  session.connected = false;
+  refreshRealtimeDom(session.key);
+  try {
+    const result = await api["realtime-open"]({
+      kind: r.type,
+      request: structuredClone(r),
+      environment: structuredClone(env(col)),
+      collection: structuredClone(col),
+      protocols: r.type === "websocket" ? r.websocket?.protocols || [] : [],
+      autoReconnect:
+        r.type === "sse"
+          ? r.sse?.autoReconnect !== false
+          : r.websocket?.autoReconnect !== false,
+    });
+    session.id = result.id;
+    session.status = "connecting";
+    realtimeById.set(result.id, session.key);
+    refreshRealtimeDom(session.key);
+    status(r.name + " 연결을 시작했습니다.");
+  } catch (error) {
+    const event = {
+      type: "error",
+      at: Date.now(),
+      message: error.message,
+    };
+    session.status = "error";
+    session.events.push(event);
+    refreshRealtimeDom(session.key, event);
+    throw error;
+  }
+}
+
+async function sendRealtimeMessage(col, r) {
+  const session = realtimeState(col, r);
+  if (!session.id || !session.connected)
+    throw Error("WebSocket 연결이 열려 있지 않습니다.");
+  await api["realtime-send"](session.id, session.message);
+  session.message = "";
+  const composer = realtimeRoot(session.key)?.querySelector(
+    "[data-role='realtime-message']",
+  );
+  if (composer) composer.value = "";
+}
+
+function realtimeRequestView(col, r) {
+  const id = col.id + r.id;
+  const current = subtabs.get(id) || "params";
+  const session = realtimeState(col, r);
+  const root = el("div", {
+    class: "request-view realtime-request-view",
+    "data-view": "request",
+    "data-realtime-key": session.key,
+  });
+  const saveButton = button(
+    "",
+    () => saveRequest({ cid: col.id, kind: "request", id: r.id }),
+    {
+      class: "request-save",
+      title: "요청 저장 · ⌘S",
+      "aria-label": "현재 요청 저장",
+    },
+  );
+  saveButton.append(
+    el("span", { "data-lucide": "save" }),
+    el("span", { text: "저장" }),
+  );
+  root.append(
+    el(
+      "div",
+      { class: "request-heading" },
+      el("span", { text: col.title + " / " + (r.group || "Requests") }),
+      el("strong", { text: r.name }),
+      requestBadge(r),
+      el(
+        "div",
+        { class: "request-heading-actions" },
+        saveButton,
+        button("⋯", () => requestMenu(col, r), {
+          class: "request-menu",
+          title: "Request actions",
+          "aria-label": "요청 메뉴",
+        }),
+      ),
+    ),
+    el(
+      "div",
+      { class: "urlbar realtime-urlbar" },
+      el("span", {
+        class: "realtime-url-kind",
+        text: r.type === "sse" ? "SSE" : "WS",
+      }),
+      input(
+        r.url,
+        (value) => {
+          r.url = value;
+          mark(col);
+        },
+        {
+          id: "requestUrl",
+          spellcheck: false,
+          placeholder:
+            r.type === "sse"
+              ? "https://api.example.com/events"
+              : "wss://api.example.com/socket",
+        },
+      ),
+      el("span", {
+        class: "realtime-request-state idle",
+        "data-role": "realtime-state",
+        text: realtimeStatusLabel(session),
+      }),
+      button(
+        session.id ? "연결 끊기" : "연결",
+        () => action(() => toggleRealtimeConnection(col, r)),
+        {
+          class: "realtime-connect-button",
+          "data-role": "realtime-connect",
+          title: "연결 전환 · ⌘Enter",
+        },
+      ),
+    ),
+  );
+
+  const pane = el("div", { class: "request-pane realtime-config-pane" });
+  const realtimeTabs =
+    r.type === "sse"
+      ? [
+          ["params", "Params"],
+          ["headers", "Headers"],
+          ["auth", "Auth"],
+          ["vars", "Vars"],
+          ["settings", "Settings"],
+          ["docs", "Docs"],
+        ]
+      : [
+          ["params", "Params"],
+          ["protocols", "Protocols"],
+          ["vars", "Vars"],
+          ["settings", "Settings"],
+          ["docs", "Docs"],
+        ];
+  pane.append(
+    tabs(realtimeTabs, current, (value) => {
+      subtabs.set(id, value);
+      render();
+    }),
+  );
+
+  const content = el("div", {
+    class: "request-content realtime-config-content",
+  });
+  if (current === "params") content.append(kv(r, "query", col));
+  if (current === "headers") {
+    content.append(
+      kv(r, "headers", col),
+      el("p", {
+        class: "hint",
+        text: "컬렉션·폴더 헤더와 인증 설정을 상속한 뒤 SSE 연결에 적용합니다.",
+      }),
+    );
+  }
+  if (current === "auth") content.append(authEditor(r, col));
+  if (current === "vars") {
+    content.append(
+      kv(r, "vars", col),
+      el("p", {
+        class: "hint",
+        text: "환경변수와 함께 URL·쿼리·헤더·인증 값의 {{variables}}를 해석합니다.",
+      }),
+    );
+  }
+  if (current === "protocols") {
+    const protocols = r.websocket?.protocols || [];
+    content.append(
+      field(
+        "WebSocket Subprotocols",
+        input(
+          protocols.join(", "),
+          (value) => {
+            r.websocket ||= {
+              protocols: [],
+              autoReconnect: true,
+              messages: [],
+            };
+            r.websocket.protocols = value
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean);
+            mark(col);
+          },
+          { placeholder: "graphql-ws, chat" },
+        ),
+      ),
+      el("p", {
+        class: "hint",
+        text: "현재 WebSocket transport는 사용자 정의 handshake 헤더를 지원하지 않습니다. 인증이 필요하면 쿼리 파라미터나 subprotocol을 사용하세요.",
+      }),
+    );
+  }
+  if (current === "settings") {
+    const config = r.type === "sse" ? r.sse : r.websocket;
+    content.append(
+      el(
+        "label",
+        { class: "realtime-setting" },
+        el("input", {
+          type: "checkbox",
+          checked: config?.autoReconnect !== false,
+          onChange: (event) => {
+            if (r.type === "sse") {
+              r.sse ||= {};
+              r.sse.autoReconnect = event.target.checked;
+            } else {
+              r.websocket ||= { protocols: [], messages: [] };
+              r.websocket.autoReconnect = event.target.checked;
+            }
+            mark(col);
+          },
+        }),
+        " 자동 재연결",
+      ),
+      el("p", {
+        class: "hint",
+        text:
+          r.type === "sse"
+            ? "서버가 retry 값을 보내면 해당 재연결 간격을 우선합니다."
+            : "비정상 종료 시 저장된 연결 설정으로 다시 연결합니다.",
+      }),
+    );
+  }
+  if (current === "docs") {
+    content.append(
+      textarea(
+        r.description,
+        (value) => {
+          r.description = value;
+          mark(col);
+        },
+        {
+          "aria-label": "Request documentation",
+          placeholder: "이 실시간 요청의 용도와 이벤트 계약을 기록하세요…",
+        },
+      ),
+    );
+  }
+  pane.append(content);
+
+  const log = el("ol", {
+    class: "realtime-request-log",
+    "data-role": "realtime-log",
+    "aria-live": "polite",
+  });
+  log.append(
+    ...session.events.map((event) => realtimeEventElement(event, r.type)),
+  );
+  const dashboard = el(
+    "section",
+    { class: "realtime-request-dashboard" },
+    el(
+      "div",
+      { class: "realtime-dashboard-toolbar" },
+      el("strong", {
+        text: r.type === "sse" ? "Event Stream" : "Message Timeline",
+      }),
+      el("span", {
+        class: "realtime-count",
+        "data-role": "realtime-count",
+        text:
+          session.events
+            .filter((event) => ["message", "sent"].includes(event.type))
+            .length.toLocaleString() +
+          (r.type === "sse" ? " events" : " messages"),
+      }),
+      button(
+        session.paused ? "이어보기" : "일시정지",
+        () => {
+          session.paused = !session.paused;
+          render();
+        },
+        { class: "text-button" },
+      ),
+      button(
+        "비우기",
+        () => {
+          session.events = [];
+          render();
+        },
+        { class: "text-button" },
+      ),
+    ),
+    log,
+  );
+
+  if (r.type === "websocket") {
+    dashboard.append(
+      el(
+        "div",
+        { class: "realtime-composer" },
+        textarea(
+          session.message,
+          (value) => {
+            session.message = value;
+          },
+          {
+            rows: 4,
+            "data-role": "realtime-message",
+            "aria-label": "WebSocket 메시지",
+            placeholder: '{ "type": "subscribe" }',
+            onKeydown: (event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                event.preventDefault();
+                action(() => sendRealtimeMessage(col, r));
+              }
+            },
+          },
+        ),
+        button(
+          "보내기",
+          () => action(() => sendRealtimeMessage(col, r)),
+          {
+            class: "primary",
+            disabled: !session.connected,
+            "data-role": "realtime-send",
+            title: "메시지 보내기 · ⌘Enter",
+          },
+        ),
+      ),
+    );
+  }
+
+  root.append(
+    el("div", { class: "realtime-request-layout" }, pane, dashboard),
+  );
+  return root;
+}
+
 function requestView(col, r) {
   if (!r) return el("p", { text: "Request no longer exists." });
   r = drafts.get(col.id, r);
+  if ((r.type || "http") !== "http") return realtimeRequestView(col, r);
   const id = col.id + r.id,
     current = subtabs.get(id) || "params";
   const root = el("div", { class: "request-view", "data-view": "request" });
@@ -1147,6 +1724,11 @@ function requestMenu(col, r) {
             "Delete Request",
             el("p", { text: "Delete " + r.name + " from this collection?" }),
             () => {
+              const realtime = realtimeSessions.get(realtimeKey(col, r));
+              if (realtime?.id)
+                api["realtime-close"](realtime.id).catch(() => {});
+              if (realtime?.id) realtimeById.delete(realtime.id);
+              realtimeSessions.delete(realtimeKey(col, r));
               col.requests = col.requests.filter((x) => x.id !== r.id);
               drafts.discard(col.id, r.id);
               state.tabs = state.tabs.filter(
@@ -1305,8 +1887,13 @@ async function sendRequest(
   fixedEnvironment = null,
   fixedInterceptors = null,
 ) {
-  if (busy && !fromRunner) return;
   if (!fromRunner) r = drafts.get(col.id, r);
+  if ((r.type || "http") !== "http") {
+    if (fromRunner)
+      throw Error("실시간 요청은 Collection Runner에서 실행할 수 없습니다.");
+    return toggleRealtimeConnection(col, r);
+  }
+  if (busy && !fromRunner) return;
   const environment = structuredClone(fixedEnvironment || env(col));
   if (!fromRunner) {
     busy = true;
@@ -1705,11 +2292,17 @@ function endpointPicker(col) {
   const list = el("div", { class: "endpoint-picker" });
   function draw(query = "") {
     list.replaceChildren();
-    const matches = col.requests.filter(r => (r.name + " " + r.method + " " + r.url + " " + r.group).toLowerCase().includes(query.toLowerCase()));
+    const matches = col.requests.filter(
+      r =>
+        (!r.type || r.type === "http") &&
+        (r.name + " " + r.method + " " + r.url + " " + r.group)
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+    );
     for (const r of matches) list.append(el("label", {class:"run-item"},
       el("input", {type:"checkbox", checked:existing.has(r.id) || chosen.has(r.id), disabled:existing.has(r.id),
         onChange:e => e.target.checked ? chosen.add(r.id) : chosen.delete(r.id)}),
-      el("span", {class:"method", text:r.method}),
+      requestBadge(r),
       el("span", {text:(r.group ? r.group + " / " : "") + r.name}),
       el("small", {text:existing.has(r.id) ? "추가됨" : r.url})));
     if (!matches.length) list.append(el("p",{class:"muted",text:"일치하는 저장 요청이 없습니다."}));
@@ -1744,7 +2337,7 @@ function runnerView(col) {
     root.append(el("div", {class:"run-item"},
       el("input", {type:"checkbox",checked:item.enabled,disabled:busy,"aria-label":r.name + " 실행",
         onChange:e => {item.enabled=e.target.checked; mark(col);}}),
-      el("span", {class:"method " + r.method,text:r.method}),
+      requestBadge(r),
       button(r.name, () => open("request",r.id,col), {class:"text-button"}),
       button("↑", () => move(-1), {disabled:busy || i===0,title:"위로"}),
       button("↓", () => move(1), {disabled:busy || i===plan.length-1,title:"아래로"}),
