@@ -164,11 +164,27 @@ function eventData(value) {
 }
 
 class RealtimeManager {
-  constructor({ emit, fetcher = fetch, WebSocketImpl = globalThis.WebSocket, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)) } = {}) {
+  constructor({
+    emit,
+    fetcher = fetch,
+    WebSocketImpl = globalThis.WebSocket,
+    createWebSocket = null,
+    sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  } = {}) {
     if (typeof emit !== "function") throw Error("RealtimeManager emit 함수가 필요합니다.");
     this.emit = emit;
     this.fetcher = fetcher;
     this.WebSocketImpl = WebSocketImpl;
+    this.hasCustomWebSocketFactory = typeof createWebSocket === "function";
+    this.createWebSocket =
+      createWebSocket ||
+      (({ url, protocols }) => {
+        if (typeof this.WebSocketImpl !== "function")
+          throw Error("현재 런타임에서 WebSocket을 사용할 수 없습니다.");
+        return protocols.length
+          ? new this.WebSocketImpl(url, protocols)
+          : new this.WebSocketImpl(url);
+      });
     this.sleep = sleep;
     this.sessions = new Map();
   }
@@ -192,8 +208,14 @@ class RealtimeManager {
       socket: null,
       closedEmitted: false,
     };
-    if (kind === "websocket" && Object.keys(state.headers).length)
-      throw Error("WebSocket 사용자 정의 헤더는 현재 지원하지 않습니다. 쿼리 파라미터나 서브프로토콜을 사용하세요.");
+    if (
+      kind === "websocket" &&
+      Object.keys(state.headers).length &&
+      !this.hasCustomWebSocketFactory
+    )
+      throw Error(
+        "현재 WebSocket transport는 사용자 정의 헤더를 지원하지 않습니다.",
+      );
     this.sessions.set(id, state);
     if (kind === "sse") this.#runSse(state).catch((error) => this.#fatal(state, error));
     else this.#connectWebSocket(state);
@@ -307,11 +329,14 @@ class RealtimeManager {
 
   #connectWebSocket(state) {
     if (state.closed) return;
-    if (typeof this.WebSocketImpl !== "function") return this.#fatal(state, Error("현재 런타임에서 WebSocket을 사용할 수 없습니다."));
     this.#event(state, state.openedOnce ? "reconnecting" : "connecting", state.openedOnce ? { retry: state.retry } : {});
     let socket;
     try {
-      socket = state.protocols.length ? new this.WebSocketImpl(state.url, state.protocols) : new this.WebSocketImpl(state.url);
+      socket = this.createWebSocket({
+        url: state.url,
+        protocols: [...state.protocols],
+        headers: { ...state.headers },
+      });
     } catch (error) {
       return this.#fatal(state, error);
     }

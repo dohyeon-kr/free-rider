@@ -64,7 +64,52 @@ test("WebSocket manager sends messages and emits lifecycle events", async () => 
   assert.equal(emitted.some((event) => event.type === "closed"), true);
 });
 
-test("WebSocket custom headers fail explicitly instead of being ignored", () => {
+test("default WebSocket transport rejects custom headers instead of ignoring them", () => {
   const manager = new RealtimeManager({ emit() {}, WebSocketImpl: class {} });
-  assert.throws(() => manager.open({ kind: "websocket", url: "ws://example.com", headers: { Authorization: "Bearer x" } }), /사용자 정의 헤더/);
+  assert.throws(
+    () =>
+      manager.open({
+        kind: "websocket",
+        url: "ws://example.com",
+        headers: { Authorization: "Bearer x" },
+      }),
+    /사용자 정의 헤더/,
+  );
+});
+
+test("custom WebSocket factory receives normalized headers and protocols", () => {
+  let options;
+  class FakeSocket extends EventTarget {
+    constructor() {
+      super();
+      this.readyState = 0;
+      this.protocol = "";
+    }
+    close() {
+      this.readyState = 3;
+    }
+  }
+  const manager = new RealtimeManager({
+    emit() {},
+    createWebSocket(value) {
+      options = value;
+      return new FakeSocket();
+    },
+  });
+  const session = manager.open({
+    kind: "websocket",
+    url: "https://example.com/socket",
+    headers: { Authorization: "Bearer token", "X-Client": "free-rider" },
+    protocols: "graphql-ws, chat",
+    autoReconnect: false,
+  });
+  assert.deepEqual(options, {
+    url: "wss://example.com/socket",
+    headers: {
+      Authorization: "Bearer token",
+      "X-Client": "free-rider",
+    },
+    protocols: ["graphql-ws", "chat"],
+  });
+  assert.equal(manager.close(session.id), true);
 });

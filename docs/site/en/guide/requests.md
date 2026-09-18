@@ -4,17 +4,41 @@
 
 Create a collection with `+` in the sidebar and add requests to it. Collections and folders can be collapsed or expanded, and you can switch the active collection from the selector next to the collection title.
 
-The request editor provides these tabs:
+Choose a Request Type when creating a request.
 
-| Tab | Purpose |
-| --- | --- |
-| Params | URL query parameters |
-| Headers | Request headers |
-| Body | String or multipart body |
-| Auth | Bearer / Basic authentication |
-| Vars | Request-scoped variables |
-| Tests | Response assertions |
-| Docs | Request description |
+| Type | Execution model | Result surface |
+| --- | --- | --- |
+| HTTP | One request → one response | Response Inspector |
+| SSE | Connect → continuously receive server events | Event Stream |
+| WebSocket | Connect → send and receive messages | Message Timeline |
+
+HTTP requests provide Params, Headers, Body, Auth, Vars, Tests, and Docs tabs. SSE and WebSocket use the same saved-request model but switch to protocol-specific settings and dashboards.
+
+## Request Type
+
+Request Type controls both how a saved request executes and which workspace is shown. Requests from v2 collections are migrated to HTTP when loaded.
+
+### SSE
+
+SSE uses an `http://` or `https://` URL. Free Rider resolves Params, Headers, Auth, and Vars before connecting and shows server `event`, `id`, `data`, and `retry` values in the Event Stream.
+
+- Auto reconnect can be enabled or disabled.
+- Search by event name or payload text.
+- The dashboard shows event count, transferred bytes, and session duration.
+- Pause stops UI updates; it does not change the saved request.
+
+### WebSocket
+
+WebSocket uses `ws://` or `wss://`. Entering `http://` or `https://` is normalized to the matching WebSocket scheme.
+
+- Params, Headers, Auth, and Vars are resolved before the opening handshake.
+- Bearer / Basic Auth and custom handshake headers are supported.
+- Set requested WebSocket subprotocols in the Protocols tab.
+- The Message Timeline combines incoming, outgoing, and connection lifecycle events.
+- Compose JSON or Text messages and save reusable payloads as Saved Messages inside the request.
+- The app network session is reused, including session cookies during the handshake.
+
+Connection state, session IDs, and received events/messages are runtime-only. URL, Params, Headers/Auth, subprotocols, reconnect settings, and Saved Messages are persisted with the request.
 
 ## URL and HTTP method
 

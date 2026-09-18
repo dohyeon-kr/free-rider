@@ -4,7 +4,7 @@ Use the Collection Runner to execute multiple saved requests in a defined order.
 
 ## Build a run list
 
-Select saved requests with `Add endpoint`. Excluding a request from the run list or changing its order does not delete the original request.
+Select saved **HTTP requests** with `Add endpoint`. Excluding a request from the run list or changing its order does not delete the original request. SSE and WebSocket requests are excluded because they do not have a finite single-response completion boundary.
 
 Save the run list configuration with the save button.
 
