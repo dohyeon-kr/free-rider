@@ -10,6 +10,8 @@ const specAuths = new SpecAuthSession();
 import { runPlan, addToRun, executionRequests } from "./run-plan.mjs";
 import { RequestDrafts } from "./drafts.mjs";
 const drafts = new RequestDrafts();
+import { RequestHistory } from "./request-history.mjs";
+const requestHistory = new RequestHistory();
 import { isCurl, parseCurl } from "../modules/curl/index.mjs";
 import { $, el, button, input, select, textarea, field, table } from "./dom.js";
 import {
@@ -71,7 +73,30 @@ async function action(fn) {
     return null;
   }
 }
-function mark(col = c()) {
+function requestHistoryGroup() {
+  const node = document.activeElement;
+  const isTextControl =
+    node?.tagName === "TEXTAREA" ||
+    (node?.tagName === "INPUT" &&
+      !["checkbox", "radio", "button", "submit", "file"].includes(node.type));
+  const root = isTextControl ? node.closest?.("[data-view='request']") : null;
+  if (!root) return null;
+  const controls = [...root.querySelectorAll("input, textarea")];
+  const index = controls.indexOf(node);
+  return index < 0 ? null : `${node.tagName}:${node.type || ""}:${index}`;
+}
+function recordRequestHistory(col) {
+  const tab = active();
+  if (!tab || tab.kind !== "request" || tab.cid !== col.id) return false;
+  const saved = col.requests.find((item) => item.id === tab.id);
+  if (!saved) return false;
+  const draft = drafts.get(col.id, saved);
+  return requestHistory.record(col.id, saved.id, draft, {
+    group: requestHistoryGroup(),
+  });
+}
+function mark(col = c(), { history: trackHistory = true } = {}) {
+  if (trackHistory) recordRequestHistory(col);
   dirty.add(col.id);
   api["set-dirty"](true).catch((e) => status(e.message));
   renderTabs();
@@ -105,6 +130,7 @@ function closeTab(t) {
   finishCloseTab(t);
 }
 function finishCloseTab(t) {
+  if (t.kind === "request") requestHistory.discard(t.cid, t.id);
   const i = state.tabs.findIndex((x) => key(x) === key(t));
   state.tabs.splice(i, 1);
   if (state.activeTab === key(t)) {
@@ -1405,6 +1431,7 @@ function realtimeRequestView(col, r) {
 function requestView(col, r) {
   if (!r) return el("p", { text: "Request no longer exists." });
   r = drafts.get(col.id, r);
+  requestHistory.ensure(col.id, r.id, r);
   if ((r.type || "http") !== "http") return realtimeRequestView(col, r);
   const id = col.id + r.id,
     current = subtabs.get(id) || "params";
@@ -1731,6 +1758,7 @@ function requestMenu(col, r) {
               realtimeSessions.delete(realtimeKey(col, r));
               col.requests = col.requests.filter((x) => x.id !== r.id);
               drafts.discard(col.id, r.id);
+              requestHistory.discard(col.id, r.id);
               state.tabs = state.tabs.filter(
                 (t) => !(t.cid === col.id && t.id === r.id),
               );
@@ -2243,6 +2271,7 @@ async function saveCollectionTransaction(col,next) {
   finally {workspace.inert=false;}
   for(const key of Object.keys(col)) delete col[key];
   Object.assign(col,next);state.tabs=snapshot.tabs;
+  requestHistory.discardCollection(col.id);
   dirty.clear();
   await api["set-dirty"](state.collections.some(c=>c.requests.some(r=>drafts.changed(c.id,r))));
 }
@@ -2494,6 +2523,59 @@ function gitView(col) {
   );
   return root;
 }
+function requestFocusToken() {
+  const root = document.activeElement?.closest?.("[data-view='request']");
+  if (!root) return null;
+  const controls = [...root.querySelectorAll("input, textarea, select")];
+  const index = controls.indexOf(document.activeElement);
+  if (index < 0) return null;
+  const node = controls[index];
+  return {
+    index,
+    start: typeof node.selectionStart === "number" ? node.selectionStart : null,
+    end: typeof node.selectionEnd === "number" ? node.selectionEnd : null,
+  };
+}
+function restoreRequestFocus(token) {
+  if (!token) return;
+  const root = document.querySelector("[data-view='request']");
+  const node = root?.querySelectorAll("input, textarea, select")[token.index];
+  if (!node) return;
+  node.focus();
+  if (
+    token.start !== null &&
+    token.end !== null &&
+    typeof node.setSelectionRange === "function"
+  ) {
+    try {
+      node.setSelectionRange(token.start, token.end);
+    } catch {}
+  }
+}
+function applyRequestHistory(direction) {
+  const tab = active();
+  if (!tab || tab.kind !== "request") return false;
+  const col = state.collections.find((item) => item.id === tab.cid);
+  const saved = col?.requests.find((item) => item.id === tab.id);
+  if (!col || !saved) return false;
+  const draft = drafts.get(col.id, saved);
+  const token = requestFocusToken();
+  const next =
+    direction === "redo"
+      ? requestHistory.redo(col.id, saved.id, draft)
+      : requestHistory.undo(col.id, saved.id, draft);
+  if (!next) {
+    status(direction === "redo" ? "다시 적용할 변경이 없습니다." : "되돌릴 변경이 없습니다.");
+    return true;
+  }
+  for (const name of Object.keys(draft)) delete draft[name];
+  Object.assign(draft, next);
+  mark(col, { history: false });
+  render();
+  restoreRequestFocus(token);
+  status(direction === "redo" ? "변경을 다시 적용했습니다." : "변경을 되돌렸습니다.");
+  return true;
+}
 async function persist(only = null) {
   const snapshot = drafts.snapshot(state, only);
   snapshot.collapsed = [...collapsed];
@@ -2699,6 +2781,10 @@ $("shortcuts").onclick = () =>
         "⌘ / Ctrl + Enter",
         "Save current request",
         "⌘ / Ctrl + S",
+        "Undo request edit",
+        "⌘ / Ctrl + Z",
+        "Redo request edit",
+        "⇧ + ⌘ / Ctrl + Z",
         "New request",
         "⌘ / Ctrl + N",
         "Close tab",
@@ -2725,6 +2811,11 @@ api.onShortcut((key) => {
 document.addEventListener("keydown", (e) => {
   if (!(e.metaKey || e.ctrlKey) || $("dialog").open) return;
   const k = e.key.toLowerCase();
+  if (k === "z" && active()?.kind === "request") {
+    e.preventDefault();
+    applyRequestHistory(e.shiftKey ? "redo" : "undo");
+    return;
+  }
   if (["s", "n", "w", "k", "enter"].includes(k)) e.preventDefault();
   if (k === "s") saveRequest();
   if (k === "n") newRequest();
