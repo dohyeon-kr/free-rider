@@ -149,6 +149,14 @@
   margin-right: auto;
   font-size: 10px;
   color: #737983;
+  white-space: nowrap;
+}
+
+.realtime-filter {
+  width: min(220px, 28vw);
+  height: 28px;
+  padding: 4px 8px;
+  font-size: 10px;
 }
 
 .realtime-dashboard-toolbar button {
@@ -212,11 +220,16 @@
 
 .realtime-composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: stretch;
   padding: 10px 0 0;
   border-top: 1px solid var(--line);
+}
+
+.realtime-composer select {
+  align-self: start;
+  min-height: 34px;
 }
 
 .realtime-composer textarea {
@@ -244,5 +257,67 @@
 
   .realtime-request-dashboard {
     padding-left: 0;
+  }
+}
+
+.saved-message-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.saved-message-heading > div {
+  flex: 1;
+}
+
+.saved-message-heading h3,
+.saved-message-heading p {
+  margin: 0 0 5px;
+}
+
+.saved-message-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.saved-message-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
+}
+
+.saved-message-card textarea {
+  min-height: 110px;
+  padding: 9px 10px;
+  border: 1px solid #343840;
+  background: #181a1f;
+}
+
+.saved-message-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.saved-message-actions button {
+  font-size: 10px;
+}
+
+@media (max-width: 760px) {
+  .realtime-dashboard-toolbar {
+    flex-wrap: wrap;
+    padding-block: 7px;
+  }
+
+  .realtime-filter {
+    order: 3;
+    width: 100%;
+  }
+
+  .realtime-composer {
+    grid-template-columns: 1fr;
   }
 }
