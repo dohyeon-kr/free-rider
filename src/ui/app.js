@@ -1510,12 +1510,11 @@ function requestView(col, r) {
   const content = el("div", { class: "request-content" });
   if (current === "params") {
     const schema = parameterSchemaView(r, ["path", "query", "cookie"]);
-    if (schema) content.append(schema);
     content.append(kv(r, "query", col));
+    if (schema) content.append(schema);
   }
   if (current === "headers") {
     const schema = parameterSchemaView(r, "header");
-    if (schema) content.append(schema);
     content.append(kv(r, "headers", col));
     if (rowList(col.headers).length)
       content.append(
@@ -1524,10 +1523,10 @@ function requestView(col, r) {
           text: "Collection and folder headers are inherited. Matching request headers override them.",
         }),
       );
+    if (schema) content.append(schema);
   }
   if (current === "body") {
     const schema = requestBodySchemaView(r);
-    if (schema) content.append(schema);
     content.append(
       el(
         "div",
@@ -1568,6 +1567,7 @@ function requestView(col, r) {
           { "aria-label": "Request body" },
         ),
       );
+    if (schema) content.append(schema);
   }
   if (current === "auth") content.append(authEditor(r, col));
   if (current === "vars") {
