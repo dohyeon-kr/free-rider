@@ -1,31 +1,44 @@
-# Tests Reference
+# Ride Tests
 
-The Tests tab checks response values with expressions and operators. Disabled rules and rules with an empty expression are not executed.
+In Free Rider, the test unit is a **Ride scenario**, not an individual request.
 
-## Expression
+Insert saved HTTP endpoints into a Ride in the order you want to execute them. Free Rider reports the result of each step and the overall scenario.
 
-| Expression | Value |
-| --- | --- |
-| `res.status` | HTTP status code |
-| `res.responseTime` | Total request duration (ms) |
-| `res.body` | Parsed value for JSON, otherwise a string |
-| `res.body.foo.bar` | Nested property in a JSON Body |
-| `res.headers.content-type` | Lowercase response header |
+## Build a test scenario
 
-Body paths are separated by dots (`.`).
+A collection can contain multiple Rides.
+
+1. Create a new Ride.
+2. Choose `Insert endpoint` and search saved requests by name, method, or URL.
+3. Click a result or press Enter to insert it at the current position.
+4. The same endpoint can be inserted more than once.
+5. Reorder steps with the up/down controls.
+
+For example:
 
 ```text
-res.body.data.user.id
+Login
+→ Current user
+→ Update profile
+→ Current user
 ```
 
-## Operator
+Runtime Vars captured by response extraction or After Response scripts are available to later steps.
 
-| Operator | Evaluation |
-| --- | --- |
-| `equals` | JSON-serialized values are equal |
-| `notEquals` | JSON-serialized values are different |
-| `exists` | Actual value is not `undefined` |
-| `contains` | String form of actual value contains the expected value |
-| `lessThan` | Numeric actual value is less than the expected value |
+## PASS / FAIL
 
-Saved expected values are passed through `JSON.parse` when possible. For example, `200`, `true`, and `{"ok":true}` are compared as a number, boolean, and object respectively, while ordinary text is compared as a string.
+A step passes when all of these conditions are true:
+
+- An HTTP response is received successfully
+- The status code is below 400
+- Before Request and After Response scripts complete without errors
+
+If any step fails, the Ride result is FAIL.
+
+When `Stop on failure` is enabled, execution stops at the first failed step. A manual stop is reported as STOPPED.
+
+## Request Tests removed
+
+Request-level Tests tabs and response assertions are no longer used.
+
+Inspect a single request through Body, Headers, Schema, History, and Console. Use Ride for repeatable test flows.
