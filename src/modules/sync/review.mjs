@@ -191,7 +191,7 @@ function differences(base,local,next,path,fields,actual) {
     key:pointer(path),
     path,
     before:at(actual.base,path),
-    local:at(actual.local,path),
+    local:at(actual.current,path),
     incoming:at(actual.next,path),
     conflict:!equal(local,base)&&!equal(local,next)
   });
