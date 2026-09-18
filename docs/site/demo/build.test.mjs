@@ -11,13 +11,15 @@ async function fixture(t) {
   const sourceDir = join(root, 'src'), demoDir = join(root, 'demo'), outDir = join(root, 'out');
   await mkdir(join(sourceDir, 'ui'), { recursive: true });
   await mkdir(join(sourceDir, 'modules'), { recursive: true });
+  await mkdir(join(sourceDir, 'assets'), { recursive: true });
   await mkdir(demoDir);
   await writeFile(join(sourceDir, 'index.html'), `<!doctype html><html lang="ko"><head>
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-    <link rel="stylesheet" href="style.css"></head><body><div id="view"></div>
+    <link rel="stylesheet" href="style.css"></head><body><img src="assets/app-icon.png" alt=""><div id="view"></div>
     <script type="module" src="ui/app.js"></script><script type="module" src="ui/dialog-enter.mjs"></script>
     <script type="module" src="ui/reveal-passwords.js"></script><script type="module" src="ui/native.js"></script></body></html>`);
   await writeFile(join(sourceDir, 'style.css'), ':root { color-scheme: dark; }');
+  await writeFile(join(sourceDir, 'assets/app-icon.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
   await writeFile(join(sourceDir, 'ui/app.js'), `import { value } from '../modules/value.mjs';\nwindow.appReady = Promise.resolve(value);`);
   await writeFile(join(sourceDir, 'modules/value.mjs'), 'export const value = 42;');
   await writeFile(join(sourceDir, 'ui/dialog-enter.mjs'), 'export {};');
@@ -31,6 +33,10 @@ test('build copies the actual renderer and transitive imports byte-for-byte', as
   await buildDemo(options);
   assert.equal(await readFile(join(options.outDir, 'ui/app.js'), 'utf8'), await readFile(join(options.sourceDir, 'ui/app.js'), 'utf8'));
   assert.match(await readFile(join(options.outDir, 'modules/value.mjs'), 'utf8'), /42/);
+  assert.deepEqual(
+    await readFile(join(options.outDir, 'assets/app-icon.png')),
+    await readFile(join(options.sourceDir, 'assets/app-icon.png')),
+  );
   await assert.rejects(access(join(options.outDir, 'ui/native.js')));
 });
 
