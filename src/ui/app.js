@@ -19,6 +19,11 @@ import {
   responseSchemaView,
 } from "./openapi-schema.js";
 import { collection, request, normalize, rowList } from "./model.js";
+import {
+  collapseEntireTree,
+  expandEntireTree,
+  isTreeFullyCollapsed,
+} from "./tree-collapse.mjs";
 const api = window.client;
 let state = {
     collections: [collection("My API Collection")],
@@ -228,10 +233,21 @@ function folderMenu(col, path) {
     "Close",
   );
 }
+function updateTreeCollapseControl(search = "") {
+  const control = $("toggleTreeCollapse");
+  if (!control) return;
+  const fullyCollapsed = isTreeFullyCollapsed(state.collections, collapsed);
+  const label = fullyCollapsed ? "모두 펼치기" : "모두 접기";
+  control.disabled = !state.collections.length || Boolean(search);
+  control.title = search ? "검색을 지운 뒤 모두 접기/펼치기를 사용할 수 있습니다." : label;
+  control.setAttribute("aria-label", control.title);
+}
+
 function renderTree() {
   const root = $("tree"),
     search = $("search").value.toLowerCase();
   root.replaceChildren();
+  updateTreeCollapseControl(search);
   for (const col of state.collections) {
     const match = (r) =>
       `${r.name} ${r.url} ${r.method} ${r.group}`
@@ -2065,6 +2081,14 @@ $("specButton").onclick = () => open("spec");
 $("gitButton").onclick = () => open("git");
 $("runnerButton").onclick = () => open("runner");
 $("saveWorkspace").onclick = save;
+$("toggleTreeCollapse").onclick = () => {
+  if (isTreeFullyCollapsed(state.collections, collapsed)) {
+    expandEntireTree(collapsed);
+  } else {
+    collapseEntireTree(state.collections, collapsed);
+  }
+  renderTree();
+};
 $("search").oninput = renderTree;
 $("searchButton").onclick = () => $("search").focus();
 $("environmentSelect").onchange = (e) => {
