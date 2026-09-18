@@ -1389,6 +1389,7 @@ function realtimeRequestView(col, r) {
 function requestView(col, r) {
   if (!r) return el("p", { text: "Request no longer exists." });
   r = drafts.get(col.id, r);
+  if ((r.type || "http") !== "http") return realtimeRequestView(col, r);
   const id = col.id + r.id,
     current = subtabs.get(id) || "params";
   const root = el("div", { class: "request-view", "data-view": "request" });
@@ -1707,6 +1708,11 @@ function requestMenu(col, r) {
             "Delete Request",
             el("p", { text: "Delete " + r.name + " from this collection?" }),
             () => {
+              const realtime = realtimeSessions.get(realtimeKey(col, r));
+              if (realtime?.id)
+                api["realtime-close"](realtime.id).catch(() => {});
+              if (realtime?.id) realtimeById.delete(realtime.id);
+              realtimeSessions.delete(realtimeKey(col, r));
               col.requests = col.requests.filter((x) => x.id !== r.id);
               drafts.discard(col.id, r.id);
               state.tabs = state.tabs.filter(
@@ -1865,8 +1871,13 @@ async function sendRequest(
   fixedEnvironment = null,
   fixedInterceptors = null,
 ) {
-  if (busy && !fromRunner) return;
   if (!fromRunner) r = drafts.get(col.id, r);
+  if ((r.type || "http") !== "http") {
+    if (fromRunner)
+      throw Error("실시간 요청은 Collection Runner에서 실행할 수 없습니다.");
+    return toggleRealtimeConnection(col, r);
+  }
+  if (busy && !fromRunner) return;
   const environment = structuredClone(fixedEnvironment || env(col));
   if (!fromRunner) {
     busy = true;
