@@ -267,7 +267,7 @@ function collectionMenu(col) {
       $("dialog").close();
       open("spec", null, col);
     }),
-    button("Run Collection", () => {
+    button("Ride", () => {
       $("dialog").close();
       open("runner", null, col);
     }),
@@ -453,7 +453,7 @@ function tabTitle(t) {
     overview: "⬡ Collection",
     environments: "▤ Environments",
     spec: "♧ API Specs",
-    runner: "▷ Runner",
+    runner: "▷ Ride",
     git: "⑂ Git",
     scripts: "⚡ Interceptors",
     folder: "▱ " + t.id,
@@ -694,7 +694,7 @@ function overview(col) {
       "API",
       "Requests",
       col.requests.length + " requests in this collection",
-      "Run collection",
+      "Ride",
       () => open("runner"),
     ],
     [
@@ -767,7 +767,7 @@ function overview(col) {
       {},
       [
         "Extract response values in the request Vars tab.",
-        "Run login before protected requests in Collection Runner.",
+        "Run login before protected requests in Ride.",
         "Inspect response assertions in the Tests tab.",
       ].map((text) => el("li", { text })),
     ),
@@ -1918,7 +1918,7 @@ async function sendRequest(
   if (!fromRunner) r = drafts.get(col.id, r);
   if ((r.type || "http") !== "http") {
     if (fromRunner)
-      throw Error("실시간 요청은 Collection Runner에서 실행할 수 없습니다.");
+      throw Error("실시간 요청은 Ride에서 실행할 수 없습니다.");
     return toggleRealtimeConnection(col, r);
   }
   if (busy && !fromRunner) return;
