@@ -545,11 +545,40 @@ th:last-child {
   color: #d0d0d0;
   font-weight: 500;
 }
+.request-heading-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .request-heading button {
   border: 0;
   font-size: 11px;
-  margin-left: auto;
-  padding: 0;
+  margin-left: 0;
+}
+.request-heading-actions .request-save,
+.request-heading-actions .request-menu {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid #343840;
+  border-radius: 7px;
+  background: #17191e;
+}
+.request-heading-actions .request-save {
+  color: var(--gold);
+}
+.request-heading-actions .request-save:hover,
+.request-heading-actions .request-menu:hover {
+  border-color: #4a4f59;
+  background: #1d2026;
+}
+.request-heading-actions .request-menu {
+  width: 30px;
+  padding-inline: 0;
 }
 .urlbar {
   display: flex;
