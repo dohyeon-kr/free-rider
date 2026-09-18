@@ -1,36 +1,81 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-test("execution list is ordered independently and excludes without deleting requests", async () => {
-  const {runPlan,addToRun,executionRequests} = await import("../src/ui/run-plan.mjs");
-  const col={requests:[{id:"a",url:"/a"},{id:"b",url:"/b"}]};
-  const plan=runPlan(col);
-  plan.reverse(); plan.forEach(x=>x.enabled=true);
-  assert.deepEqual(executionRequests(col).map(x=>x.id),["b","a"]);
-  assert.deepEqual(col.requests.map(x=>x.id),["a","b"]);
-  col.runPlan=plan.filter(x=>x.id!=="a");
-  assert.equal(col.requests.length,2);
-  addToRun(col,["a","a","missing"]);
-  assert.deepEqual(col.runPlan.map(x=>x.id),["b","a"]);
-  const snapshot=executionRequests(col);
-  col.requests[0].url="/changed";
-  assert.equal(snapshot[1].url,"/a");
-  const restored=JSON.parse(JSON.stringify(col));
-  assert.deepEqual(executionRequests(restored).map(x=>x.id),["b","a"]);
-  col.requests=col.requests.filter(x=>x.id!=="a");
-  assert.deepEqual(runPlan(col).map(x=>x.id),["b"]);
+
+test("Ride stores multiple ordered scenarios and allows duplicate endpoints", async () => {
+  const {
+    rides,
+    activeRide,
+    createRide,
+    insertRideStep,
+    moveRideStep,
+    removeRideStep,
+    executionSteps,
+  } = await import("../src/ui/run-plan.mjs");
+
+  const col = {
+    requests: [
+      { id: "login", type: "http", url: "/login" },
+      { id: "me", type: "http", url: "/me" },
+    ],
+  };
+
+  const first = activeRide(col);
+  insertRideStep(col, first.id, "login");
+  const firstMe = insertRideStep(col, first.id, "me");
+  insertRideStep(col, first.id, "me");
+
+  assert.deepEqual(
+    executionSteps(col).map(({ request }) => request.id),
+    ["login", "me", "me"],
+  );
+
+  moveRideStep(col, first.id, firstMe.id, -1);
+  assert.deepEqual(
+    executionSteps(col).map(({ request }) => request.id),
+    ["me", "login", "me"],
+  );
+
+  const second = createRide(col, "Create and verify");
+  insertRideStep(col, second.id, "login");
+  assert.equal(rides(col).length, 2);
+  assert.equal(activeRide(col).name, "Create and verify");
+
+  removeRideStep(col, second.id, second.steps[0].id);
+  assert.equal(executionSteps(col).length, 0);
 });
 
+test("legacy runPlan migrates enabled HTTP requests into the first Ride", async () => {
+  const { rides, executionSteps } = await import("../src/ui/run-plan.mjs");
+  const col = {
+    requests: [
+      { id: "a", type: "http", url: "/a" },
+      { id: "b", type: "http", url: "/b" },
+      { id: "ws", type: "websocket", url: "ws://localhost" },
+    ],
+    runPlan: [
+      { id: "a", enabled: true },
+      { id: "b", enabled: false },
+      { id: "ws", enabled: true },
+    ],
+    stopOnFailure: false,
+  };
 
-test("runner excludes SSE and WebSocket requests", async () => {
-  const {runPlan,addToRun,executionRequests} = await import("../src/ui/run-plan.mjs");
-  const col={requests:[
-    {id:"http",type:"http",url:"/"},
-    {id:"sse",type:"sse",url:"/events"},
-    {id:"ws",type:"websocket",url:"ws://localhost"},
-  ]};
-  assert.deepEqual(runPlan(col).map(x=>x.id),["http"]);
-  addToRun(col,["sse","ws"]);
-  assert.deepEqual(col.runPlan.map(x=>x.id),["http"]);
-  col.runPlan[0].enabled=true;
-  assert.deepEqual(executionRequests(col).map(x=>x.id),["http"]);
+  const [ride] = rides(col);
+  assert.equal(ride.stopOnFailure, false);
+  assert.deepEqual(
+    executionSteps(col).map(({ request }) => request.id),
+    ["a"],
+  );
+  assert.equal("runPlan" in col, false);
+  assert.equal("stopOnFailure" in col, false);
+});
+
+test("Ride drops steps whose requests no longer exist", async () => {
+  const { activeRide, insertRideStep, executionSteps } = await import("../src/ui/run-plan.mjs");
+  const col = { requests: [{ id: "a", url: "/a" }] };
+  const ride = activeRide(col);
+  insertRideStep(col, ride.id, "a");
+  col.requests = [];
+  assert.deepEqual(executionSteps(col), []);
+  assert.equal(activeRide(col).steps.length, 0);
 });

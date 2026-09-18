@@ -53,7 +53,6 @@ function fixture() {
     body: "",
     manual: true,
     authConfig: { type: "inherit" },
-    assertions: [],
     ...extra,
   });
   return {
@@ -74,16 +73,7 @@ function fixture() {
             authConfig: { type: "none" },
             extract: { token: "token" },
           }),
-          req("me", "Current user", "GET", "{{baseUrl}}/me", "users", {
-            assertions: [
-              {
-                expression: "res.status",
-                operator: "equals",
-                value: "200",
-                enabled: true,
-              },
-            ],
-          }),
+          req("me", "Current user", "GET", "{{baseUrl}}/me", "users"),
           req(
             "list",
             "List notifications",
@@ -140,28 +130,28 @@ async function run(win) {
   await screenshot("scripts");
   await js(`document.querySelector('#collectionHome').click()`);
   await screenshot("collection");
-  await js(`document.querySelector('#runnerButton').click(); document.querySelector('[data-exclude="list"]').click()`);
-  if ((await js(`document.querySelectorAll('[data-view=runner] .run-item').length`)) !== 4) throw Error("Run exclude failed");
-  await js(`document.querySelector('#addEndpoints').click(); document.querySelector('.endpoint-picker input:not(:disabled)').click(); document.querySelector('#dialogConfirm').click()`);
+  await js(`document.querySelector('#runnerButton').click(); document.querySelector('#addEndpoints').click()`);
+  await js(`(() => { const search=document.querySelector('.ride-insert-palette input'); search.value='Login'; search.dispatchEvent(new Event('input',{bubbles:true})); [...document.querySelectorAll('.endpoint-insert-item')].find(b=>b.textContent.includes('Login')).click(); search.value='Current user'; search.dispatchEvent(new Event('input',{bubbles:true})); [...document.querySelectorAll('.endpoint-insert-item')].find(b=>b.textContent.includes('Current user')).click(); document.querySelector('#dialogConfirm').click(); })()`);
   await poll(() => js(`!document.querySelector('#dialog').open`));
-  if ((await js(`document.querySelectorAll('[data-view=runner] .run-item').length`)) !== 5) throw Error("Run add failed");
-  await js(`document.querySelectorAll('[data-view=runner] .run-item input[type=checkbox]')[4].click()`);
-  await js(
-    `document.querySelector('#runnerButton').click(); document.querySelectorAll('[data-view=runner] .run-item input[type=checkbox]')[0].click(); document.querySelectorAll('[data-view=runner] .run-item input[type=checkbox]')[1].click();document.querySelector('#runSelected').click();`,
-  );
-  await poll(() =>
-    js(
-      `document.querySelector('#status').textContent.includes('2/2 requests')`,
-    ),
-  );
+  if ((await js(`document.querySelectorAll('[data-view=runner] .ride-step').length`)) !== 2)
+    throw Error("Ride insert palette failed");
+  await js(`document.querySelector('#runSelected').click()`);
+  await poll(() => js(`document.querySelector('#status').textContent.includes('2/2 steps')`));
   await screenshot("runner");
   const statuses = await js(
-    `[...document.querySelectorAll('[data-view=runner] .run-item .result')].slice(0,2).map(e=>e.textContent)`,
+    `[...document.querySelectorAll('[data-view=runner] .ride-step .result')].map(e=>e.textContent)`,
   );
-  if (!statuses.every((s) => s.startsWith("200")))
-    throw Error("Login chain failed: " + statuses);
+  if (!statuses.every((s) => s.startsWith("PASS")))
+    throw Error("Ride login chain failed: " + statuses);
+  if (!(await js(`document.querySelector('.ride-summary')?.textContent.includes('PASS')`)))
+    throw Error("Ride summary did not pass");
   if (!(await js(`document.querySelector('#networkButton')?.textContent.includes('2')`)))
-    throw Error("Network history did not receive runner requests");
+    throw Error("Network history did not receive Ride requests");
+  await js(`document.querySelector('#newRide').click(); const name=document.querySelector('#dialogName'); name.value='Notifications smoke'; name.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('#dialogConfirm').click()`);
+  await poll(() => js(`!document.querySelector('#dialog').open`));
+  if ((await js(`document.querySelectorAll('#rideSelect option').length`)) !== 2)
+    throw Error("Multiple Rides were not created");
+  await js(`document.querySelector('#rideSelect').selectedIndex=0; document.querySelector('#rideSelect').dispatchEvent(new Event('change',{bubbles:true}))`);
   await js(`document.querySelector('#networkButton').click()`);
   if (!(await js(`!document.querySelector('#networkDrawer').hidden && document.querySelectorAll('#networkDrawer .network-entry').length >= 2`)))
     throw Error("Network panel did not render request history");
@@ -302,8 +292,10 @@ async function run(win) {
   if(!(await js(`document.querySelector('[data-view=scripts] input[type=checkbox]').checked && document.querySelector('[aria-label="Before Request Interceptor"]').value.includes('X-Global')`)))
     throw Error("Collection interceptors were not restored from disk");
   await js(`document.querySelector('#runnerButton').click()`);
-  if((await js(`document.querySelectorAll('[data-view=runner] .run-item').length`))!==5)
-    throw Error("Execution list was not restored from disk");
+  if((await js(`document.querySelectorAll('#rideSelect option').length`))!==2)
+    throw Error("Ride scenarios were not restored from disk");
+  if((await js(`document.querySelectorAll('[data-view=runner] .ride-step').length`))!==2)
+    throw Error("Ride steps were not restored from disk");
   await js(`document.querySelector('#gitButton').click();[...document.querySelectorAll('button')].find(b=>b.textContent==='Open repository folder').click()`);
   await poll(()=>js(`document.querySelector('[data-view=git]').textContent.includes('최근 컬렉션 커밋')`));
   await screenshot("git");
@@ -311,7 +303,7 @@ async function run(win) {
   await require("./spec-auth-smoke.cjs").run({ js, poll, baseUrl, win });
   server.close();
   await fs.rm(path.dirname(workspacePath),{recursive:true,force:true});
-  return "Native tabs, Network panel, runner login chain with Cookie Jar, inherited auth, assertions, environments and IPC passed";
+  return "Native tabs, Network panel, Ride login chain with Cookie Jar, multiple scenarios, inherited auth, environments and IPC passed";
   async function screenshot(name) {
     await js(
       "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",

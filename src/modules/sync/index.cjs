@@ -263,7 +263,6 @@ function synchronize(old, generated) {
       "description",
       "method",
       "authConfig",
-      "assertions",
       "vars",
       "bodyType",
     ])

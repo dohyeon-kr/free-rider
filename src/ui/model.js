@@ -46,7 +46,6 @@ export function request(group = "", type = "http") {
     bodyType: "json",
     authConfig: { type: "inherit" },
     extract: {},
-    assertions: [],
     sse: { autoReconnect: true },
     websocket: { protocols: [], autoReconnect: true, messages: [] },
     manual: true,
@@ -72,7 +71,7 @@ export function normalize(c) {
     : collection().environments;
   for (const r of c.requests) {
     if (!REQUEST_TYPES.includes(r.type)) r.type = "http";
-    r.assertions ||= [];
+    delete r.assertions;
     r.vars ||= [];
     r.query ||= [];
     r.headers ||= [];
