@@ -13,7 +13,6 @@ The request editor provides these tabs:
 | Body | String or multipart body |
 | Auth | Bearer / Basic authentication |
 | Vars | Request-scoped variables |
-| Tests | Response assertions |
 | Docs | Request description |
 
 ## URL and HTTP method
