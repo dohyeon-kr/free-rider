@@ -45,9 +45,10 @@ function resolveRequestVariables(request, variables = {}) {
     if (resolving.has(key))
       throw Error(`파라미터 ${key}에 순환 참조가 있습니다.`);
     resolving.add(key);
-    const value = interpolateWith(raw.get(key), (nested) =>
-      raw.has(nested) ? resolveParameter(nested) : interpolate(`{{${nested}}}`, variables),
-    );
+    const value = interpolateWith(raw.get(key), (nested) => {
+      if (nested !== key && raw.has(nested)) return resolveParameter(nested);
+      return interpolate(`{{${nested}}}`, variables);
+    });
     resolving.delete(key);
     resolved[key] = value;
     return value;
