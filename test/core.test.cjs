@@ -134,6 +134,13 @@ test("sync updates generated defaults but preserves edits and removed operations
 });
 test("runner resolves params before variables and does not duplicate path params into query", () => {
   const r = operations(doc)[0];
+  const fallback = prepare(r, {
+    baseUrl: "https://example.com",
+    id: "environment-id",
+    token: "abc",
+  });
+  assert.equal(fallback.url, "https://example.com/users/environment-id?limit=10");
+
   r.query.id = "42";
   const p = prepare(r, {
     baseUrl: "https://example.com",
