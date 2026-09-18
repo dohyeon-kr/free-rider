@@ -270,8 +270,18 @@ async function run(win) {
   await poll(() => js(`!document.querySelector('#dialog').open`));
   if(await js(`document.querySelector('#tree').textContent.includes('Review fixture')`))
     throw Error("Sync undo did not restore previous requests");
-  await js(`document.querySelector('#envButton').click();document.querySelector('#connectEnvFile').click()`);
-  await poll(()=>js(`!!document.querySelector('[aria-label="환경 파일 내용"]')`));
+  await js(`document.querySelector('#envButton').click()`);
+  await poll(()=>js(`(()=>{
+    const view=document.querySelector('[data-view="environments"]');
+    const button=document.querySelector('#connectEnvFile');
+    const workspace=document.querySelector('.workspace');
+    return !!view && !!button && button.getClientRects().length > 0 && !button.disabled && !workspace?.inert;
+  })()`));
+  const envStatus=await js(`document.querySelector('#status').textContent`);
+  await js(`document.querySelector('#connectEnvFile').click()`);
+  await poll(()=>js(`!!document.querySelector('[aria-label="환경 파일 내용"]') || document.querySelector('#status').textContent !== ${JSON.stringify(envStatus)}`));
+  if(!(await js(`!!document.querySelector('[aria-label="환경 파일 내용"]')`)))
+    throw Error("Environment file connection failed: "+await js(`document.querySelector('#status').textContent`));
   await js(`const editor=document.querySelector('[aria-label="환경 파일 내용"]');editor.value='BASE_URL=https://changed.example.com';editor.dispatchEvent(new Event('input',{bubbles:true}));[...document.querySelectorAll('button')].find(b=>b.textContent==='파일 저장').click()`);
   await poll(async()=> (await fs.readFile(envPath,"utf8")).includes("changed.example.com"));
   await screenshot("env-file");
@@ -279,9 +289,9 @@ async function run(win) {
   await poll(()=>js(`!!document.querySelector('#reloadSpecFile')`));
   await js(`document.querySelector('#applySyncSelection').click()`);
   await poll(()=>js(`document.querySelector('#tree').textContent.includes('File endpoint')`));
-  await fs.writeFile(specPath,JSON.stringify({openapi:"3.0.3",info:{title:"File fixture",version:"2"},paths:{"/file-test":{get:{summary:"File endpoint changed",responses:{"200":{description:"OK"}}}}}}));
+  await fs.writeFile(specPath,JSON.stringify({openapi:"3.0.3",info:{title:"File fixture",version:"2"},paths:{"/file-test":{get:{summary:"File endpoint",parameters:[{name:"limit",in:"query",required:false,schema:{type:"integer"}}],responses:{"200":{description:"OK"}}}}}}));
   await js(`document.querySelector('#reloadSpecFile').click()`);
-  await poll(()=>js(`document.querySelector('.sync-review')?.textContent.includes('File endpoint changed')`));
+  await poll(()=>js(`document.querySelector('.sync-review')?.textContent.includes('limit')`));
   await js(`document.querySelector('.sync-change summary').click()`);
   await screenshot("sync");
   await js(`document.querySelector('#saveWorkspace').click()`);
@@ -316,7 +326,8 @@ async function run(win) {
   }
 }
 async function poll(fn) {
-  for (let i = 0; i < 100; i++) {
+  const attempts = process.env.CI ? 300 : 100;
+  for (let i = 0; i < attempts; i++) {
     if (await fn()) return;
     await new Promise((r) => setTimeout(r, 100));
   }

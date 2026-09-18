@@ -10,17 +10,10 @@ function addReason(reasons,code,key,message) {
 function parameterMap(request) {
   return new Map((request?.openapi?.parameters || []).map(parameter=>[`${parameter.in || ""}:${parameter.name || ""}`,parameter]));
 }
-function removedEnumValues(before,after) {
-  if(!Array.isArray(before?.enum)||!Array.isArray(after?.enum)) return [];
-  return before.enum.filter(value=>!after.enum.some(next=>equal(value,next)));
-}
 function requestSchemaBreaks(before,after,path,reasons,context="request") {
   if(!object(before)||!object(after)) return;
   if(before.type&&after.type&&before.type!==after.type)
     addReason(reasons,context==="parameter"?"parameter-type-changed":"request-schema-type-changed",pointer(path),`요청 스키마 타입이 ${before.type}에서 ${after.type}(으)로 변경됩니다.`);
-  const removed=removedEnumValues(before,after);
-  if(removed.length)
-    addReason(reasons,context==="parameter"?"parameter-enum-narrowed":"request-enum-narrowed",pointer(path),`허용 값이 줄어듭니다: ${removed.map(value=>JSON.stringify(value)).join(", ")}`);
   const beforeRequired=new Set(Array.isArray(before.required)?before.required:[]);
   for(const name of Array.isArray(after.required)?after.required:[]) if(!beforeRequired.has(name))
     addReason(reasons,"request-property-became-required",pointer([...path,"required"]),`요청 속성 ${name}이(가) 필수가 됩니다.`);
@@ -102,15 +95,106 @@ function comparable(request) {
   }
   return value;
 }
-function differences(base,local,next,path,fields) {
+function schemaShape(schema) {
+  if(schema===true||schema===false) return schema;
+  if(!object(schema)) return {};
+  const shape={};
+  for(const key of ["type","format","nullable"]) if(schema[key]!==undefined) shape[key]=schema[key];
+  if(object(schema.properties))
+    shape.properties=Object.fromEntries(Object.keys(schema.properties).sort().map(name=>[name,schemaShape(schema.properties[name])]));
+  if(Array.isArray(schema.required)) shape.required=[...schema.required].sort();
+  if(schema.items!==undefined) shape.items=schemaShape(schema.items);
+  if(Array.isArray(schema.prefixItems)) shape.prefixItems=schema.prefixItems.map(schemaShape);
+  for(const key of ["allOf","oneOf","anyOf"]) if(Array.isArray(schema[key])) {
+    shape[key]=schema[key].map(schemaShape).sort((a,b)=>JSON.stringify(canonical(a)).localeCompare(JSON.stringify(canonical(b))));
+  }
+  if(schema.not!==undefined) shape.not=schemaShape(schema.not);
+  if(schema.additionalProperties!==undefined)
+    shape.additionalProperties=object(schema.additionalProperties)?schemaShape(schema.additionalProperties):schema.additionalProperties;
+  return shape;
+}
+function mediaShape(media) {
+  return {schema:schemaShape(object(media?.schema)?media.schema:{})};
+}
+function openapiShape(openapi) {
+  const shape={
+    path:openapi?.path || "",
+    method:openapi?.method || "",
+    parameters:(openapi?.parameters || []).map(parameter=>({
+      name:parameter?.name || "",
+      in:parameter?.in || "",
+      required:parameter?.required===true,
+      schema:schemaShape(parameter?.schema || {})
+    })).sort((a,b)=>`${a.in}:${a.name}`.localeCompare(`${b.in}:${b.name}`))
+  };
+  if(object(openapi?.requestBody)) {
+    const content=Object.fromEntries(Object.keys(openapi.requestBody.content || {}).sort().map(mime=>[
+      mime,
+      mediaShape(openapi.requestBody.content[mime])
+    ]));
+    shape.requestBody={required:openapi.requestBody.required===true,content};
+  }
+  return shape;
+}
+function responseShape(responses) {
+  const shape={};
+  for(const status of Object.keys(responses || {}).sort()) {
+    const response=object(responses[status])?responses[status]:{};
+    const next={};
+    if(object(response.headers)) {
+      next.headers=Object.fromEntries(Object.keys(response.headers).sort().map(name=>[
+        name.toLowerCase(),
+        mediaShape(response.headers[name])
+      ]));
+    }
+    if(object(response.content)) {
+      next.content=Object.fromEntries(Object.keys(response.content).sort().map(mime=>[
+        mime,
+        mediaShape(response.content[mime])
+      ]));
+    }
+    shape[status]=next;
+  }
+  return shape;
+}
+function inputShape(groups) {
+  return Object.fromEntries(Object.keys(groups || {}).sort().map(key=>[
+    key,
+    Array.isArray(groups[key])?groups[key].length:0
+  ]));
+}
+function structuralComparable(request) {
+  const shape={};
+  for(const key of ["type","method","auth","bodyType"]) if(request?.[key]!==undefined) shape[key]=request[key];
+  if(request?.query) shape.query=inputShape(request.query);
+  if(request?.headers) shape.headers=inputShape(request.headers);
+  if(request?.openapi) shape.openapi=openapiShape(request.openapi);
+  if(request?.responses) shape.responses=responseShape(request.responses);
+  return shape;
+}
+function at(value,path) {
+  let current=value;
+  for(const key of path) {
+    if(current===undefined||current===null) return undefined;
+    current=current[key];
+  }
+  return current;
+}
+function differences(base,local,next,path,fields,actual) {
   if(equal(base,next)) return;
   if(object(base) && object(next) && object(local)) {
     for(const key of new Set([...Object.keys(base),...Object.keys(next)]))
-      differences(base[key],local[key],next[key],[...path,key],fields);
+      differences(base[key],local[key],next[key],[...path,key],fields,actual);
     return;
   }
-  fields.push({key:pointer(path),path,
-    before:base,local,incoming:next,conflict:!equal(local,base)&&!equal(local,next)});
+  fields.push({
+    key:pointer(path),
+    path,
+    before:at(actual.base,path),
+    local:at(actual.current,path),
+    incoming:at(actual.next,path),
+    conflict:!equal(local,base)&&!equal(local,next)
+  });
 }
 function put(value,path,next) {
   let target=value;
@@ -135,10 +219,10 @@ export function preview(old, generated) {
       continue;
     }
     const base=comparable(local.baseline || {}), current=comparable(local), normalizedNext=comparable(next);
+    const baseShape=structuralComparable(base), currentShape=structuralComparable(current), nextShape=structuralComparable(normalizedNext);
     const fields=[];
-    for(const key of new Set([...Object.keys(base),...Object.keys(normalizedNext)]))
-      if(!["id","baseline","manual","removed"].includes(key))
-        differences(base[key],current[key],normalizedNext[key],[key],fields);
+    for(const key of new Set([...Object.keys(baseShape),...Object.keys(nextShape)]))
+      differences(baseShape[key],currentShape[key],nextShape[key],[key],fields,{base,current:current,next:normalizedNext});
     if(fields.length) changes.push(withBreaking({id:local.id,type:"updated",local,incoming:next,fields},local.baseline?classifyBreaking(local.baseline,next):[]));
   }
   for(const next of incoming.values()) changes.push(withBreaking({id:next.id,type:"added",incoming:next,fields:[]},[]));

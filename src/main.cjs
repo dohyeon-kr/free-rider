@@ -73,7 +73,9 @@ function handle(name, fn) {
 async function chooseOpen(options) {
   if(process.argv.includes("--smoke-test")) {
     const fixture=require("./smoke.cjs").chooseFile(options);
-    if(fixture)return {canceled:false,filePaths:[fixture]};
+    if(!fixture) throw Error(`Smoke file chooser has no fixture for ${options.title || options.filters?.[0]?.name || options.properties?.join(",") || "unknown"}`);
+    console.log("[smoke] file chooser", options.title || options.filters?.[0]?.name || options.properties?.join(","), fixture);
+    return {canceled:false,filePaths:[fixture]};
   }
   return dialog.showOpenDialog(win,options);
 }
