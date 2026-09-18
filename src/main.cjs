@@ -27,7 +27,10 @@ const {
   assertions,
   rows,
 } = require("./modules/runner/context.cjs");
-const { interpolate } = require("./modules/runner/request.cjs");
+const {
+  interpolate,
+  resolveRequestTarget,
+} = require("./modules/runner/request.cjs");
 const { EnvironmentFiles } = require("./modules/env/files.cjs");
 const { createUpdateController } = require("./modules/update/index.cjs");
 const environmentFiles = new EnvironmentFiles();
@@ -274,26 +277,29 @@ function prepareRealtimeRequest(request, environment, collection) {
     id: (collection?.id || "default") + ":" + (environment?.id || "default"),
   };
   const vars = runtime.resolve(scope);
-  const url = new URL(interpolate(context.request.url || "", vars));
-  for (const [key, value] of rows(context.request.query))
-    if (value !== "") url.searchParams.append(key, interpolate(value, vars));
+  const target = resolveRequestTarget(context.request, vars);
+  const scopedVariables = target.variables;
+  const url = new URL(target.url);
+  for (const parameter of target.parameters)
+    if (parameter.location !== "path")
+      url.searchParams.append(parameter.key, parameter.value);
   const headers = Object.fromEntries(
     rows(context.request.headers).map(([key, value]) => [
       key,
-      interpolate(value, vars),
+      interpolate(value, scopedVariables),
     ]),
   );
   const auth = context.request.authConfig;
   if (auth?.type === "bearer")
     headers.Authorization =
-      "Bearer " + interpolate(auth.token || "{{token}}", vars);
+      "Bearer " + interpolate(auth.token || "{{token}}", scopedVariables);
   if (auth?.type === "basic")
     headers.Authorization =
       "Basic " +
       Buffer.from(
-        interpolate(auth.username || "", vars) +
+        interpolate(auth.username || "", scopedVariables) +
           ":" +
-          interpolate(auth.password || "", vars),
+          interpolate(auth.password || "", scopedVariables),
       ).toString("base64");
   return { url: url.toString(), headers };
 }
