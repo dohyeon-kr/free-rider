@@ -281,7 +281,12 @@ async function run(win) {
   if(await js(`document.querySelector('#tree').textContent.includes('Review fixture')`))
     throw Error("Sync undo did not restore previous requests");
   await js(`document.querySelector('#envButton').click()`);
-  await poll(()=>js(`document.querySelector('#connectEnvFile')?.getClientRects().length > 0`));
+  await poll(()=>js(`{
+    const view=document.querySelector('[data-view="environments"]');
+    const button=document.querySelector('#connectEnvFile');
+    const workspace=document.querySelector('.workspace');
+    return !!view && !!button && button.getClientRects().length > 0 && !button.disabled && !workspace?.inert;
+  }`));
   const envStatus=await js(`document.querySelector('#status').textContent`);
   await js(`document.querySelector('#connectEnvFile').click()`);
   await poll(()=>js(`!!document.querySelector('[aria-label="환경 파일 내용"]') || document.querySelector('#status').textContent !== ${JSON.stringify(envStatus)}`));
