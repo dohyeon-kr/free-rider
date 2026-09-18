@@ -2234,19 +2234,26 @@ async function saveCollectionTransaction(col,next) {
   await api["set-dirty"](state.collections.some(c=>c.requests.some(r=>drafts.changed(c.id,r))));
 }
 async function applySync(col, result, selected) {
-  rides(col);
   const next=structuredClone(col);
   next.syncUndo={
     requests:structuredClone(col.requests),
-    rides:structuredClone(col.rides || []),
-    activeRideId:col.activeRideId,
     title:col.title,
     lastSync:col.lastSync || ""
   };
+  if(Array.isArray(col.rides)) {
+    next.syncUndo.rides=structuredClone(col.rides);
+    next.syncUndo.activeRideId=col.activeRideId;
+  }
+  if(Array.isArray(col.runPlan)) {
+    next.syncUndo.runPlan=structuredClone(col.runPlan);
+    next.syncUndo.stopOnFailure=!!col.stopOnFailure;
+  }
   next.requests=result.requests;
   if(!col.requests.length) next.title=result.title || col.title;
   for(const ride of next.rides || [])
     ride.steps=(ride.steps || []).filter(step=>next.requests.some(r=>r.id===step.requestId));
+  if(next.runPlan)
+    next.runPlan=next.runPlan.filter(item=>next.requests.some(r=>r.id===item.id));
   const n=result.counts;
   const changesApplied = hasSyncChanges(col, next);
   next.lastSync=new Date().toLocaleString()+" · "+n.added+" 추가 · "+n.updated+" 수정 · "+n.removed+" 삭제";
