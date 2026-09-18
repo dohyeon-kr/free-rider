@@ -894,7 +894,10 @@ function realtimeState(col, r) {
       connected: false,
       events: [],
       paused: false,
+      autoScroll: true,
+      filter: "",
       message: "",
+      messageFormat: "json",
       startedAt: 0,
     };
     realtimeSessions.set(key, value);
@@ -973,6 +976,54 @@ function realtimeRoot(key) {
   );
 }
 
+function realtimeEventMatches(event, session) {
+  const query = String(session.filter || "").trim().toLowerCase();
+  if (!query) return true;
+  return [
+    event.type,
+    event.event,
+    event.data,
+    event.message,
+    event.reason,
+  ]
+    .filter((value) => value != null)
+    .some((value) => String(value).toLowerCase().includes(query));
+}
+
+function realtimeStatsText(session) {
+  const messages = session.events.filter((event) =>
+    ["message", "sent"].includes(event.type),
+  );
+  const bytes = messages.reduce((total, event) => total + Number(event.bytes || 0), 0);
+  const elapsed = session.startedAt ? Math.max(0, Date.now() - session.startedAt) : 0;
+  const seconds = Math.floor(elapsed / 1000);
+  const duration =
+    seconds >= 60
+      ? Math.floor(seconds / 60) + "m " + (seconds % 60) + "s"
+      : seconds + "s";
+  return (
+    messages.length.toLocaleString() +
+    (session.kind === "sse" ? " events" : " messages") +
+    " · " +
+    bytes.toLocaleString() +
+    " B" +
+    (session.startedAt ? " · " + duration : "")
+  );
+}
+
+function redrawRealtimeLog(session) {
+  const list = realtimeRoot(session.key)?.querySelector(
+    "[data-role='realtime-log']",
+  );
+  if (!list) return;
+  list.replaceChildren(
+    ...session.events
+      .filter((event) => realtimeEventMatches(event, session))
+      .map((event) => realtimeEventElement(event, session.kind)),
+  );
+  if (session.autoScroll) list.scrollTop = list.scrollHeight;
+}
+
 function refreshRealtimeDom(key, event = null) {
   const session = realtimeSessions.get(key);
   const root = realtimeRoot(key);
@@ -997,18 +1048,16 @@ function refreshRealtimeDom(key, event = null) {
   if (connectButton)
     connectButton.textContent = session.id ? "연결 끊기" : "연결";
   if (sendButton) sendButton.disabled = !session.connected;
-  if (countNode) {
-    const count = session.events.filter((item) =>
-      ["message", "sent"].includes(item.type),
-    ).length;
-    countNode.textContent =
-      count.toLocaleString() +
-      (session.kind === "sse" ? " events" : " messages");
-  }
-  if (event && list && !session.paused) {
+  if (countNode) countNode.textContent = realtimeStatsText(session);
+  if (
+    event &&
+    list &&
+    !session.paused &&
+    realtimeEventMatches(event, session)
+  ) {
     list.append(realtimeEventElement(event, session.kind));
     while (list.children.length > 300) list.firstElementChild?.remove();
-    list.scrollTop = list.scrollHeight;
+    if (session.autoScroll) list.scrollTop = list.scrollHeight;
   }
 }
 
@@ -1082,11 +1131,28 @@ async function toggleRealtimeConnection(col, r) {
   }
 }
 
-async function sendRealtimeMessage(col, r) {
+async function sendRealtimePayload(col, r, payload, format = "text") {
   const session = realtimeState(col, r);
   if (!session.id || !session.connected)
     throw Error("WebSocket 연결이 열려 있지 않습니다.");
-  await api["realtime-send"](session.id, session.message);
+  if (format === "json" && String(payload).trim()) {
+    try {
+      JSON.parse(payload);
+    } catch {
+      throw Error("JSON 메시지 형식이 올바르지 않습니다.");
+    }
+  }
+  await api["realtime-send"](session.id, String(payload ?? ""));
+}
+
+async function sendRealtimeMessage(col, r) {
+  const session = realtimeState(col, r);
+  await sendRealtimePayload(
+    col,
+    r,
+    session.message,
+    session.messageFormat || "text",
+  );
   session.message = "";
   const composer = realtimeRoot(session.key)?.querySelector(
     "[data-role='realtime-message']",
