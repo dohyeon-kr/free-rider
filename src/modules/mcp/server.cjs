@@ -63,6 +63,144 @@ function interceptorPatch(args = {}) {
   return patch;
 }
 
+const REDACTED = "[REDACTED]";
+const SENSITIVE_HEADER_NAMES = new Set([
+  "authorization",
+  "proxy-authorization",
+  "cookie",
+  "set-cookie",
+  "x-api-key",
+  "x-auth-token",
+  "x-access-token",
+  "api-key",
+]);
+const SENSITIVE_FIELD_NAME =
+  /(^|[_-])(password|passwd|token|secret|api[_-]?key|authorization|credential|signature)([_-]|$)/i;
+
+function redactHeaders(headers) {
+  if (Array.isArray(headers))
+    return headers.map((entry) => {
+      if (!Array.isArray(entry) || entry.length < 2) return entry;
+      return [
+        entry[0],
+        SENSITIVE_HEADER_NAMES.has(String(entry[0]).toLowerCase()) ? REDACTED : entry[1],
+      ];
+    });
+  if (!headers || typeof headers !== "object") return headers || {};
+  return Object.fromEntries(
+    Object.entries(headers).map(([name, value]) => [
+      name,
+      SENSITIVE_HEADER_NAMES.has(name.toLowerCase()) ? REDACTED : value,
+    ]),
+  );
+}
+
+function redactObject(value) {
+  if (Array.isArray(value)) return value.map(redactObject);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      SENSITIVE_FIELD_NAME.test(key) ? REDACTED : redactObject(item),
+    ]),
+  );
+}
+
+function redactBody(body) {
+  if (body && typeof body === "object") return redactObject(body);
+  if (typeof body !== "string") return body;
+  const trimmed = body.trim();
+  if (!trimmed || !["{", "["].includes(trimmed[0])) return body;
+  try {
+    return JSON.stringify(redactObject(JSON.parse(body)), null, 2);
+  } catch {
+    return body;
+  }
+}
+
+function redactUrl(value) {
+  const text = String(value || "");
+  try {
+    const url = new URL(text);
+    for (const name of [...url.searchParams.keys()])
+      if (SENSITIVE_FIELD_NAME.test(name)) url.searchParams.set(name, REDACTED);
+    return url.href;
+  } catch {
+    return text;
+  }
+}
+
+function redactCookieList(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((cookie) => {
+    if (typeof cookie === "string") return REDACTED;
+    if (!cookie || typeof cookie !== "object") return cookie;
+    return { ...cookie, value: REDACTED };
+  });
+}
+
+function redactNetworkEntry(entry) {
+  const safe = structuredClone(entry || {});
+  safe.request = {
+    ...(safe.request || {}),
+    url: redactUrl(safe.request?.url),
+    headers: redactHeaders(safe.request?.headers),
+    body: redactBody(safe.request?.body),
+  };
+  safe.response = {
+    ...(safe.response || {}),
+    headers: redactHeaders(safe.response?.headers),
+    body: redactBody(safe.response?.body),
+  };
+  safe.cookies = {
+    request: redactCookieList(safe.cookies?.request),
+    current: redactCookieList(safe.cookies?.current),
+    setCookie: redactCookieList(safe.cookies?.setCookie),
+  };
+  safe.sensitiveFieldsRedacted = true;
+  return safe;
+}
+
+function historyEntries(entries, args = {}) {
+  let result = Array.isArray(entries) ? entries : [];
+  const collectionId = typeof args.collectionId === "string" ? args.collectionId.trim() : "";
+  const requestId = typeof args.requestId === "string" ? args.requestId.trim() : "";
+  const method = typeof args.method === "string" ? args.method.trim().toUpperCase() : "";
+  const search = typeof args.search === "string" ? args.search.trim().toLowerCase() : "";
+
+  if (collectionId) result = result.filter((entry) => entry.collectionId === collectionId);
+  if (requestId) result = result.filter((entry) => entry.requestId === requestId);
+  if (method)
+    result = result.filter(
+      (entry) => String(entry.request?.method || "").toUpperCase() === method,
+    );
+  if (args.status !== undefined) {
+    const status = Number(args.status);
+    if (!Number.isInteger(status) || status < 0 || status > 599)
+      throw Error("status must be an integer between 0 and 599.");
+    result = result.filter((entry) => Number(entry.response?.status || 0) === status);
+  }
+  if (args.since !== undefined) {
+    const since = Number(args.since);
+    if (!Number.isFinite(since) || since < 0)
+      throw Error("since must be a non-negative timestamp in milliseconds.");
+    result = result.filter((entry) => Number(entry.at || 0) >= since);
+  }
+  if (search)
+    result = result.filter((entry) =>
+      [
+        entry.name,
+        entry.collectionTitle,
+        entry.collectionId,
+        entry.requestId,
+        entry.request?.url,
+        entry.response?.error,
+      ]
+        .some((value) => String(value || "").toLowerCase().includes(search)),
+    );
+  return result;
+}
+
 function toolDefinitions() {
   return [
     {
@@ -139,16 +277,26 @@ function toolDefinitions() {
     },
     {
       name: "list_network_history",
-      description: "List recent Free Rider network history as compact summaries. Use get_network_entry for full details.",
+      description:
+        "List recent Free Rider Network-tab history as compact summaries. Supports collection/request/method/status/time/text filters. Use get_network_entry for redacted details.",
       inputSchema: {
         type: "object",
-        properties: { limit: { type: "integer", minimum: 1, maximum: 200 } },
+        properties: {
+          limit: { type: "integer", minimum: 1, maximum: 200 },
+          collectionId: { type: "string" },
+          requestId: { type: "string" },
+          method: { type: "string" },
+          status: { type: "integer", minimum: 0, maximum: 599 },
+          since: { type: "number", minimum: 0 },
+          search: { type: "string" },
+        },
         additionalProperties: false,
       },
     },
     {
       name: "get_network_entry",
-      description: "Read one full Free Rider network-history entry by id.",
+      description:
+        "Read one Free Rider Network-tab history entry by id. Authorization, cookies, API keys, credential-like query parameters and JSON credential fields are redacted.",
       inputSchema: {
         type: "object",
         properties: { id: { type: "string" } },
@@ -182,6 +330,8 @@ function createMcpServer(options) {
     "Free Rider exposes the saved API workspace and recent network history. " +
     "Use list tools before selecting ids. Environment values are not returned by list tools. " +
     "Read collection interceptors before patching them; interceptor writes require the app to have no unsaved UI changes. " +
+    "OpenAPI sources can be inspected, linked, unlinked, reviewed, and selectively applied; source writes require a saved workspace. " +
+    "Network history details redact common credentials, cookies, API keys, and token-like fields. " +
     "Use review_openapi before apply_openapi_review and resolve every selected conflict explicitly.";
 
   function stamp(result, modern, cacheable = false) {
@@ -227,6 +377,12 @@ function createMcpServer(options) {
         description: collection.description || "",
         requestCount: collection.requests?.length || 0,
         interceptorsEnabled: interceptorsFor(state, collection).enabled,
+        openApiLinked: !!(collection.sourceFile || String(collection.source || "").trim()),
+        openApiSourceType: collection.sourceFile
+          ? "file"
+          : String(collection.source || "").trim()
+            ? "url"
+            : "none",
         environments: (collection.environments || []).map((environment) => ({
           id: environment.id,
           name: environment.name,
@@ -284,7 +440,7 @@ function createMcpServer(options) {
 
     if (name === "list_network_history") {
       const limit = optionalLimit(args);
-      const entries = await loadNetworkHistory();
+      const entries = historyEntries(await loadNetworkHistory(), args);
       return entries.slice(0, limit).map((entry) => ({
         id: entry.id,
         at: entry.at,
@@ -293,7 +449,7 @@ function createMcpServer(options) {
         requestId: entry.requestId || "",
         name: entry.name || "",
         method: entry.request?.method || "",
-        url: entry.request?.url || "",
+        url: redactUrl(entry.request?.url),
         status: entry.response?.status || 0,
         elapsed: entry.response?.elapsed || entry.timing?.total || 0,
         error: entry.response?.error || "",
@@ -305,7 +461,7 @@ function createMcpServer(options) {
       const entries = await loadNetworkHistory();
       const entry = entries.find((item) => item.id === id);
       if (!entry) throw Error(`Network entry not found: ${id}`);
-      return entry;
+      return redactNetworkEntry(entry);
     }
 
     if (openApiReview.has(name)) return openApiReview.call(name, args);
