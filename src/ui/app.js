@@ -196,39 +196,38 @@ function newRequest(group = "") {
   }
   let name = "";
   let type = "http";
-  const picker = el("div", { class: "request-type-picker" });
   const options = [
     ["http", "HTTP", "일반 REST / HTTP 요청"],
     ["sse", "SSE", "Server-Sent Events 스트림"],
     ["websocket", "WebSocket", "양방향 실시간 연결"],
   ];
-  const draw = () => {
-    picker.replaceChildren(
-      ...options.map(([value, title, description]) =>
-        el(
-          "button",
-          {
-            type: "button",
-            class: "request-type-option " + (type === value ? "active" : ""),
-            "aria-pressed": String(type === value),
-            onClick: () => {
-              type = value;
-              draw();
-            },
-          },
-          el("strong", { text: title }),
-          el("span", { text: description }),
-        ),
-      ),
-    );
-  };
-  draw();
+  const typeDescription = el("span", {
+    id: "dialogRequestTypeDescription",
+    class: "request-type-description",
+    text: options[0][2],
+  });
+  const typeSelect = select(
+    type,
+    options.map(([value, title]) => [value, title]),
+    (value) => {
+      type = value;
+      typeDescription.textContent =
+        options.find(([candidate]) => candidate === value)?.[2] || "";
+    },
+    {
+      id: "dialogRequestType",
+      "aria-describedby": "dialogRequestTypeDescription",
+    },
+  );
   modal(
     "새 요청",
     el(
       "div",
       { class: "new-request-form" },
-      picker,
+      field(
+        "요청 타입",
+        el("div", { class: "request-type-select" }, typeSelect, typeDescription),
+      ),
       field(
         "이름",
         input(name, (value) => (name = value), {
