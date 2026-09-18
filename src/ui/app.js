@@ -1254,6 +1254,7 @@ function realtimeRequestView(col, r) {
           ["params", "Params"],
           ["protocols", "Protocols"],
           ["vars", "Vars"],
+          ["messages", "Messages"],
           ["settings", "Settings"],
           ["docs", "Docs"],
         ];
@@ -1315,6 +1316,144 @@ function realtimeRequestView(col, r) {
       }),
     );
   }
+  if (current === "messages" && r.type === "websocket") {
+    r.websocket ||= { protocols: [], autoReconnect: true, messages: [] };
+    const messages = (r.websocket.messages ||= []);
+    const addMessage = () => {
+      messages.push({
+        id: crypto.randomUUID(),
+        name: "New message",
+        format: "json",
+        body: "{\n  \n}",
+      });
+      mark(col);
+      render();
+    };
+    content.append(
+      el(
+        "div",
+        { class: "saved-message-heading" },
+        el("div", {},
+          el("h3", { text: "Saved Messages" }),
+          el("p", {
+            class: "hint",
+            text: "자주 보내는 WebSocket payload를 Request와 함께 저장합니다.",
+          }),
+        ),
+        button("+ 메시지", addMessage, { class: "text-button" }),
+      ),
+    );
+    if (!messages.length) {
+      content.append(
+        el("div", {
+          class: "empty-response",
+          text: "저장된 메시지가 없습니다.",
+        }),
+      );
+    }
+    messages.forEach((message, index) => {
+      const body = textarea(
+        message.body,
+        (value) => {
+          message.body = value;
+          mark(col);
+        },
+        {
+          rows: 6,
+          "aria-label": (message.name || "Message") + " body",
+        },
+      );
+      const card = el(
+        "div",
+        { class: "saved-message-card" },
+        el(
+          "div",
+          { class: "saved-message-row" },
+          input(
+            message.name,
+            (value) => {
+              message.name = value;
+              mark(col);
+            },
+            { "aria-label": "Saved message name", placeholder: "Message name" },
+          ),
+          select(
+            message.format || "json",
+            [
+              ["json", "JSON"],
+              ["text", "Text"],
+            ],
+            (value) => {
+              message.format = value;
+              mark(col);
+            },
+          ),
+        ),
+        body,
+        el(
+          "div",
+          { class: "saved-message-actions" },
+          button(
+            "불러오기",
+            () => {
+              session.message = message.body;
+              session.messageFormat = message.format || "text";
+              const composer = realtimeRoot(session.key)?.querySelector(
+                "[data-role='realtime-message']",
+              );
+              const format = realtimeRoot(session.key)?.querySelector(
+                "[data-role='realtime-message-format']",
+              );
+              if (composer) composer.value = session.message;
+              if (format) format.value = session.messageFormat;
+              status(message.name + " 메시지를 작성기에 불러왔습니다.");
+            },
+            { class: "text-button" },
+          ),
+          button(
+            "보내기",
+            () =>
+              action(() =>
+                sendRealtimePayload(
+                  col,
+                  r,
+                  message.body,
+                  message.format || "text",
+                ),
+              ),
+            { class: "text-button", disabled: !session.connected },
+          ),
+          message.format === "json"
+            ? button(
+                "JSON 정리",
+                () =>
+                  action(() => {
+                    message.body = JSON.stringify(
+                      JSON.parse(message.body || "{}"),
+                      null,
+                      2,
+                    );
+                    mark(col);
+                    render();
+                  }),
+                { class: "text-button" },
+              )
+            : null,
+          button(
+            "삭제",
+            () => {
+              messages.splice(index, 1);
+              mark(col);
+              render();
+            },
+            { class: "text-button danger" },
+          ),
+        ),
+      );
+      content.append(card);
+    });
+  }
+
   if (current === "settings") {
     const config = r.type === "sse" ? r.sse : r.websocket;
     content.append(
@@ -1369,7 +1508,9 @@ function realtimeRequestView(col, r) {
     "aria-live": "polite",
   });
   log.append(
-    ...session.events.map((event) => realtimeEventElement(event, r.type)),
+    ...session.events
+      .filter((event) => realtimeEventMatches(event, session))
+      .map((event) => realtimeEventElement(event, r.type)),
   );
   const dashboard = el(
     "section",
@@ -1383,12 +1524,28 @@ function realtimeRequestView(col, r) {
       el("span", {
         class: "realtime-count",
         "data-role": "realtime-count",
-        text:
-          session.events
-            .filter((event) => ["message", "sent"].includes(event.type))
-            .length.toLocaleString() +
-          (r.type === "sse" ? " events" : " messages"),
+        text: realtimeStatsText(session),
       }),
+      input(
+        session.filter,
+        (value) => {
+          session.filter = value;
+          redrawRealtimeLog(session);
+        },
+        {
+          class: "realtime-filter",
+          placeholder: r.type === "sse" ? "event / payload 검색" : "message 검색",
+          "aria-label": "실시간 기록 검색",
+        },
+      ),
+      button(
+        session.autoScroll ? "자동 스크롤" : "수동 스크롤",
+        () => {
+          session.autoScroll = !session.autoScroll;
+          render();
+        },
+        { class: "text-button" },
+      ),
       button(
         session.paused ? "이어보기" : "일시정지",
         () => {
@@ -1414,6 +1571,20 @@ function realtimeRequestView(col, r) {
       el(
         "div",
         { class: "realtime-composer" },
+        select(
+          session.messageFormat || "json",
+          [
+            ["json", "JSON"],
+            ["text", "Text"],
+          ],
+          (value) => {
+            session.messageFormat = value;
+          },
+          {
+            "data-role": "realtime-message-format",
+            "aria-label": "WebSocket 메시지 형식",
+          },
+        ),
         textarea(
           session.message,
           (value) => {
