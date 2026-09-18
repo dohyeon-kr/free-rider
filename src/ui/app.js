@@ -7,7 +7,18 @@ const syncReviews = new Map();
 import { specAuthEditor } from "./spec-auth.js";
 import { SpecAuthSession } from "./spec-auth-state.mjs";
 const specAuths = new SpecAuthSession();
-import { runPlan, addToRun, executionRequests } from "./run-plan.mjs";
+import {
+  rides,
+  activeRide,
+  createRide,
+  renameRide,
+  removeRide,
+  selectRide,
+  insertRideStep,
+  removeRideStep,
+  moveRideStep,
+  executionSteps,
+} from "./run-plan.mjs";
 import { RequestDrafts } from "./drafts.mjs";
 const drafts = new RequestDrafts();
 import { RequestHistory } from "./request-history.mjs";
@@ -48,7 +59,9 @@ let state = {
   history = [],
   busy = false,
   stopRun = false,
-  runnerResults = new Map(),
+  rideManualStop = false,
+  rideStepResults = new Map(),
+  rideSummaries = new Map(),
   gitInfo = new Map(),
   subtabs = new Map(),
   realtimeSessions = new Map(),
@@ -768,7 +781,7 @@ function overview(col) {
       [
         "Extract response values in the request Vars tab.",
         "Run login before protected requests in Ride.",
-        "Inspect response assertions in the Tests tab.",
+        "Build repeatable API scenarios in Ride.",
       ].map((text) => el("li", { text })),
     ),
     el("h3", { text: "Collaboration" }),
@@ -1524,7 +1537,6 @@ function requestView(col, r) {
         ["body", "Body"],
         ["auth", "Auth"],
         ["vars", "Vars"],
-        ["assert", "Tests"],
         ["docs", "Docs"],
       ],
       current,
@@ -1630,35 +1642,6 @@ function requestView(col, r) {
       ),
     );
   }
-  if (current === "assert")
-    content.append(
-      el("p", {
-        class: "hint",
-        text: "Check res.status, res.responseTime, res.body.field or res.headers.name after each response.",
-      }),
-      table(
-        (r.assertions ||= []),
-        [
-          { key: "expression", label: "Expression", placeholder: "res.status" },
-          {
-            key: "operator",
-            label: "Operator",
-            options: [
-              ["equals", "equals"],
-              ["notEquals", "not equals"],
-              ["contains", "contains"],
-              ["exists", "exists"],
-              ["lessThan", "less than"],
-            ],
-          },
-          { key: "value", label: "Value", placeholder: "200" },
-        ],
-        (rows) => {
-          r.assertions = rows;
-          mark(col);
-        },
-      ),
-    );
   if (current === "docs")
     content.append(
       textarea(
@@ -1817,7 +1800,6 @@ function responseView(col, r) {
           ...(r.openapi || Object.keys(r.responses || {}).length
             ? [["schema", "Schema"]]
             : []),
-          ["tests", "Tests"],
           ["history", "History"],
           ["console", "콘솔"],
         ],
@@ -1876,30 +1858,6 @@ function responseView(col, r) {
     root.append(el("div", {class:"empty-response",text:"수신한 응답이 없습니다. 콘솔에서 실행 오류를 확인하세요."}));
     return root;
   }
-  if (tab === "tests") {
-    const tests = res.tests || [];
-    root.append(
-      ...tests.map((t) =>
-        el(
-          "div",
-          { class: "run-item" },
-          el("span", {
-            class: t.passed ? "metrics" : "error",
-            text: t.passed ? "✓ PASS" : "× FAIL",
-          }),
-          el("span", { text: `${t.expression} ${t.operator} ${t.value}` }),
-        ),
-      ),
-    );
-    if (!tests.length)
-      root.append(
-        el("p", {
-          class: "hint",
-          text: "Add checks in the Assert tab to validate the response.",
-        }),
-      );
-    return root;
-  }
   let text =
     tab === "headers" ? JSON.stringify(res.headers, null, 2) : res.body;
   try {
@@ -1955,7 +1913,7 @@ async function sendRequest(
     );
   } catch (e) {
     const message = e.message.replace(/^Error invoking remote method '[^']+':\s*(?:Error|TypeError):\s*/, "");
-    result = { status: 0, body: "", error: message, headers: {}, tests: [], elapsed: 0 };
+    result = { status: 0, body: "", error: message, headers: {}, elapsed: 0 };
     logExecution(col.id + r.id, "error", message);
     subtabs.set(col.id + r.id + "response", "console");
     status("요청 실행 실패 · 콘솔을 확인하세요.");
@@ -2276,11 +2234,19 @@ async function saveCollectionTransaction(col,next) {
   await api["set-dirty"](state.collections.some(c=>c.requests.some(r=>drafts.changed(c.id,r))));
 }
 async function applySync(col, result, selected) {
+  rides(col);
   const next=structuredClone(col);
-  next.syncUndo={requests:structuredClone(col.requests),runPlan:structuredClone(col.runPlan || []),title:col.title,lastSync:col.lastSync || ""};
+  next.syncUndo={
+    requests:structuredClone(col.requests),
+    rides:structuredClone(col.rides || []),
+    activeRideId:col.activeRideId,
+    title:col.title,
+    lastSync:col.lastSync || ""
+  };
   next.requests=result.requests;
   if(!col.requests.length) next.title=result.title || col.title;
-  if(next.runPlan) next.runPlan=next.runPlan.filter(item=>next.requests.some(r=>r.id===item.id));
+  for(const ride of next.rides || [])
+    ride.steps=(ride.steps || []).filter(step=>next.requests.some(r=>r.id===step.requestId));
   const n=result.counts;
   const changesApplied = hasSyncChanges(col, next);
   next.lastSync=new Date().toLocaleString()+" · "+n.added+" 추가 · "+n.updated+" 수정 · "+n.removed+" 삭제";
@@ -2316,105 +2282,399 @@ async function applySync(col, result, selected) {
     offerCommit();
   }
 }
-function endpointPicker(col) {
-  const chosen = new Set(), existing = new Set(runPlan(col).map(x => x.id));
+function endpointPicker(col, ride, insertAt = ride.steps.length) {
+  let query = "", visible = [];
   const list = el("div", { class: "endpoint-picker" });
-  function draw(query = "") {
-    list.replaceChildren();
-    const matches = col.requests.filter(
-      r =>
-        (!r.type || r.type === "http") &&
-        (r.name + " " + r.method + " " + r.url + " " + r.group)
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-    );
-    for (const r of matches) list.append(el("label", {class:"run-item"},
-      el("input", {type:"checkbox", checked:existing.has(r.id) || chosen.has(r.id), disabled:existing.has(r.id),
-        onChange:e => e.target.checked ? chosen.add(r.id) : chosen.delete(r.id)}),
-      requestBadge(r),
-      el("span", {text:(r.group ? r.group + " / " : "") + r.name}),
-      el("small", {text:existing.has(r.id) ? "추가됨" : r.url})));
-    if (!matches.length) list.append(el("p",{class:"muted",text:"일치하는 저장 요청이 없습니다."}));
-  }
-  draw();
-  modal("엔드포인트 추가", el("div", {},
-    input("", draw, {placeholder:"이름·메서드·URL 검색", "aria-label":"엔드포인트 검색"}), list
-  ), () => { addToRun(col, chosen); mark(col); render(); }, "선택한 요청 추가");
-}
-function runnerView(col) {
-  const root = el("div", {class:"view-inner", "data-view":"runner"});
-  const plan = runPlan(col);
-  root.append(el("div", {class:"page-heading"},
-    el("h2", {text:"컬렉션 실행"}),
-    button(busy ? "중지" : "선택한 요청 실행", () => busy
-      ? action(() => { stopRun = true; return api.cancel(); })
-      : runCollection(col), {class:"primary",id:"runSelected"})),
-    el("p", {class:"muted",text:env(col).name + " 환경에서 저장된 요청을 순서대로 실행합니다."}),
-    el("div", {class:"actions"},
-      button("+ 엔드포인트 추가", () => endpointPicker(col), {id:"addEndpoints",disabled:busy}),
-      button("전체 선택", () => { plan.forEach(x => x.enabled = true); mark(col); render(); }, {disabled:busy}),
-      button("선택 해제", () => { plan.forEach(x => x.enabled = false); mark(col); render(); }, {disabled:busy}),
-      el("label", {}, el("input", {type:"checkbox",checked:!!col.stopOnFailure,disabled:busy,
-        onChange:e => {col.stopOnFailure = e.target.checked; mark(col);}}), " 실패 시 중단")));
-  if (!plan.length) root.append(el("p",{class:"hint",text:"엔드포인트 추가에서 실행할 저장 요청을 선택하세요."}));
-  plan.forEach((item, i) => {
-    const r = col.requests.find(r => r.id === item.id), result = runnerResults.get(col.id + r.id);
-    const move = offset => {
-      [plan[i], plan[i+offset]] = [plan[i+offset], plan[i]];
-      mark(col); render();
-    };
-    root.append(el("div", {class:"run-item"},
-      el("input", {type:"checkbox",checked:item.enabled,disabled:busy,"aria-label":r.name + " 실행",
-        onChange:e => {item.enabled=e.target.checked; mark(col);}}),
-      requestBadge(r),
-      button(r.name, () => open("request",r.id,col), {class:"text-button"}),
-      button("↑", () => move(-1), {disabled:busy || i===0,title:"위로"}),
-      button("↓", () => move(1), {disabled:busy || i===plan.length-1,title:"아래로"}),
-      button("제외", () => {col.runPlan=plan.filter(x => x.id!==item.id); mark(col); render();},{disabled:busy,"data-exclude":r.id}),
-      el("span", {class:"result " + (result && !runFailed(result) ? "metrics":"error"),
-        text:result ? (result.status || "오류") + " · " + (result.elapsed || 0) + " ms" : "대기"}),
-      result ? button("결과", () => modal(r.name + " 실행 결과", el("div", {},
-        el("p",{text:result.error || ("HTTP " + result.status)}),
-        ...(result.tests || []).map(t => el("p",{text:JSON.stringify(t)})),
-        el("pre",{class:"response-body",text:result.body || ""})), () => true, "닫기")) : null));
+  const search = input("", (value) => {
+    query = value;
+    draw();
+  }, {
+    placeholder: "엔드포인트 이름·메서드·URL 검색",
+    "aria-label": "엔드포인트 검색",
+    onKeydown: (event) => {
+      if (event.key !== "Enter" || !visible.length) return;
+      event.preventDefault();
+      insert(visible[0]);
+    },
   });
+
+  function insert(request) {
+    insertRideStep(col, ride.id, request.id, insertAt++);
+    mark(col);
+    render();
+    draw();
+    search.focus();
+    status(ride.name + ": " + request.name + " 삽입");
+  }
+
+  function draw() {
+    const needle = query.trim().toLowerCase();
+    visible = col.requests.filter(
+      (request) =>
+        (!request.type || request.type === "http") &&
+        (!needle ||
+          (request.name + " " + request.method + " " + request.url + " " + request.group)
+            .toLowerCase()
+            .includes(needle)),
+    );
+    list.replaceChildren(
+      ...visible.map((request) =>
+        el(
+          "button",
+          {
+            type: "button",
+            class: "run-item endpoint-insert-item",
+            onClick: () => insert(request),
+          },
+          requestBadge(request),
+          el("span", {
+            class: "endpoint-insert-name",
+            text: (request.group ? request.group + " / " : "") + request.name,
+          }),
+          el("small", { text: request.url }),
+          el("span", { class: "insert-hint", text: "삽입" }),
+        ),
+      ),
+    );
+    if (!visible.length)
+      list.append(el("p", { class: "muted", text: "일치하는 HTTP 엔드포인트가 없습니다." }));
+  }
+
+  draw();
+  modal(
+    "엔드포인트 삽입",
+    el(
+      "div",
+      { class: "ride-insert-palette" },
+      search,
+      el("p", {
+        class: "hint",
+        text: "클릭하거나 Enter로 현재 위치에 삽입합니다. 같은 엔드포인트도 여러 번 넣을 수 있습니다.",
+      }),
+      list,
+    ),
+    () => true,
+    "닫기",
+  );
+}
+
+function rideStepKey(col, ride, stepId) {
+  return col.id + ":" + ride.id + ":" + stepId;
+}
+
+function rideSummaryKey(col, ride) {
+  return col.id + ":" + ride.id;
+}
+
+function runnerView(col) {
+  const root = el("div", { class: "view-inner", "data-view": "runner" });
+  const list = rides(col);
+  const ride = activeRide(col);
+  const plan = ride.steps;
+  const summary = rideSummaries.get(rideSummaryKey(col, ride));
+
+  root.append(
+    el(
+      "div",
+      { class: "page-heading" },
+      el("h2", { text: "Ride" }),
+      button(
+        busy ? "중지" : "Ride 실행",
+        () =>
+          busy
+            ? action(() => {
+                rideManualStop = true;
+                stopRun = true;
+                return api.cancel();
+              })
+            : runCollection(col, ride),
+        { class: "primary", id: "runSelected" },
+      ),
+    ),
+    el("p", {
+      class: "muted",
+      text: "Ride는 저장된 HTTP 요청을 순서대로 실행하는 테스트 시나리오입니다.",
+    }),
+    el(
+      "div",
+      { class: "actions ride-toolbar" },
+      select(
+        ride.id,
+        list.map((item) => [item.id, item.name]),
+        (id) => {
+          selectRide(col, id);
+          mark(col);
+          render();
+        },
+        { id: "rideSelect", disabled: busy, "aria-label": "Ride 선택" },
+      ),
+      button(
+        "+ 새 Ride",
+        () =>
+          askName("새 Ride", "", (name) => {
+            createRide(col, name);
+            mark(col);
+            render();
+          }),
+        { disabled: busy, id: "newRide" },
+      ),
+      button(
+        "이름 변경",
+        () =>
+          askName("Ride 이름 변경", ride.name, (name) => {
+            renameRide(col, ride.id, name);
+            mark(col);
+            render();
+          }),
+        { disabled: busy },
+      ),
+      button(
+        "삭제",
+        () =>
+          modal(
+            "Ride 삭제",
+            el("p", { text: ride.name + " 시나리오를 삭제할까요?" }),
+            () => {
+              removeRide(col, ride.id);
+              mark(col);
+              render();
+            },
+            "삭제",
+          ),
+        { disabled: busy, class: "danger" },
+      ),
+    ),
+  );
+
+  if (summary) {
+    const label =
+      summary.state === "passed"
+        ? "✓ PASS"
+        : summary.state === "failed"
+          ? "× FAIL"
+          : summary.state === "running"
+            ? "● RUNNING"
+            : "■ STOPPED";
+    root.append(
+      el(
+        "div",
+        { class: "ride-summary " + summary.state },
+        el("strong", { text: label }),
+        el("span", {
+          text:
+            summary.completed +
+            "/" +
+            summary.total +
+            " steps" +
+            (summary.failed ? " · " + summary.failed + " failed" : ""),
+        }),
+      ),
+    );
+  }
+
+  root.append(
+    el(
+      "div",
+      { class: "actions" },
+      button(
+        "+ 엔드포인트 삽입",
+        () => endpointPicker(col, ride, plan.length),
+        { id: "addEndpoints", disabled: busy },
+      ),
+      el(
+        "label",
+        {},
+        el("input", {
+          type: "checkbox",
+          checked: ride.stopOnFailure !== false,
+          disabled: busy,
+          onChange: (event) => {
+            ride.stopOnFailure = event.target.checked;
+            mark(col);
+          },
+        }),
+        " 실패 시 중단",
+      ),
+    ),
+  );
+
+  if (!plan.length)
+    root.append(
+      el("p", {
+        class: "hint",
+        text: "엔드포인트를 검색해 삽입하면 이 Ride의 테스트 시퀀스가 됩니다.",
+      }),
+    );
+
+  plan.forEach((step, index) => {
+    const request = col.requests.find((item) => item.id === step.requestId);
+    if (!request) return;
+    const result = rideStepResults.get(rideStepKey(col, ride, step.id));
+
+    root.append(
+      el(
+        "div",
+        { class: "run-item ride-step", "data-step": step.id },
+        button("＋", () => endpointPicker(col, ride, index), {
+          disabled: busy,
+          title: "이 앞에 엔드포인트 삽입",
+          "aria-label": index + 1 + "번 앞에 엔드포인트 삽입",
+        }),
+        el("span", { class: "ride-step-index", text: String(index + 1) }),
+        requestBadge(request),
+        button(request.name, () => open("request", request.id, col), {
+          class: "text-button",
+        }),
+        button("↑", () => {
+          moveRideStep(col, ride.id, step.id, -1);
+          mark(col);
+          render();
+        }, { disabled: busy || index === 0, title: "위로" }),
+        button("↓", () => {
+          moveRideStep(col, ride.id, step.id, 1);
+          mark(col);
+          render();
+        }, { disabled: busy || index === plan.length - 1, title: "아래로" }),
+        button("삭제", () => {
+          removeRideStep(col, ride.id, step.id);
+          mark(col);
+          render();
+        }, { disabled: busy, "data-remove-step": step.id }),
+        el("span", {
+          class: "result " + (result && !runFailed(result) ? "metrics" : "error"),
+          text: result
+            ? (runFailed(result) ? "FAIL" : "PASS") +
+              " · " +
+              (result.status || "오류") +
+              " · " +
+              (result.elapsed || 0) +
+              " ms"
+            : "대기",
+        }),
+        result
+          ? button(
+              "결과",
+              () =>
+                modal(
+                  request.name + " 실행 결과",
+                  el(
+                    "div",
+                    {},
+                    el("p", { text: result.error || ("HTTP " + result.status) }),
+                    el("pre", { class: "response-body", text: result.body || "" }),
+                  ),
+                  () => true,
+                  "닫기",
+                ),
+            )
+          : null,
+      ),
+    );
+  });
+
+  if (plan.length)
+    root.append(
+      button("+ 엔드포인트 삽입", () => endpointPicker(col, ride, plan.length), {
+        class: "text-button",
+        disabled: busy,
+      }),
+    );
+
   return root;
 }
+
 function runFailed(result) {
-  return !result || result.scriptError || !result.status || result.status >= 400 || result.tests?.some(t => !t.passed);
+  return (
+    !result ||
+    result.scriptError ||
+    !result.status ||
+    result.status >= 400
+  );
 }
-async function runCollection(col) {
+
+async function runCollection(col, ride = activeRide(col)) {
   if (busy) return;
-  const selected = structuredClone(
-      executionRequests(col),
-    ),
-    runEnvironment = structuredClone(env(col)),
-    runContext = structuredClone(col),
-    stopOnFailure = !!col.stopOnFailure,
-    runInterceptors = structuredClone(col.interceptors || {});
+  const selected = structuredClone(executionSteps(col, ride.id));
+  const runEnvironment = structuredClone(env(col));
+  const runContext = structuredClone(col);
+  const stopOnFailure = ride.stopOnFailure !== false;
+  const runInterceptors = structuredClone(col.interceptors || {});
+
   if (!selected.length) {
-    status("Select requests to run.");
+    status("Ride에 실행할 엔드포인트를 삽입하세요.");
     return;
   }
+
   busy = true;
   stopRun = false;
-  selected.forEach(r => runnerResults.delete(col.id + r.id));
+  rideManualStop = false;
+  const summaryKey = rideSummaryKey(col, ride);
+  selected.forEach(({ stepId }) =>
+    rideStepResults.delete(rideStepKey(col, ride, stepId)),
+  );
+  rideSummaries.set(summaryKey, {
+    state: "running",
+    total: selected.length,
+    completed: 0,
+    failed: 0,
+  });
   render();
-  let count = 0;
+
+  let completed = 0;
+  let failed = 0;
   try {
-    for (const r of selected) {
+    for (const { stepId, request } of selected) {
       if (stopRun) break;
-      const result = await sendRequest(runContext, r, true, runEnvironment, runInterceptors);
-      runnerResults.set(col.id + r.id, result);
-      count++;
+      const result = await sendRequest(
+        runContext,
+        request,
+        true,
+        runEnvironment,
+        runInterceptors,
+      );
+      rideStepResults.set(rideStepKey(col, ride, stepId), result);
+      completed++;
+      const failedStep = runFailed(result);
+      if (failedStep) failed++;
+      rideSummaries.set(summaryKey, {
+        state: "running",
+        total: selected.length,
+        completed,
+        failed,
+      });
       render();
-      if (stopOnFailure && runFailed(result)) { stopRun = true; break; }
+      if (stopOnFailure && failedStep) {
+        stopRun = true;
+        break;
+      }
     }
   } finally {
     busy = false;
+    const state =
+      rideManualStop
+        ? "stopped"
+        : failed
+          ? "failed"
+          : completed === selected.length
+            ? "passed"
+            : "stopped";
+    rideSummaries.set(summaryKey, {
+      state,
+      total: selected.length,
+      completed,
+      failed,
+    });
     render();
     status(
-      `Collection run ${stopRun ? "stopped" : "complete"}: ${count}/${selected.length} requests.`,
+      "Ride " +
+        ride.name +
+        ": " +
+        state.toUpperCase() +
+        " · " +
+        completed +
+        "/" +
+        selected.length +
+        " steps",
     );
   }
 }
