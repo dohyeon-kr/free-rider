@@ -27,6 +27,9 @@ export async function buildDemo({
   }
   const styles = (original.match(/<link\b[^>]*>/gi) || [])
     .filter(tag => attribute(tag, 'rel') === 'stylesheet').map(tag => attribute(tag, 'href'));
+  const images = (original.match(/<img\b[^>]*>/gi) || [])
+    .map(tag => attribute(tag, 'src'))
+    .filter(Boolean);
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
   const seen = new Set();
@@ -58,7 +61,7 @@ export async function buildDemo({
       await copyAsset(relative(sourceDir, resolve(dirname(absolute), dependency)));
     }
   }
-  for (const asset of [...styles, ...scripts]) await copyAsset(asset);
+  for (const asset of [...styles, ...scripts, ...images]) await copyAsset(asset);
   for (const name of ['client.mjs', 'bootstrap.mjs', 'chrome.css']) {
     await copyFile(join(demoDir, name), join(outDir, name));
   }
