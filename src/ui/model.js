@@ -85,6 +85,12 @@ export function normalize(c) {
       : String(r.websocket.protocols || "").split(",").map((v) => v.trim()).filter(Boolean);
     r.websocket.autoReconnect = r.websocket.autoReconnect !== false;
     r.websocket.messages ||= [];
+    r.websocket.messages = r.websocket.messages.map((message, index) => ({
+      id: message?.id || crypto.randomUUID(),
+      name: message?.name || "Message " + (index + 1),
+      format: message?.format === "text" ? "text" : "json",
+      body: String(message?.body ?? ""),
+    }));
   }
   return c;
 }

@@ -33,3 +33,17 @@ test("request type labels keep HTTP methods and name realtime transports", () =>
   assert.equal(requestTypeLabel({type:"sse"}), "SSE");
   assert.equal(requestTypeLabel({type:"websocket"}), "WS");
 });
+
+
+test("normalizing WebSocket messages gives presets stable editable fields", () => {
+  const col = collection("Sockets");
+  const ws = request("", "websocket");
+  ws.websocket.messages = [{ name: "Subscribe", body: '{"type":"subscribe"}' }];
+  col.requests.push(ws);
+  normalize(col);
+  assert.equal(ws.websocket.messages.length, 1);
+  assert.ok(ws.websocket.messages[0].id);
+  assert.equal(ws.websocket.messages[0].name, "Subscribe");
+  assert.equal(ws.websocket.messages[0].format, "json");
+  assert.equal(ws.websocket.messages[0].body, '{"type":"subscribe"}');
+});
