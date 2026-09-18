@@ -292,7 +292,7 @@ function renderTree() {
   root.replaceChildren();
   for (const col of state.collections) {
     const match = (r) =>
-      `${r.name} ${r.url} ${r.method} ${r.group}`
+      `${r.name} ${r.url} ${r.method || ""} ${r.type || "http"} ${r.group}`
         .toLowerCase()
         .includes(search);
     const matches = col.requests.filter(match);
@@ -381,7 +381,7 @@ function renderTree() {
           title: req.url,
         });
         b.append(
-          el("span", { class: "method " + req.method, text: req.method }),
+          requestBadge(req),
           el("span", { text: req.name + (req.removed ? " ⚠" : "") }),
         );
         r.append(b);
@@ -391,6 +391,16 @@ function renderTree() {
     draw(tree);
   }
 }
+function requestBadge(r) {
+  const type = r?.type || "http";
+  const tone =
+    type === "sse" ? "SSE" : type === "websocket" ? "WS" : r?.method || "GET";
+  return el("span", {
+    class: "method " + tone,
+    text: requestTypeLabel(r || { type: "http", method: "HTTP" }),
+  });
+}
+
 function tabTitle(t) {
   const col = state.collections.find((c) => c.id === t.cid);
   if (t.kind === "request") {
@@ -433,7 +443,7 @@ function renderTabs() {
     });
     if (t.kind === "request") {
       const r = col.requests.find((r) => r.id === t.id);
-      tab.append(el("span", { class: "method " + r?.method, text: r?.method }));
+      tab.append(requestBadge(r));
     }
     tab.append(el("span", { class: "label", text: tabTitle(t) }));
     if (t.kind === "request" ? col.requests.some(r => r.id === t.id && drafts.changed(t.cid, r)) : dirty.has(t.cid))
@@ -1747,11 +1757,17 @@ function endpointPicker(col) {
   const list = el("div", { class: "endpoint-picker" });
   function draw(query = "") {
     list.replaceChildren();
-    const matches = col.requests.filter(r => (r.name + " " + r.method + " " + r.url + " " + r.group).toLowerCase().includes(query.toLowerCase()));
+    const matches = col.requests.filter(
+      r =>
+        (!r.type || r.type === "http") &&
+        (r.name + " " + r.method + " " + r.url + " " + r.group)
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+    );
     for (const r of matches) list.append(el("label", {class:"run-item"},
       el("input", {type:"checkbox", checked:existing.has(r.id) || chosen.has(r.id), disabled:existing.has(r.id),
         onChange:e => e.target.checked ? chosen.add(r.id) : chosen.delete(r.id)}),
-      el("span", {class:"method", text:r.method}),
+      requestBadge(r),
       el("span", {text:(r.group ? r.group + " / " : "") + r.name}),
       el("small", {text:existing.has(r.id) ? "추가됨" : r.url})));
     if (!matches.length) list.append(el("p",{class:"muted",text:"일치하는 저장 요청이 없습니다."}));
@@ -1786,7 +1802,7 @@ function runnerView(col) {
     root.append(el("div", {class:"run-item"},
       el("input", {type:"checkbox",checked:item.enabled,disabled:busy,"aria-label":r.name + " 실행",
         onChange:e => {item.enabled=e.target.checked; mark(col);}}),
-      el("span", {class:"method " + r.method,text:r.method}),
+      requestBadge(r),
       button(r.name, () => open("request",r.id,col), {class:"text-button"}),
       button("↑", () => move(-1), {disabled:busy || i===0,title:"위로"}),
       button("↓", () => move(1), {disabled:busy || i===plan.length-1,title:"아래로"}),
