@@ -51,7 +51,7 @@ export default defineConfig({
                 { text: '시작하기', link: '/guide/getting-started' },
                 { text: '요청과 저장', link: '/guide/requests' },
                 { text: 'Environment, Vars, Interceptors', link: '/guide/variables-and-scripts' },
-                { text: '컬렉션 실행', link: '/guide/collection-runner' },
+                { text: 'Ride', link: '/guide/collection-runner' },
                 { text: 'OpenAPI 동기화', link: '/guide/openapi-sync' },
                 { text: 'Git 연동', link: '/guide/git' },
                 { text: 'MCP 서버', link: '/guide/mcp' }
@@ -63,7 +63,7 @@ export default defineConfig({
               text: 'API Reference',
               items: [
                 { text: 'Script API', link: '/reference/script-api' },
-                { text: 'Tests', link: '/reference/tests' },
+                { text: 'Ride Tests', link: '/reference/tests' },
                 { text: '실행 규칙과 제한', link: '/reference/execution' }
               ]
             }
@@ -128,7 +128,7 @@ export default defineConfig({
                 { text: 'Getting Started', link: '/en/guide/getting-started' },
                 { text: 'Requests and Saving', link: '/en/guide/requests' },
                 { text: 'Environment, Vars, Interceptors', link: '/en/guide/variables-and-scripts' },
-                { text: 'Collection Runner', link: '/en/guide/collection-runner' },
+                { text: 'Ride', link: '/en/guide/collection-runner' },
                 { text: 'OpenAPI Sync', link: '/en/guide/openapi-sync' },
                 { text: 'Git Integration', link: '/en/guide/git' },
                 { text: 'MCP Server', link: '/en/guide/mcp' }
@@ -140,7 +140,7 @@ export default defineConfig({
               text: 'API Reference',
               items: [
                 { text: 'Script API', link: '/en/reference/script-api' },
-                { text: 'Tests', link: '/en/reference/tests' },
+                { text: 'Ride Tests', link: '/en/reference/tests' },
                 { text: 'Execution Rules and Limits', link: '/en/reference/execution' }
               ]
             }
