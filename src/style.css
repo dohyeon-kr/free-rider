@@ -510,8 +510,8 @@ td input:focus {
   background: #202020;
 }
 .checkcell,
-th:first-child,
-th:last-child {
+.kv-wrap th:first-child,
+.kv-wrap th:last-child {
   width: 32px;
 }
 .checkcell input {

@@ -259,15 +259,55 @@ button.network-entry.selected {
   overflow: auto;
 }
 .network-cookie-table {
-  min-width: 680px;
+  min-width: 100%;
   font-size: 11px;
 }
 .network-cookie-table th {
   position: sticky;
   top: 0;
+  overflow: visible;
   background: #202020;
   color: #888;
   font-weight: 500;
+}
+.network-cookie-heading {
+  display: block;
+  padding-right: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.network-cookie-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  z-index: 2;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.network-cookie-resizer::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+}
+.network-cookie-resizer:hover::after,
+.network-cookie-resizer:focus-visible::after {
+  background: var(--gold);
+}
+.network-cookie-resizer:focus-visible {
+  outline: 1px solid var(--gold);
+  outline-offset: -1px;
+}
+body.network-cookie-resizing,
+body.network-cookie-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 .network-cookie-value {
   font-family: ui-monospace, Menlo, monospace;
