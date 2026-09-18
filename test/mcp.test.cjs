@@ -521,7 +521,7 @@ test("apply_openapi_review persists only selected changes and suggests a missing
   assert.equal(reloaded, 1);
   assert.equal(state.collections[0].requests.length, 1);
   assert.equal(state.collections[0].requests[0].description, "Old docs");
-  assert.equal(state.collections[0].requests[0].query.find((row) => row.key === "page").value, "1");
+  assert.equal(state.collections[0].requests[0].query.page, "1");
   assert.equal(state.collections[0].requests[0].openapi.parameters[0].schema.type, "string");
   assert.equal(state.collections[0].syncUndo.requests[0].description, "Old docs");
   assert.match(state.collections[0].lastSync, /1 수정/);
@@ -546,7 +546,7 @@ test("apply_openapi_review requires an explicit resolution for selected conflict
   });
   const review = JSON.parse(reviewResult.result.content[0].text);
   assert.equal(review.summary.conflicts, 1);
-  assert.equal(review.changes[0].fields.find((field) => field.key === "openapi/parameters/0/schema/type").conflict, true);
+  assert.equal(review.changes[0].fields.find((field) => field.key === "openapi/parameters").conflict, true);
 
   const blocked = await rpc.handle({
     jsonrpc: "2.0",
@@ -570,7 +570,7 @@ test("apply_openapi_review requires an explicit resolution for selected conflict
       arguments: {
         reviewId: "review-conflict",
         selectedIds: ["GET /users"],
-        resolutions: [{ requestId: "GET /users", field: "openapi/parameters/0/schema/type", choice: "incoming" }],
+        resolutions: [{ requestId: "GET /users", field: "openapi/parameters", choice: "incoming" }],
       },
     },
   });
