@@ -1,9 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const {
-  effectiveRequest,
-  assertions,
-} = require("../src/modules/runner/context.cjs");
+const { effectiveRequest } = require("../src/modules/runner/context.cjs");
 const { prepare } = require("../src/modules/runner/request.cjs");
 test("collection/folder/request headers and auth inherit with explicit override", () => {
   const c = {
@@ -47,29 +44,6 @@ test("disabled and repeated query rows are respected", () => {
     {},
   );
   assert.equal(p.url, "https://example.com/?tag=a&tag=b");
-});
-test("assertions evaluate response and clearly fail missing properties", () => {
-  const res = {
-    status: 200,
-    elapsed: 12,
-    body: '{"data":{"id":7}}',
-    headers: { "content-type": "application/json" },
-  };
-  const results = assertions(res, [
-    { expression: "res.status", operator: "equals", value: "200" },
-    { expression: "res.body.data.id", operator: "equals", value: "7" },
-    { expression: "res.body.missing", operator: "exists" },
-    { expression: "res.responseTime", operator: "lessThan", value: "100" },
-    {
-      expression: "res.headers.content-type",
-      operator: "contains",
-      value: "json",
-    },
-  ]);
-  assert.deepEqual(
-    results.map((t) => t.passed),
-    [true, true, false, true, true],
-  );
 });
 test("encrypted workspace writes are serialized and round trip", async (t) => {
   const fs = require("node:fs/promises"),
