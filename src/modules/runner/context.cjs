@@ -39,43 +39,4 @@ function effectiveRequest(collection, request) {
     ),
   };
 }
-function assertions(response, rules = []) {
-  let body;
-  try {
-    body = JSON.parse(response.body);
-  } catch {
-    body = response.body;
-  }
-  return rules
-    .filter((r) => r.enabled !== false && r.expression)
-    .map((rule) => {
-      let actual;
-      if (rule.expression === "res.status") actual = response.status;
-      else if (rule.expression === "res.responseTime")
-        actual = response.elapsed;
-      else if (rule.expression.startsWith("res.body."))
-        actual = rule.expression
-          .slice(9)
-          .split(".")
-          .reduce((v, k) => v?.[k], body);
-      else if (rule.expression.startsWith("res.headers."))
-        actual = response.headers[rule.expression.slice(12).toLowerCase()];
-      else if (rule.expression === "res.body") actual = body;
-      let expected = rule.value;
-      try {
-        expected = JSON.parse(rule.value);
-      } catch {}
-      const passed =
-        rule.operator === "exists"
-          ? actual !== undefined
-          : rule.operator === "contains"
-            ? actual !== undefined && String(actual).includes(String(expected))
-            : rule.operator === "lessThan"
-              ? Number(actual) < Number(expected)
-              : rule.operator === "notEquals"
-                ? JSON.stringify(actual) !== JSON.stringify(expected)
-                : JSON.stringify(actual) === JSON.stringify(expected);
-      return { ...rule, actual, passed };
-    });
-}
-module.exports = { rows, effectiveRequest, assertions };
+module.exports = { rows, effectiveRequest };
