@@ -20,3 +20,23 @@ export function getTabTargetIndexes(tabCount, currentIndex) {
     right: all.filter((index) => index > currentIndex),
   };
 }
+
+
+export function moveItem(items, fromIndex, toIndex) {
+  const next = [...items];
+  if (
+    !Number.isInteger(fromIndex) ||
+    !Number.isInteger(toIndex) ||
+    fromIndex < 0 ||
+    fromIndex >= next.length ||
+    toIndex < 0 ||
+    toIndex >= next.length ||
+    fromIndex === toIndex
+  ) {
+    return next;
+  }
+
+  const [item] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, item);
+  return next;
+}
