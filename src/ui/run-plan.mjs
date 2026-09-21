@@ -26,7 +26,7 @@ export function rides(col) {
 
   if (!Array.isArray(col.rides)) {
     const legacy = Array.isArray(col.runPlan) ? col.runPlan : [];
-    const ride = newRide("Ride 1");
+    const ride = newRide("Course 1");
     ride.stopOnFailure = !!col.stopOnFailure;
     ride.steps = legacy
       .filter((item) => item?.enabled && valid.has(item.id))
@@ -36,13 +36,13 @@ export function rides(col) {
     delete col.stopOnFailure;
   }
 
-  if (!col.rides.length) col.rides.push(newRide("Ride 1"));
+  if (!col.rides.length) col.rides.push(newRide("Course 1"));
 
   const usedRideIds = new Set();
   col.rides.forEach((ride, index) => {
     if (!ride.id || usedRideIds.has(ride.id)) ride.id = id("ride");
     usedRideIds.add(ride.id);
-    ride.name = String(ride.name || `Ride ${index + 1}`);
+    ride.name = String(ride.name || `Course ${index + 1}`);
     ride.stopOnFailure = ride.stopOnFailure !== false;
     if (!Array.isArray(ride.steps)) ride.steps = [];
 
@@ -74,7 +74,7 @@ export function activeRide(col) {
 
 export function createRide(col, name = "") {
   const list = rides(col);
-  const ride = newRide(String(name || `Ride ${list.length + 1}`).trim());
+  const ride = newRide(String(name || `Course ${list.length + 1}`).trim());
   list.push(ride);
   col.activeRideId = ride.id;
   return ride;
@@ -84,7 +84,7 @@ export function renameRide(col, rideId, name) {
   const ride = rides(col).find((item) => item.id === rideId);
   if (!ride) return null;
   const next = String(name || "").trim();
-  if (!next) throw Error("Ride 이름을 입력하세요.");
+  if (!next) throw Error("코스 이름을 입력하세요.");
   ride.name = next;
   return ride;
 }
@@ -94,7 +94,7 @@ export function removeRide(col, rideId) {
   const index = list.findIndex((ride) => ride.id === rideId);
   if (index < 0) return false;
   list.splice(index, 1);
-  if (!list.length) list.push(newRide("Ride 1"));
+  if (!list.length) list.push(newRide("Course 1"));
   if (!list.some((ride) => ride.id === col.activeRideId))
     col.activeRideId = list[Math.min(index, list.length - 1)].id;
   return true;
@@ -109,7 +109,7 @@ export function selectRide(col, rideId) {
 
 export function insertRideStep(col, rideId, requestId, index = null) {
   const ride = rides(col).find((item) => item.id === rideId);
-  if (!ride) throw Error("Ride를 찾을 수 없습니다.");
+  if (!ride) throw Error("코스를 찾을 수 없습니다.");
   const request = col.requests.find(
     (item) => item.id === requestId && isHttpRequest(item),
   );
