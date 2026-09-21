@@ -32,6 +32,11 @@ MCP는 저장된 워크스페이스를 기준으로 컬렉션, 요청, 환경, I
 | `review_openapi` | 연결된 OpenAPI 명세와 저장된 요청의 변경·충돌을 검토하고 임시 `reviewId` 발급 |
 | `apply_openapi_review` | 검토 결과에서 선택한 엔드포인트만 반영하고 충돌 처리 방식을 명시적으로 적용 |
 | `send_request` | 저장된 요청 실행 |
+| `list_courses` | 컬렉션의 저장된 코스 목록 조회 |
+| `get_course` | 코스와 순서가 지정된 엔드포인트 step 조회 |
+| `set_course` | 요청 ID 순서로 코스 생성 또는 교체 |
+| `delete_course` | 저장된 코스 삭제 |
+| `ride_course` | 코스의 HTTP 요청을 순서대로 실행하여 Ride |
 | `list_network_history` | Network 탭의 최근 기록을 필터링해서 요약 조회 |
 | `get_network_entry` | Network 탭 기록 상세를 민감값 마스킹 후 조회 |
 
@@ -71,6 +76,25 @@ Interceptor 코드에서 사용할 수 있는 `req`, `res`, `ctx` API는 [Script
 ::: warning Interceptor 코드와 비밀값
 `get_collection_interceptors`는 저장된 Interceptor 코드 원문을 반환합니다. 토큰이나 비밀번호를 코드에 직접 넣지 말고 Environment/Vars를 사용하세요.
 :::
+
+## MCP에서 코스 설정하고 Ride하기
+
+**코스(Course)**는 저장된 HTTP 요청의 순서이고, **Ride**는 그 코스를 실제로 실행하는 동작입니다.
+
+기존 코스는 `list_courses`, `get_course`로 확인합니다. `set_course`에 순서가 있는 `requestIds` 배열을 넘기면 코스를 새로 만들거나 기존 코스를 교체할 수 있습니다. 배열 순서는 그대로 보존되고 같은 요청 ID를 여러 번 넣어도 됩니다.
+
+```json
+{
+  "collectionId": "collection-1",
+  "name": "로그인 후 검증",
+  "requestIds": ["login", "me", "me"],
+  "stopOnFailure": true
+}
+```
+
+반환된 `courseId`를 `ride_course`에 넘기면 코스를 실행합니다. 저장된 `environmentId`를 선택적으로 지정할 수 있고, 생략하면 컬렉션의 선택/기본 Environment를 사용합니다.
+
+앱에 미저장 편집 내용이 있으면 MCP의 코스 쓰기는 거절됩니다. 렌더러의 오래된 상태가 MCP 변경을 덮어쓰지 않도록 먼저 워크스페이스를 저장하세요.
 
 ## OpenAPI 명세 연결 관리
 
