@@ -24,6 +24,14 @@ function fixture() {
         environments: [
           { id: "env-1", name: "Local", values: { baseUrl: "http://localhost:3000", token: "secret" } },
         ],
+        rides: [
+          {
+            id: "course-1",
+            name: "Smoke course",
+            stopOnFailure: true,
+            steps: [{ id: "step-1", requestId: "request-1" }],
+          },
+        ],
       },
     ],
   };
@@ -120,6 +128,11 @@ test("modern tools/list is stamped and non-cacheable", async () => {
   assert.equal(result.result._meta["io.modelcontextprotocol/serverInfo"].version, "1.2.3");
   assert.ok(result.result.tools.some((tool) => tool.name === "get_collection_interceptors"));
   assert.ok(result.result.tools.some((tool) => tool.name === "set_collection_interceptors"));
+  assert.ok(result.result.tools.some((tool) => tool.name === "list_courses"));
+  assert.ok(result.result.tools.some((tool) => tool.name === "get_course"));
+  assert.ok(result.result.tools.some((tool) => tool.name === "set_course"));
+  assert.ok(result.result.tools.some((tool) => tool.name === "delete_course"));
+  assert.ok(result.result.tools.some((tool) => tool.name === "ride_course"));
   assert.ok(result.result.tools.some((tool) => tool.name === "get_openapi_spec"));
   assert.ok(result.result.tools.some((tool) => tool.name === "set_openapi_source"));
   assert.ok(result.result.tools.some((tool) => tool.name === "unlink_openapi"));
@@ -211,6 +224,158 @@ test("send_request delegates ids to the app bridge", async () => {
     environmentId: "env-1",
   });
   assert.equal(JSON.parse(result.result.content[0].text).status, 204);
+});
+
+test("course tools expose the saved ordered sequence", async () => {
+  const list = await server().handle({
+    jsonrpc: "2.0",
+    id: 20,
+    method: "tools/call",
+    params: { name: "list_courses", arguments: { collectionId: "collection-1" } },
+  });
+  assert.deepEqual(JSON.parse(list.result.content[0].text), [
+    {
+      id: "course-1",
+      name: "Smoke course",
+      stepCount: 1,
+      stopOnFailure: true,
+    },
+  ]);
+
+  const detail = await server().handle({
+    jsonrpc: "2.0",
+    id: 21,
+    method: "tools/call",
+    params: {
+      name: "get_course",
+      arguments: { collectionId: "collection-1", courseId: "course-1" },
+    },
+  });
+  const course = JSON.parse(detail.result.content[0].text);
+  assert.equal(course.name, "Smoke course");
+  assert.deepEqual(course.steps.map((step) => step.requestId), ["request-1"]);
+  assert.equal(course.steps[0].method, "GET");
+});
+
+test("set_course persists ordered request ids and allows duplicates", async () => {
+  let saved = null;
+  let reloads = 0;
+  const result = await server({
+    saveWorkspace: async (state) => {
+      saved = structuredClone(state);
+      return true;
+    },
+    reloadWorkspace: async () => {
+      reloads += 1;
+    },
+  }).handle({
+    jsonrpc: "2.0",
+    id: 22,
+    method: "tools/call",
+    params: {
+      name: "set_course",
+      arguments: {
+        collectionId: "collection-1",
+        courseId: "course-1",
+        name: "Login twice",
+        requestIds: ["request-1", "request-1"],
+        stopOnFailure: false,
+      },
+    },
+  });
+
+  const course = JSON.parse(result.result.content[0].text);
+  assert.equal(course.name, "Login twice");
+  assert.equal(course.stopOnFailure, false);
+  assert.deepEqual(course.steps.map((step) => step.requestId), ["request-1", "request-1"]);
+  assert.deepEqual(
+    saved.collections[0].rides[0].steps.map((step) => step.requestId),
+    ["request-1", "request-1"],
+  );
+  assert.equal(saved.collections[0].activeRideId, "course-1");
+  assert.equal(reloads, 1);
+});
+
+test("set_course rejects writes while the app has unsaved changes", async () => {
+  const result = await server({
+    hasUnsavedChanges: () => true,
+  }).handle({
+    jsonrpc: "2.0",
+    id: 23,
+    method: "tools/call",
+    params: {
+      name: "set_course",
+      arguments: {
+        collectionId: "collection-1",
+        courseId: "course-1",
+        requestIds: ["request-1"],
+      },
+    },
+  });
+  assert.equal(result.result.isError, true);
+  assert.match(result.result.content[0].text, /Save the Free Rider workspace/);
+});
+
+test("ride_course executes every Course step through the saved request bridge", async () => {
+  const calls = [];
+  const result = await server({
+    runSavedRequest: async (value) => {
+      calls.push(value);
+      return { status: 200, statusText: "OK", elapsed: 12 };
+    },
+  }).handle({
+    jsonrpc: "2.0",
+    id: 24,
+    method: "tools/call",
+    params: {
+      name: "ride_course",
+      arguments: {
+        collectionId: "collection-1",
+        courseId: "course-1",
+        environmentId: "env-1",
+      },
+    },
+  });
+
+  const ride = JSON.parse(result.result.content[0].text);
+  assert.equal(ride.state, "passed");
+  assert.equal(ride.completed, 1);
+  assert.equal(ride.failed, 0);
+  assert.equal(ride.steps[0].passed, true);
+  assert.deepEqual(calls, [
+    {
+      collectionId: "collection-1",
+      requestId: "request-1",
+      environmentId: "env-1",
+    },
+  ]);
+});
+
+test("ride_course honors stopOnFailure", async () => {
+  const state = fixture();
+  state.collections[0].rides[0].steps.push({ id: "step-2", requestId: "request-1" });
+  const calls = [];
+  const result = await server({
+    loadWorkspace: async () => structuredClone(state),
+    runSavedRequest: async (value) => {
+      calls.push(value);
+      return { status: 500, statusText: "Internal Server Error" };
+    },
+  }).handle({
+    jsonrpc: "2.0",
+    id: 25,
+    method: "tools/call",
+    params: {
+      name: "ride_course",
+      arguments: { collectionId: "collection-1", courseId: "course-1" },
+    },
+  });
+
+  const ride = JSON.parse(result.result.content[0].text);
+  assert.equal(ride.state, "failed");
+  assert.equal(ride.completed, 1);
+  assert.equal(ride.failed, 1);
+  assert.equal(calls.length, 1);
 });
 
 test("get_openapi_spec reads the linked specification without saving", async () => {
