@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# Serialize every release-capable run through one lane. PR validation keeps its
+# own per-ref lane so pull requests can still build independently.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('macos-pr-{0}', github.ref) || 'macos-release-main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
     concurrency:
@@ -67,6 +73,9 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
+          # A queued release must analyze the latest main, including release/
+          # Homebrew commits produced by the previous serialized run.
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
