@@ -142,6 +142,22 @@ function openTabMenu(event, tab) {
   const right = tabsAt(targets.right);
 
   tabMenu.replaceChildren(
+    menuButton(
+      "왼쪽으로 이동",
+      () =>
+        tab.dispatchEvent(
+          new CustomEvent("tabmove", { detail: { direction: -1 } }),
+        ),
+      { disabled: selectedIndex <= 0 },
+    ),
+    menuButton(
+      "오른쪽으로 이동",
+      () =>
+        tab.dispatchEvent(
+          new CustomEvent("tabmove", { detail: { direction: 1 } }),
+        ),
+      { disabled: selectedIndex < 0 || selectedIndex >= tabs.length - 1 },
+    ),
     menuButton("닫기", () => tab.querySelector(".close")?.click()),
     menuButton("다른 탭 닫기", () => showBatchCloseDialog(others, "다른 탭 닫기"), {
       disabled: !others.length,

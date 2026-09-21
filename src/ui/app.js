@@ -43,6 +43,7 @@ import {
   expandEntireTree,
   isTreeFullyCollapsed,
 } from "./tree-collapse.mjs";
+import { moveItem } from "./tab-actions.mjs";
 const api = window.client;
 let state = {
     collections: [collection("My API Collection")],
@@ -471,6 +472,57 @@ function tabTitle(t) {
     folder: "▱ " + t.id,
   }[t.kind];
 }
+let draggedTabKey = null;
+
+function workTabElement(tabKey) {
+  return [...document.querySelectorAll("#workTabs .work-tab")].find(
+    (node) => node.dataset.tabKey === tabKey,
+  );
+}
+
+function clearTabDropIndicators(root = $("workTabs")) {
+  root
+    ?.querySelectorAll(".work-tab")
+    .forEach((node) =>
+      node.classList.remove("dragging", "drop-before", "drop-after"),
+    );
+}
+
+function autoScrollWorkTabs(root, clientX) {
+  const rect = root.getBoundingClientRect();
+  const edge = 40;
+  const step = 24;
+  if (clientX < rect.left + edge) root.scrollLeft -= step;
+  else if (clientX > rect.right - edge) root.scrollLeft += step;
+}
+
+function moveTabByOffset(tabKey, offset) {
+  const fromIndex = state.tabs.findIndex((tab) => key(tab) === tabKey);
+  if (fromIndex < 0) return false;
+  const toIndex = Math.max(
+    0,
+    Math.min(state.tabs.length - 1, fromIndex + offset),
+  );
+  if (toIndex === fromIndex) return false;
+  state.tabs = moveItem(state.tabs, fromIndex, toIndex);
+  renderTabs();
+  return true;
+}
+
+function moveTabRelative(sourceKey, targetKey, after) {
+  const fromIndex = state.tabs.findIndex((tab) => key(tab) === sourceKey);
+  const targetIndex = state.tabs.findIndex((tab) => key(tab) === targetKey);
+  if (fromIndex < 0 || targetIndex < 0 || fromIndex === targetIndex) return false;
+
+  let toIndex = targetIndex + (after ? 1 : 0);
+  if (fromIndex < toIndex) toIndex -= 1;
+  if (toIndex === fromIndex) return false;
+
+  state.tabs = moveItem(state.tabs, fromIndex, toIndex);
+  renderTabs();
+  return true;
+}
+
 function renderTabs() {
   const root = $("workTabs");
   root.replaceChildren();
@@ -481,13 +533,66 @@ function renderTabs() {
       class: "work-tab " + (key(t) === state.activeTab ? "active" : ""),
       role: "tab",
       tabIndex: 0,
+      draggable: true,
+      "data-tab-key": key(t),
       "aria-selected": key(t) === state.activeTab,
+      onDragstart: (e) => {
+        draggedTabKey = key(t);
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", draggedTabKey);
+        tab.classList.add("dragging");
+      },
+      onDragover: (e) => {
+        if (!draggedTabKey || draggedTabKey === key(t)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        autoScrollWorkTabs(root, e.clientX);
+        root
+          .querySelectorAll(".work-tab")
+          .forEach((node) => node.classList.remove("drop-before", "drop-after"));
+        const rect = tab.getBoundingClientRect();
+        tab.classList.add(
+          e.clientX > rect.left + rect.width / 2 ? "drop-after" : "drop-before",
+        );
+      },
+      onDrop: (e) => {
+        if (!draggedTabKey) return;
+        e.preventDefault();
+        const rect = tab.getBoundingClientRect();
+        const after = e.clientX > rect.left + rect.width / 2;
+        const sourceKey =
+          e.dataTransfer.getData("text/plain") || draggedTabKey;
+        moveTabRelative(sourceKey, key(t), after);
+        draggedTabKey = null;
+        clearTabDropIndicators(root);
+      },
+      onDragend: () => {
+        draggedTabKey = null;
+        clearTabDropIndicators(root);
+      },
+      onTabmove: (e) => {
+        const direction = Number(e.detail?.direction) || 0;
+        if (direction) moveTabByOffset(key(t), direction);
+      },
       onClick: () => {
         state.activeTab = key(t);
         state.activeCollection = t.cid;
         render();
       },
       onKeydown: (e) => {
+        if (
+          e.altKey &&
+          e.shiftKey &&
+          ["ArrowLeft", "ArrowRight"].includes(e.key)
+        ) {
+          e.preventDefault();
+          const moved = moveTabByOffset(
+            key(t),
+            e.key === "ArrowLeft" ? -1 : 1,
+          );
+          if (moved) queueMicrotask(() => workTabElement(key(t))?.focus());
+          return;
+        }
         if (e.key === "Enter") {
           state.activeTab = key(t);
           state.activeCollection = t.cid;

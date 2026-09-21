@@ -294,6 +294,20 @@ main {
   padding: 2px;
   color: #888;
 }
+.work-tab[draggable="true"] {
+  user-select: none;
+  cursor: grab;
+}
+.work-tab.dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+.work-tab.drop-before {
+  box-shadow: inset 2px 0 0 var(--gold);
+}
+.work-tab.drop-after {
+  box-shadow: inset -2px 0 0 var(--gold);
+}
 .dirty-dot {
   color: #d8a13d;
   font-size: 10px;
