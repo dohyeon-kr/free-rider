@@ -13,6 +13,8 @@ const network = {
   message: "",
 };
 
+let networkMessageTimer = null;
+
 const COOKIE_COLUMN_WIDTHS_STORAGE_KEY = "free-rider.network.cookie-column-widths";
 const COOKIE_COLUMNS = [
   { key: "name", label: "Name", width: 140, min: 80 },
@@ -220,9 +222,20 @@ function curlFor(entry) {
 
 function copy(text, message = "복사했습니다.") {
   api.copy(text).then(() => {
+    if (networkMessageTimer) clearTimeout(networkMessageTimer);
     network.message = message;
     renderPanel();
+    networkMessageTimer = setTimeout(() => {
+      if (network.message !== message) return;
+      network.message = "";
+      networkMessageTimer = null;
+      renderPanel();
+    }, 2000);
   }).catch((error) => {
+    if (networkMessageTimer) {
+      clearTimeout(networkMessageTimer);
+      networkMessageTimer = null;
+    }
     network.message = error.message;
     renderPanel();
   });
