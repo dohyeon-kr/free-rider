@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-test("Ride stores multiple ordered scenarios and allows duplicate endpoints", async () => {
+test("Course stores multiple ordered scenarios and allows duplicate endpoints", async () => {
   const {
     rides,
     activeRide,
@@ -20,6 +20,7 @@ test("Ride stores multiple ordered scenarios and allows duplicate endpoints", as
   };
 
   const first = activeRide(col);
+  assert.equal(first.name, "Course 1");
   insertRideStep(col, first.id, "login");
   const firstMe = insertRideStep(col, first.id, "me");
   insertRideStep(col, first.id, "me");
@@ -44,7 +45,7 @@ test("Ride stores multiple ordered scenarios and allows duplicate endpoints", as
   assert.equal(executionSteps(col).length, 0);
 });
 
-test("legacy runPlan migrates enabled HTTP requests into the first Ride", async () => {
+test("legacy runPlan migrates enabled HTTP requests into the first Course", async () => {
   const { rides, executionSteps } = await import("../src/ui/run-plan.mjs");
   const col = {
     requests: [
@@ -70,7 +71,7 @@ test("legacy runPlan migrates enabled HTTP requests into the first Ride", async 
   assert.equal("stopOnFailure" in col, false);
 });
 
-test("Ride drops steps whose requests no longer exist", async () => {
+test("Course drops steps whose requests no longer exist", async () => {
   const { activeRide, insertRideStep, executionSteps } = await import("../src/ui/run-plan.mjs");
   const col = { requests: [{ id: "a", url: "/a" }] };
   const ride = activeRide(col);
