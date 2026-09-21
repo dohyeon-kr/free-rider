@@ -32,6 +32,11 @@ MCP reads collections, requests, and Environments from the saved workspace. Save
 | `review_openapi` | Review changes and conflicts between saved requests and the linked OpenAPI specification, then issue a temporary `reviewId` |
 | `apply_openapi_review` | Apply only explicitly selected endpoints from a prior review with explicit conflict resolutions |
 | `send_request` | Execute a saved request |
+| `list_courses` | List saved Courses in a collection |
+| `get_course` | Read one Course and its ordered endpoint steps |
+| `set_course` | Create or replace a Course from an ordered request ID list |
+| `delete_course` | Delete a saved Course |
+| `ride_course` | Ride a Course by executing its saved HTTP requests in order |
 | `list_network_history` | List and filter recent Network-tab history summaries |
 | `get_network_entry` | Read a redacted Network-tab history entry |
 
@@ -66,6 +71,25 @@ See [Script API Reference](/en/reference/script-api) for the `req`, `res`, and `
 ::: warning Interceptor source and secrets
 `get_collection_interceptors` returns the saved script source. Do not hard-code tokens or passwords in scripts; use Environment/Vars instead.
 :::
+
+## Configure Courses and Ride through MCP
+
+A **Course** is a saved ordered sequence of HTTP requests. A **Ride** is the execution of that Course.
+
+Use `list_courses` and `get_course` to inspect existing Courses. Use `set_course` with an ordered `requestIds` array to create a Course or replace an existing one. Order is preserved and duplicate request IDs are allowed.
+
+```json
+{
+  "collectionId": "collection-1",
+  "name": "Login and verify",
+  "requestIds": ["login", "me", "me"],
+  "stopOnFailure": true
+}
+```
+
+Pass the returned `courseId` to `ride_course` to execute the Course. You may optionally specify a saved `environmentId`; otherwise Free Rider uses the collection's selected/default Environment.
+
+Course writes are rejected while the app has unsaved editor changes. Save the workspace first so the renderer cannot overwrite MCP changes with stale state.
 
 ## Manage the linked OpenAPI specification
 
