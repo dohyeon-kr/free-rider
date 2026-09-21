@@ -1,9 +1,9 @@
 cask "free-rider" do
   arch arm: "arm64", intel: "x64"
 
-  version "0.23.2"
-  sha256 arm:   "ed7899fb7d26e1087ef54ab9ec15ec3fa55de601b0bfa81e9303c23c498c310e",
-         intel: "341f56b03a303ebb151a74758ff4b81f578f31d5e0220542c1b7de9b952e57c4"
+  version "0.24.0"
+  sha256 arm:   "530e928bf8a01d1b9ea052fcc1f008a103bba02dd25e69037e0e8c9aebc03c76",
+         intel: "4cf65f15f22139434a49e678f2c1fa684dc4f4e930a7b9178703f4ffaefc28eb"
 
   url "https://github.com/dohyeon-kr/free-rider/releases/download/v#{version}/Free-Rider-#{version}-mac-#{arch}.dmg",
       verified: "github.com/dohyeon-kr/free-rider/"
