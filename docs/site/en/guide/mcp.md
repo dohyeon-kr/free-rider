@@ -24,6 +24,7 @@ MCP reads collections, requests, and Environments from the saved workspace. Save
 | `list_collections` | List collection and Environment names |
 | `list_requests` | List requests in a collection |
 | `get_request` | Read saved request details |
+| `set_request` | Patch and save editable fields on an existing request |
 | `get_collection_interceptors` | Read the collection's Before Request / After Response Interceptor configuration and source |
 | `set_collection_interceptors` | Patch and save collection Interceptor settings |
 | `get_openapi_spec` | Read the linked OpenAPI source and generated operation summaries |
@@ -41,6 +42,30 @@ MCP reads collections, requests, and Environments from the saved workspace. Save
 | `get_network_entry` | Read a redacted Network-tab history entry |
 
 `list_collections` does not return Environment variable values or Interceptor source. `send_request` uses the same request execution handler as the main Free Rider app, including the same cookie session, collection Interceptors, and assertion flow.
+
+## Edit saved requests through MCP
+
+Read the current saved request with `get_request`, then pass only the fields you want to change to `set_request`. Omitted fields are preserved.
+
+```json
+{
+  "collectionId": "collection-1",
+  "requestId": "request-1",
+  "method": "PATCH",
+  "url": "{{baseUrl}}/users/{{userId}}",
+  "headers": [
+    { "key": "Content-Type", "value": "application/json", "enabled": true }
+  ],
+  "body": "{\"name\":\"{{name}}\"}",
+  "authConfig": { "type": "bearer", "token": "{{accessToken}}" }
+}
+```
+
+Editable fields include the name/group, request type, HTTP method and URL, Params, Headers, Vars, Body/Body Type, Auth, response extraction mapping, documentation, and SSE/WebSocket settings. Nested `authConfig`, `sse`, and `websocket` objects merge the provided keys into the existing object. Params/Headers/Vars/`extract` replace that entire field when supplied.
+
+`set_request` cannot change the request `id`, OpenAPI synchronization metadata such as `openapi`/`baseline`, or internal origin metadata. Use the existing `review_openapi` → `apply_openapi_review` flow for OpenAPI structural changes.
+
+Request writes are rejected while the app has unsaved editor changes. Save first so the renderer and MCP cannot overwrite each other with stale workspace state. After a successful write, MCP saves the workspace and reloads the app from that saved state.
 
 ## Interceptor settings
 
