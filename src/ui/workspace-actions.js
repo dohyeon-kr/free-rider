@@ -197,8 +197,9 @@ function installTabMenu() {
 }
 
 function isCollectionActionsDialog() {
-  const labels = [...$("dialogContent")?.querySelectorAll(".actions > button") || []].map((button) => button.textContent);
-  return ["New Request", "New Folder", "Rename", "OpenAPI", "Run Collection", "Export Collection"].every((label) => labels.includes(label));
+  return Boolean(
+    $("dialogContent")?.querySelector("[data-collection-actions]"),
+  );
 }
 
 async function deleteCurrentCollection(title) {
