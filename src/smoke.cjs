@@ -125,6 +125,11 @@ async function run(win) {
   if (!(await js(`document.querySelector('#dialog').open && document.querySelector('#dialogTitle').textContent === 'Export Collection' && !document.querySelector('#collectionActions').matches(':popover-open')`)))
     throw Error("Collection export menu action failed");
   await js(`document.querySelector('#dialogCancel').click()`);
+  await js(`document.querySelector('#tree .tree-row .more').click()`);
+  await poll(() => js(`document.querySelector('#dialog').open`));
+  if (!(await js(`!!document.querySelector('#dialogContent [data-collection-actions]') && [...document.querySelectorAll('#dialogContent button')].some(b=>b.textContent==='Delete Collection')`)))
+    throw Error("Collection delete action missing");
+  await js(`document.querySelector('#dialogCancel').click()`);
   await js(`document.querySelector('#collectionHome').click(); [...document.querySelectorAll('.overview-item button')].find(b=>b.textContent==='Configure interceptors').click(); const view=document.querySelector('[data-view=scripts]');view.querySelector('input[type=checkbox]').click();const before=view.querySelector('[aria-label="Before Request Interceptor"]');before.value='req.headers.set("X-Global", "active");ctx.log("collection-before");';before.dispatchEvent(new Event('input',{bubbles:true}));const after=view.querySelector('[aria-label="After Response Interceptor"]');after.value='ctx.log("collection-after");';after.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#collectionHome').click()`);
   await js(`document.querySelector('#collectionHome').click(); [...document.querySelectorAll('.overview-item button')].find(b=>b.textContent==='Configure interceptors').click()`);
   await screenshot("scripts");
