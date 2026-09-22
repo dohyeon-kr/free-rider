@@ -256,7 +256,7 @@ function collectionMenu(col) {
   state.activeCollection = col.id;
   const actions = el(
     "div",
-    { class: "actions" },
+    { class: "actions", "data-collection-actions": col.id },
     button("New Request", () => {
       $("dialog").close();
       newRequest();
