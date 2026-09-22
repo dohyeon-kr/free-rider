@@ -24,6 +24,7 @@ MCP는 저장된 워크스페이스를 기준으로 컬렉션, 요청, 환경, I
 | `list_collections` | 컬렉션과 환경 이름, Interceptor 활성화 여부 조회 |
 | `list_requests` | 컬렉션의 요청 목록 조회 |
 | `get_request` | 저장된 요청 상세 조회 |
+| `set_request` | 기존 요청의 사용자 편집 필드를 부분 수정 후 저장 |
 | `get_collection_interceptors` | 컬렉션의 Before Request / After Response Interceptor 설정과 코드 조회 |
 | `set_collection_interceptors` | 컬렉션 Interceptor 활성화 여부와 코드를 부분 수정 후 저장 |
 | `get_openapi_spec` | 연결된 OpenAPI 소스와 생성될 operation 요약 조회 |
@@ -41,6 +42,30 @@ MCP는 저장된 워크스페이스를 기준으로 컬렉션, 요청, 환경, I
 | `get_network_entry` | Network 탭 기록 상세를 민감값 마스킹 후 조회 |
 
 `list_collections`는 환경 변수 값이나 Interceptor 코드를 반환하지 않습니다. `send_request`는 Free Rider 본체의 요청 실행 핸들러를 사용하므로 앱과 같은 쿠키 세션, 컬렉션 Interceptor, assertion 실행 흐름을 탑니다.
+
+## MCP에서 요청 수정하기
+
+먼저 `get_request`로 현재 저장된 요청을 읽고, `set_request`에는 바꿀 필드만 전달합니다. 생략한 필드는 그대로 유지됩니다.
+
+```json
+{
+  "collectionId": "collection-1",
+  "requestId": "request-1",
+  "method": "PATCH",
+  "url": "{{baseUrl}}/users/{{userId}}",
+  "headers": [
+    { "key": "Content-Type", "value": "application/json", "enabled": true }
+  ],
+  "body": "{\"name\":\"{{name}}\"}",
+  "authConfig": { "type": "bearer", "token": "{{accessToken}}" }
+}
+```
+
+수정 가능한 범위는 이름/그룹, 요청 타입, HTTP 메서드와 URL, Params, Headers, Vars, Body/Body Type, Auth, 응답 추출 설정, 설명, SSE/WebSocket 설정입니다. `authConfig`, `sse`, `websocket`은 전달한 하위 필드만 기존 설정에 병합됩니다. Params/Headers/Vars/`extract`는 전달하면 해당 필드 전체를 교체합니다.
+
+요청 `id`, OpenAPI 동기화용 `openapi`/`baseline`, 생성 출처 같은 내부 메타데이터는 `set_request`로 바꿀 수 없습니다. OpenAPI 구조 변경은 기존 `review_openapi` → `apply_openapi_review` 흐름을 사용하세요.
+
+앱에 미저장 편집이 있으면 요청 수정도 거절됩니다. 저장된 워크스페이스를 MCP와 렌더러가 동시에 덮어쓰지 않도록 먼저 앱에서 저장해야 합니다. 성공하면 MCP가 워크스페이스를 저장하고 앱을 최신 저장 상태로 다시 읽습니다.
 
 ## Interceptor 조회와 설정
 
