@@ -1,4 +1,5 @@
 const http = require("node:http");
+const { randomUUID } = require("node:crypto");
 const {
   openApiToolDefinitions,
   createOpenApiReviewTools,
@@ -61,6 +62,82 @@ function interceptorPatch(args = {}) {
   if (!changed)
     throw Error("At least one of enabled, before, or after must be provided.");
   return patch;
+}
+
+
+function isHttpRequest(request) {
+  return !request?.type || request.type === "http";
+}
+
+function courseList(collection) {
+  const requests = new Map(
+    (collection.requests || []).filter(isHttpRequest).map((request) => [request.id, request]),
+  );
+
+  if (Array.isArray(collection.rides)) {
+    return collection.rides.map((course, courseIndex) => ({
+      id: String(course?.id || `course-${courseIndex + 1}`),
+      name: String(course?.name || `Course ${courseIndex + 1}`),
+      stopOnFailure: course?.stopOnFailure !== false,
+      steps: (Array.isArray(course?.steps) ? course.steps : [])
+        .map((step, stepIndex) =>
+          typeof step === "string"
+            ? { id: `step-${stepIndex + 1}`, requestId: step }
+            : {
+                id: String(step?.id || `step-${stepIndex + 1}`),
+                requestId: step?.requestId,
+              },
+        )
+        .filter((step) => requests.has(step.requestId)),
+    }));
+  }
+
+  const legacy = Array.isArray(collection.runPlan) ? collection.runPlan : [];
+  if (!legacy.length) return [];
+
+  return [
+    {
+      id: "legacy-course",
+      name: "Course 1",
+      stopOnFailure: collection.stopOnFailure !== false,
+      steps: legacy
+        .filter((item) => item?.enabled && requests.has(item.id))
+        .map((item, index) => ({
+          id: `legacy-step-${index + 1}`,
+          requestId: item.id,
+        })),
+    },
+  ];
+}
+
+function materializeCourses(collection) {
+  if (!Array.isArray(collection.rides)) {
+    collection.rides = courseList(collection).map((course) => ({
+      ...course,
+      steps: course.steps.map((step) => ({ ...step })),
+    }));
+    delete collection.runPlan;
+    delete collection.stopOnFailure;
+  }
+  return collection.rides;
+}
+
+function courseView(collection, course) {
+  return {
+    id: course.id,
+    name: course.name,
+    stopOnFailure: course.stopOnFailure !== false,
+    steps: (course.steps || []).map((step) => {
+      const request = (collection.requests || []).find((item) => item.id === step.requestId);
+      return {
+        id: step.id,
+        requestId: step.requestId,
+        name: request?.name || "",
+        method: request?.method || "",
+        url: request?.url || "",
+      };
+    }),
+  };
 }
 
 const REDACTED = "[REDACTED]";
@@ -262,6 +339,75 @@ function toolDefinitions() {
       },
     },
     {
+      name: "list_courses",
+      description: "List saved Courses in a Free Rider collection. A Course is an ordered sequence of saved HTTP requests that can be ridden.",
+      inputSchema: {
+        type: "object",
+        properties: { collectionId: { type: "string" } },
+        required: ["collectionId"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "get_course",
+      description: "Read one saved Course with its ordered endpoint steps.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          collectionId: { type: "string" },
+          courseId: { type: "string" },
+        },
+        required: ["collectionId", "courseId"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "set_course",
+      description: "Create or replace a Course from an ordered requestIds array. Duplicate request ids are allowed. Free Rider must have no unsaved UI changes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          collectionId: { type: "string" },
+          courseId: { type: "string" },
+          name: { type: "string" },
+          requestIds: {
+            type: "array",
+            items: { type: "string" },
+          },
+          stopOnFailure: { type: "boolean" },
+        },
+        required: ["collectionId", "requestIds"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "delete_course",
+      description: "Delete a saved Course. Free Rider must have no unsaved UI changes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          collectionId: { type: "string" },
+          courseId: { type: "string" },
+        },
+        required: ["collectionId", "courseId"],
+        additionalProperties: false,
+      },
+    },
+    {
+      name: "ride_course",
+      description: "Ride a saved Course by executing its HTTP requests in order with the selected saved environment. Honors the Course stop-on-failure setting.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          collectionId: { type: "string" },
+          courseId: { type: "string" },
+          environmentId: { type: "string" },
+        },
+        required: ["collectionId", "courseId"],
+        additionalProperties: false,
+      },
+    },
+    {
       name: "send_request",
       description: "Execute one saved Free Rider request with a saved environment and the collection's Before Request / After Response interceptors.",
       inputSchema: {
@@ -316,6 +462,9 @@ function createMcpServer(options) {
     runSavedRequest,
     loadNetworkHistory,
     saveCollectionInterceptors,
+    saveWorkspace,
+    hasUnsavedChanges,
+    reloadWorkspace,
   } = options;
   if (typeof loadWorkspace !== "function") throw Error("loadWorkspace is required.");
   if (typeof runSavedRequest !== "function") throw Error("runSavedRequest is required.");
@@ -330,6 +479,7 @@ function createMcpServer(options) {
     "Free Rider exposes the saved API workspace and recent network history. " +
     "Use list tools before selecting ids. Environment values are not returned by list tools. " +
     "Read collection interceptors before patching them; interceptor writes require the app to have no unsaved UI changes. " +
+    "Courses are saved ordered HTTP request sequences; use set_course to configure them and ride_course to execute them. " +
     "OpenAPI sources can be inspected, linked, unlinked, reviewed, and selectively applied; source writes require a saved workspace. " +
     "Network history details redact common credentials, cookies, API keys, and token-like fields. " +
     "Use review_openapi before apply_openapi_review and resolve every selected conflict explicitly.";
@@ -376,6 +526,7 @@ function createMcpServer(options) {
         title: collection.title,
         description: collection.description || "",
         requestCount: collection.requests?.length || 0,
+        courseCount: courseList(collection).length,
         interceptorsEnabled: interceptorsFor(state, collection).enabled,
         openApiLinked: !!(collection.sourceFile || String(collection.source || "").trim()),
         openApiSourceType: collection.sourceFile
@@ -429,6 +580,112 @@ function createMcpServer(options) {
       return normalizeInterceptors(saved || next);
     }
 
+    if (name === "list_courses") {
+      const state = await workspace();
+      const collection = collectionById(state, requiredString(args, "collectionId"));
+      return courseList(collection).map((course) => ({
+        id: course.id,
+        name: course.name,
+        stepCount: course.steps.length,
+        stopOnFailure: course.stopOnFailure !== false,
+      }));
+    }
+
+    if (name === "get_course") {
+      const state = await workspace();
+      const collection = collectionById(state, requiredString(args, "collectionId"));
+      const courseId = requiredString(args, "courseId");
+      const course = courseList(collection).find((item) => item.id === courseId);
+      if (!course) throw Error(`Course not found: ${courseId}`);
+      return courseView(collection, course);
+    }
+
+    if (name === "set_course") {
+      if (typeof saveWorkspace !== "function") throw Error("Course persistence is unavailable.");
+      if (typeof hasUnsavedChanges === "function" && hasUnsavedChanges())
+        throw Error("Save the Free Rider workspace before changing Courses through MCP.");
+
+      const state = await workspace();
+      if (typeof hasUnsavedChanges === "function" && hasUnsavedChanges())
+        throw Error("Save the Free Rider workspace before changing Courses through MCP.");
+
+      const collection = collectionById(state, requiredString(args, "collectionId"));
+      if (!Array.isArray(args.requestIds))
+        throw Error("requestIds must be an array of saved HTTP request ids.");
+
+      const httpRequests = new Map(
+        (collection.requests || []).filter(isHttpRequest).map((request) => [request.id, request]),
+      );
+      const requestIds = args.requestIds.map((requestId, index) => {
+        if (typeof requestId !== "string" || !requestId.trim())
+          throw Error(`requestIds[${index}] must be a non-empty string.`);
+        if (!httpRequests.has(requestId))
+          throw Error(`HTTP request not found: ${requestId}`);
+        return requestId;
+      });
+
+      const courses = materializeCourses(collection);
+      const courseId =
+        args.courseId === undefined ? "" : requiredString(args, "courseId");
+      let course = courseId
+        ? courses.find((item) => item.id === courseId)
+        : null;
+      if (courseId && !course) throw Error(`Course not found: ${courseId}`);
+
+      if (!course) {
+        course = {
+          id: randomUUID(),
+          name: `Course ${courses.length + 1}`,
+          steps: [],
+          stopOnFailure: true,
+        };
+        courses.push(course);
+      }
+
+      if (args.name !== undefined) {
+        if (typeof args.name !== "string" || !args.name.trim())
+          throw Error("name must be a non-empty string.");
+        course.name = args.name.trim();
+      }
+      if (args.stopOnFailure !== undefined) {
+        if (typeof args.stopOnFailure !== "boolean")
+          throw Error("stopOnFailure must be a boolean.");
+        course.stopOnFailure = args.stopOnFailure;
+      }
+      course.steps = requestIds.map((requestId) => ({
+        id: randomUUID(),
+        requestId,
+      }));
+      collection.activeRideId = course.id;
+
+      await saveWorkspace(state);
+      if (typeof reloadWorkspace === "function") await reloadWorkspace();
+      return courseView(collection, course);
+    }
+
+    if (name === "delete_course") {
+      if (typeof saveWorkspace !== "function") throw Error("Course persistence is unavailable.");
+      if (typeof hasUnsavedChanges === "function" && hasUnsavedChanges())
+        throw Error("Save the Free Rider workspace before changing Courses through MCP.");
+
+      const state = await workspace();
+      if (typeof hasUnsavedChanges === "function" && hasUnsavedChanges())
+        throw Error("Save the Free Rider workspace before changing Courses through MCP.");
+
+      const collection = collectionById(state, requiredString(args, "collectionId"));
+      const courseId = requiredString(args, "courseId");
+      const courses = materializeCourses(collection);
+      const index = courses.findIndex((item) => item.id === courseId);
+      if (index < 0) throw Error(`Course not found: ${courseId}`);
+      courses.splice(index, 1);
+      if (collection.activeRideId === courseId)
+        collection.activeRideId = courses[0]?.id;
+
+      await saveWorkspace(state);
+      if (typeof reloadWorkspace === "function") await reloadWorkspace();
+      return { deleted: true, courseId, remaining: courses.length };
+    }
+
     if (name === "send_request") {
       return runSavedRequest({
         collectionId: requiredString(args, "collectionId"),
@@ -436,6 +693,75 @@ function createMcpServer(options) {
         environmentId:
           args.environmentId === undefined ? undefined : requiredString(args, "environmentId"),
       });
+    }
+
+    if (name === "ride_course") {
+      const state = await workspace();
+      const collectionId = requiredString(args, "collectionId");
+      const collection = collectionById(state, collectionId);
+      const courseId = requiredString(args, "courseId");
+      const course = courseList(collection).find((item) => item.id === courseId);
+      if (!course) throw Error(`Course not found: ${courseId}`);
+
+      const environmentId =
+        args.environmentId === undefined ? undefined : requiredString(args, "environmentId");
+      const steps = [];
+      let failed = 0;
+
+      for (const step of course.steps) {
+        const request = requestById(collection, step.requestId);
+        let result = null;
+        let error = "";
+        try {
+          result = await runSavedRequest({
+            collectionId,
+            requestId: request.id,
+            environmentId,
+          });
+        } catch (cause) {
+          error = cause?.message || String(cause);
+        }
+
+        const stepFailed =
+          !!error ||
+          !result ||
+          !!result.scriptError ||
+          !result.status ||
+          result.status >= 400;
+        if (stepFailed) failed += 1;
+
+        steps.push({
+          stepId: step.id,
+          requestId: request.id,
+          name: request.name || "",
+          method: request.method || "",
+          url: request.url || "",
+          status: result?.status || 0,
+          statusText: result?.statusText || "",
+          elapsed: result?.elapsed || 0,
+          error: error || result?.error || "",
+          scriptError: result?.scriptError ? String(result.scriptError) : "",
+          passed: !stepFailed,
+        });
+
+        if (stepFailed && course.stopOnFailure !== false) break;
+      }
+
+      return {
+        courseId: course.id,
+        courseName: course.name,
+        state:
+          failed > 0
+            ? "failed"
+            : steps.length === course.steps.length
+              ? "passed"
+              : "stopped",
+        total: course.steps.length,
+        completed: steps.length,
+        failed,
+        stopOnFailure: course.stopOnFailure !== false,
+        steps,
+      };
     }
 
     if (name === "list_network_history") {

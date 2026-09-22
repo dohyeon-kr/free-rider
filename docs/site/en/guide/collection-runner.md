@@ -1,26 +1,26 @@
 # Ride
 
-A Ride is a **test scenario** that executes saved HTTP requests in order.
+A **Course** is a saved ordered sequence of HTTP requests. A **Ride** is the action of executing that Course.
 
-A collection can contain multiple Rides, so login flows, CRUD scenarios, and regression checks can be stored as separate execution sequences.
+Store repeatable flows such as login → current user → profile update as Courses, then Ride them whenever you need to verify the flow. A collection can contain multiple Courses.
 
-## Create multiple Rides
+## Create Courses
 
-Use the Ride selector to switch scenarios and `New Ride` to create another sequence.
+Use the Course selector on the Ride screen to switch the current Course, and choose `New Course` to add another execution path.
 
-Each Ride stores its own:
+Each Course stores its own:
 
-- Name
+- Course name
 - Ordered endpoint steps
 - Stop-on-failure setting
 
 ## Insert endpoints
 
-Ride uses a search-and-insert palette instead of checkbox selection.
+Use the search-and-insert palette instead of checkbox selection.
 
 Choose `Insert endpoint`, search by request name, method, or URL, then click a result or press Enter.
 
-The same endpoint can appear multiple times, which makes macro-style flows possible:
+The same endpoint can appear multiple times, which makes macro-style Courses possible:
 
 ```text
 POST Login
@@ -31,17 +31,29 @@ GET Current user
 
 Use the `+` control before a step to insert a new endpoint at that exact position.
 
-## Run tests
+## Ride a Course
 
-Choose `Run Ride` to execute every step from top to bottom.
+Choose `Run Ride` to execute every step in the selected Course from top to bottom.
 
-A step passes when the HTTP status is below 400 and request scripts complete without errors. If any step fails, the whole Ride is FAIL.
+A step passes when the HTTP status is below 400 and request scripts complete without errors. If any step fails, the Ride result is FAIL.
 
 Enable `Stop on failure` to stop at the first failed step. Manual cancellation is reported as STOPPED.
 
 ::: warning Ride uses saved requests
 Ride executes the last saved request, not the draft currently in the editor. Save with <kbd>Cmd</kbd> + <kbd>S</kbd> before running.
 :::
+
+## Configure and Ride Courses through MCP
+
+When Free Rider MCP is enabled, an AI agent can inspect, configure, and execute Courses.
+
+- `list_courses`: list Courses in a collection
+- `get_course`: inspect ordered endpoint steps
+- `set_course`: create or replace a Course from request IDs
+- `delete_course`: delete a Course
+- `ride_course`: Ride a saved Course
+
+`set_course.requestIds` preserves order and may contain the same request ID more than once.
 
 ## Pass values between requests
 

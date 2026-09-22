@@ -2504,7 +2504,7 @@ function runnerView(col) {
     ),
     el("p", {
       class: "muted",
-      text: "Ride는 저장된 HTTP 요청을 순서대로 실행하는 테스트 시나리오입니다.",
+      text: "코스는 저장된 HTTP 요청의 실행 순서입니다. Ride는 선택한 코스를 실제로 실행합니다.",
     }),
     el(
       "div",
@@ -2517,12 +2517,12 @@ function runnerView(col) {
           mark(col);
           render();
         },
-        { id: "rideSelect", disabled: busy, "aria-label": "Ride 선택" },
+        { id: "rideSelect", disabled: busy, "aria-label": "코스 선택" },
       ),
       button(
-        "+ 새 Ride",
+        "+ 새 코스",
         () =>
-          askName("새 Ride", "", (name) => {
+          askName("새 코스", "", (name) => {
             createRide(col, name);
             mark(col);
             render();
@@ -2532,7 +2532,7 @@ function runnerView(col) {
       button(
         "이름 변경",
         () =>
-          askName("Ride 이름 변경", ride.name, (name) => {
+          askName("코스 이름 변경", ride.name, (name) => {
             renameRide(col, ride.id, name);
             mark(col);
             render();
@@ -2543,8 +2543,8 @@ function runnerView(col) {
         "삭제",
         () =>
           modal(
-            "Ride 삭제",
-            el("p", { text: ride.name + " 시나리오를 삭제할까요?" }),
+            "코스 삭제",
+            el("p", { text: ride.name + " 코스를 삭제할까요?" }),
             () => {
               removeRide(col, ride.id);
               mark(col);
@@ -2712,7 +2712,7 @@ async function runCollection(col, ride = activeRide(col)) {
   const runInterceptors = structuredClone(col.interceptors || {});
 
   if (!selected.length) {
-    status("Ride에 실행할 엔드포인트를 삽입하세요.");
+    status("코스에 실행할 엔드포인트를 삽입하세요.");
     return;
   }
 
