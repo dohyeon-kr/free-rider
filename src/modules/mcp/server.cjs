@@ -65,6 +65,150 @@ function interceptorPatch(args = {}) {
 }
 
 
+const REQUEST_TYPES = new Set(["http", "sse", "websocket"]);
+const BODY_TYPES = new Set(["json", "text", "none", "multipart"]);
+const AUTH_TYPES = new Set(["inherit", "none", "bearer", "basic"]);
+const REQUEST_PATCH_FIELDS = [
+  "name",
+  "group",
+  "type",
+  "method",
+  "url",
+  "query",
+  "headers",
+  "vars",
+  "body",
+  "bodyType",
+  "authConfig",
+  "extract",
+  "description",
+  "sse",
+  "websocket",
+];
+
+function cloneObject(value, name) {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw Error(`${name} must be an object.`);
+  return structuredClone(value);
+}
+
+function cloneRows(value, name) {
+  if (!value || typeof value !== "object")
+    throw Error(`${name} must be an object or array.`);
+  return structuredClone(value);
+}
+
+function requestPatch(args = {}) {
+  const patch = {};
+  let changed = false;
+
+  for (const name of REQUEST_PATCH_FIELDS) {
+    if (!hasOwn(args, name)) continue;
+    changed = true;
+    const value = args[name];
+
+    if (name === "name") {
+      if (typeof value !== "string" || !value.trim())
+        throw Error("name must be a non-empty string.");
+      patch.name = value.trim();
+      continue;
+    }
+
+    if (name === "group" || name === "body" || name === "description") {
+      if (typeof value !== "string") throw Error(`${name} must be a string.`);
+      patch[name] = value;
+      continue;
+    }
+
+    if (name === "type") {
+      if (typeof value !== "string" || !REQUEST_TYPES.has(value))
+        throw Error("type must be one of http, sse, or websocket.");
+      patch.type = value;
+      continue;
+    }
+
+    if (name === "method") {
+      if (typeof value !== "string" || !value.trim())
+        throw Error("method must be a non-empty string.");
+      patch.method = value.trim().toUpperCase();
+      continue;
+    }
+
+    if (name === "url") {
+      if (typeof value !== "string" || !value.trim())
+        throw Error("url must be a non-empty string.");
+      patch.url = value.trim();
+      continue;
+    }
+
+    if (["query", "headers", "vars"].includes(name)) {
+      patch[name] = cloneRows(value, name);
+      continue;
+    }
+
+    if (name === "bodyType") {
+      if (typeof value !== "string" || !BODY_TYPES.has(value))
+        throw Error("bodyType must be one of json, text, none, or multipart.");
+      patch.bodyType = value;
+      continue;
+    }
+
+    if (name === "authConfig") {
+      const next = cloneObject(value, name);
+      if (hasOwn(next, "type") && !AUTH_TYPES.has(next.type))
+        throw Error("authConfig.type must be one of inherit, none, bearer, or basic.");
+      patch.authConfig = next;
+      continue;
+    }
+
+    if (name === "extract") {
+      patch.extract = cloneObject(value, name);
+      continue;
+    }
+
+    if (name === "sse") {
+      const next = cloneObject(value, name);
+      if (hasOwn(next, "autoReconnect") && typeof next.autoReconnect !== "boolean")
+        throw Error("sse.autoReconnect must be a boolean.");
+      patch.sse = next;
+      continue;
+    }
+
+    if (name === "websocket") {
+      const next = cloneObject(value, name);
+      if (hasOwn(next, "autoReconnect") && typeof next.autoReconnect !== "boolean")
+        throw Error("websocket.autoReconnect must be a boolean.");
+      if (
+        hasOwn(next, "protocols") &&
+        (!Array.isArray(next.protocols) ||
+          next.protocols.some((item) => typeof item !== "string"))
+      )
+        throw Error("websocket.protocols must be an array of strings.");
+      if (hasOwn(next, "messages") && !Array.isArray(next.messages))
+        throw Error("websocket.messages must be an array.");
+      patch.websocket = next;
+    }
+  }
+
+  if (!changed)
+    throw Error(
+      "At least one editable request field must be provided. Request id and OpenAPI sync metadata cannot be changed through set_request.",
+    );
+  return patch;
+}
+
+function applyRequestPatch(request, patch) {
+  const next = { ...request, ...patch };
+  for (const name of ["authConfig", "sse", "websocket"]) {
+    if (!hasOwn(patch, name)) continue;
+    next[name] = {
+      ...(request?.[name] && typeof request[name] === "object" ? request[name] : {}),
+      ...patch[name],
+    };
+  }
+  return next;
+}
+
 function isHttpRequest(request) {
   return !request?.type || request.type === "http";
 }
@@ -309,6 +453,34 @@ function toolDefinitions() {
       },
     },
     {
+      name: "set_request",
+      description: "Patch and save one existing Free Rider request. Omitted editable fields are preserved; request id and OpenAPI sync metadata are never changed. Free Rider must have no unsaved UI changes.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          collectionId: { type: "string" },
+          requestId: { type: "string" },
+          name: { type: "string" },
+          group: { type: "string" },
+          type: { type: "string", enum: ["http", "sse", "websocket"] },
+          method: { type: "string" },
+          url: { type: "string" },
+          query: { anyOf: [{ type: "array" }, { type: "object" }] },
+          headers: { anyOf: [{ type: "array" }, { type: "object" }] },
+          vars: { anyOf: [{ type: "array" }, { type: "object" }] },
+          body: { type: "string" },
+          bodyType: { type: "string", enum: ["json", "text", "none", "multipart"] },
+          authConfig: { type: "object" },
+          extract: { type: "object" },
+          description: { type: "string" },
+          sse: { type: "object" },
+          websocket: { type: "object" },
+        },
+        required: ["collectionId", "requestId"],
+        additionalProperties: false,
+      },
+    },
+    {
       name: "get_collection_interceptors",
       description: "Read a collection's saved Before Request and After Response interceptor configuration, including script source.",
       inputSchema: {
@@ -478,6 +650,7 @@ function createMcpServer(options) {
   const instructions =
     "Free Rider exposes the saved API workspace and recent network history. " +
     "Use list tools before selecting ids. Environment values are not returned by list tools. " +
+    "Read a request with get_request before patching it with set_request; request writes preserve ids/OpenAPI sync metadata and require the app to have no unsaved UI changes. " +
     "Read collection interceptors before patching them; interceptor writes require the app to have no unsaved UI changes. " +
     "Courses are saved ordered HTTP request sequences; use set_course to configure them and ride_course to execute them. " +
     "OpenAPI sources can be inspected, linked, unlinked, reviewed, and selectively applied; source writes require a saved workspace. " +
@@ -557,6 +730,30 @@ function createMcpServer(options) {
       const state = await workspace();
       const collection = collectionById(state, requiredString(args, "collectionId"));
       return requestById(collection, requiredString(args, "requestId"));
+    }
+
+
+    if (name === "set_request") {
+      if (typeof saveWorkspace !== "function") throw Error("Request persistence is unavailable.");
+      if (typeof hasUnsavedChanges === "function" && hasUnsavedChanges())
+        throw Error("Save the Free Rider workspace before changing requests through MCP.");
+
+      const state = await workspace();
+      if (typeof hasUnsavedChanges === "function" && hasUnsavedChanges())
+        throw Error("Save the Free Rider workspace before changing requests through MCP.");
+
+      const collection = collectionById(state, requiredString(args, "collectionId"));
+      const requestId = requiredString(args, "requestId");
+      const index = (collection.requests || []).findIndex((item) => item.id === requestId);
+      if (index < 0) throw Error(`Request not found: ${requestId}`);
+
+      const current = collection.requests[index];
+      const next = applyRequestPatch(current, requestPatch(args));
+      collection.requests[index] = next;
+
+      await saveWorkspace(state);
+      if (typeof reloadWorkspace === "function") await reloadWorkspace();
+      return next;
     }
 
     if (name === "get_collection_interceptors") {
