@@ -126,6 +126,7 @@ test("modern tools/list is stamped and non-cacheable", async () => {
   assert.equal(result.result.ttlMs, 0);
   assert.equal(result.result.cacheScope, "private");
   assert.equal(result.result._meta["io.modelcontextprotocol/serverInfo"].version, "1.2.3");
+  assert.ok(result.result.tools.some((tool) => tool.name === "set_request"));
   assert.ok(result.result.tools.some((tool) => tool.name === "get_collection_interceptors"));
   assert.ok(result.result.tools.some((tool) => tool.name === "set_collection_interceptors"));
   assert.ok(result.result.tools.some((tool) => tool.name === "list_courses"));
@@ -138,6 +139,107 @@ test("modern tools/list is stamped and non-cacheable", async () => {
   assert.ok(result.result.tools.some((tool) => tool.name === "unlink_openapi"));
   assert.ok(result.result.tools.some((tool) => tool.name === "review_openapi"));
   assert.ok(result.result.tools.some((tool) => tool.name === "apply_openapi_review"));
+});
+
+test("set_request patches editable request fields, preserves identity/sync metadata and reloads", async () => {
+  const state = fixture();
+  Object.assign(state.collections[0].requests[0], {
+    group: "Users",
+    query: [{ key: "page", value: "1", enabled: true }],
+    headers: [{ key: "Accept", value: "application/json", enabled: true }],
+    vars: [{ key: "scope", value: "local", enabled: true }],
+    body: "",
+    bodyType: "json",
+    authConfig: { type: "inherit", token: "{{token}}" },
+    description: "Before",
+    manual: false,
+    openapi: { path: "/users", method: "GET" },
+    baseline: { method: "GET", url: "{{baseUrl}}/users" },
+  });
+
+  let saved = null;
+  let reloads = 0;
+  const result = await server({
+    loadWorkspace: async () => structuredClone(state),
+    saveWorkspace: async (next) => {
+      saved = structuredClone(next);
+      return true;
+    },
+    reloadWorkspace: async () => {
+      reloads += 1;
+    },
+  }).handle({
+    jsonrpc: "2.0",
+    id: 10,
+    method: "tools/call",
+    params: {
+      name: "set_request",
+      arguments: {
+        collectionId: "collection-1",
+        requestId: "request-1",
+        name: "Create user",
+        method: "post",
+        url: "{{baseUrl}}/users",
+        headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
+        body: "{\"name\":\"{{name}}\"}",
+        authConfig: { type: "bearer" },
+        description: "Updated by MCP",
+      },
+    },
+  });
+
+  const request = JSON.parse(result.result.content[0].text);
+  assert.equal(request.id, "request-1");
+  assert.equal(request.name, "Create user");
+  assert.equal(request.method, "POST");
+  assert.equal(request.description, "Updated by MCP");
+  assert.equal(request.authConfig.type, "bearer");
+  assert.equal(request.authConfig.token, "{{token}}");
+  assert.deepEqual(request.openapi, { path: "/users", method: "GET" });
+  assert.deepEqual(request.baseline, { method: "GET", url: "{{baseUrl}}/users" });
+  assert.equal(request.manual, false);
+  assert.equal(saved.collections[0].requests[0].name, "Create user");
+  assert.equal(reloads, 1);
+});
+
+test("set_request rejects writes while the app has unsaved changes", async () => {
+  const result = await server({
+    hasUnsavedChanges: () => true,
+  }).handle({
+    jsonrpc: "2.0",
+    id: 11,
+    method: "tools/call",
+    params: {
+      name: "set_request",
+      arguments: {
+        collectionId: "collection-1",
+        requestId: "request-1",
+        url: "https://example.com/users",
+      },
+    },
+  });
+
+  assert.equal(result.result.isError, true);
+  assert.match(result.result.content[0].text, /Save the Free Rider workspace/);
+});
+
+test("set_request requires an editable field and cannot rewrite request ids", async () => {
+  const result = await server().handle({
+    jsonrpc: "2.0",
+    id: 12,
+    method: "tools/call",
+    params: {
+      name: "set_request",
+      arguments: {
+        collectionId: "collection-1",
+        requestId: "request-1",
+        id: "replacement-id",
+      },
+    },
+  });
+
+  assert.equal(result.result.isError, true);
+  assert.match(result.result.content[0].text, /At least one editable request field/);
 });
 
 test("get_collection_interceptors returns the saved collection scripts", async () => {
