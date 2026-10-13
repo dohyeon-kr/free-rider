@@ -9,6 +9,12 @@
 .mock-settings .field:last-child{grid-column:1/-1}
 .mock-settings code{display:block;overflow-wrap:anywhere;padding:11px;border-radius:6px;background:var(--surface2,#242424)}
 .mock-rule{padding:14px;border:1px solid var(--border, #444);border-radius:8px;display:flex;flex-direction:column;gap:10px}
+.mock-rule[hidden],.mock-rule-empty[hidden]{display:none!important}
+.mock-rule-search{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mock-rule-search input[type="search"]{flex:1;min-width:190px;max-width:520px}
+.mock-search-count{font-size:12px;white-space:nowrap;color:var(--muted,#9ca3af);margin-left:auto}
+.mock-rule-empty{margin:4px 0 10px}
+
 .mock-rule-head>code{font-size:13px;overflow-wrap:anywhere}
 .mock-rule-settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
 .mock-rule .field{min-width:0}
