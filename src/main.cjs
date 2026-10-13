@@ -349,6 +349,7 @@ handle("mock-state", () => mockServer.status());
 handle("mock-start", config => mockServer.start(config));
 handle("mock-update", config => mockServer.configure(config));
 handle("mock-stop", () => mockServer.stop());
+handle("mock-preview", (request, rule) => require("./modules/mock/schema.cjs").responseFor(request, rule));
 handle("network-clear", async () => {
   networkEntries = [];
   replayRequests.clear();
