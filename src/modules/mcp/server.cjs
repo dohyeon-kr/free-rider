@@ -4,6 +4,7 @@ const {
   openApiToolDefinitions,
   createOpenApiReviewTools,
 } = require("./openapi-review.cjs");
+const {requireConfig} = require("../mock/server.cjs");
 
 const MODERN_VERSION = "2026-07-28";
 const LEGACY_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
@@ -223,6 +224,7 @@ function courseList(collection) {
       id: String(course?.id || `course-${courseIndex + 1}`),
       name: String(course?.name || `Course ${courseIndex + 1}`),
       stopOnFailure: course?.stopOnFailure !== false,
+      mockScenarioId: String(course?.mockScenarioId||""),
       steps: (Array.isArray(course?.steps) ? course.steps : [])
         .map((step, stepIndex) =>
           typeof step === "string"
@@ -244,6 +246,7 @@ function courseList(collection) {
       id: "legacy-course",
       name: "Course 1",
       stopOnFailure: collection.stopOnFailure !== false,
+      mockScenarioId: "",
       steps: legacy
         .filter((item) => item?.enabled && requests.has(item.id))
         .map((item, index) => ({
@@ -271,6 +274,7 @@ function courseView(collection, course) {
     id: course.id,
     name: course.name,
     stopOnFailure: course.stopOnFailure !== false,
+    mockScenarioId: course.mockScenarioId||"",
     steps: (course.steps || []).map((step) => {
       const request = (collection.requests || []).find((item) => item.id === step.requestId);
       return {
@@ -547,6 +551,7 @@ function toolDefinitions() {
             items: { type: "string" },
           },
           stopOnFailure: { type: "boolean" },
+          mockScenarioId: { type: "string" },
         },
         required: ["collectionId", "requestIds"],
         additionalProperties: false,
@@ -594,6 +599,56 @@ function toolDefinitions() {
       },
     },
     {
+      name:"get_mock_server",
+      description:"Inspect local Mock server status and the saved collection's named scenario profiles without exposing upstream credentials or response bodies.",
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"}},required:["collectionId"],additionalProperties:false},
+    },
+    {
+      name:"list_mock_rules",
+      description:"List saved Mock rules as non-secret summaries with indices for editing. Response bodies and values in conditional predicates are omitted.",
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"}},required:["collectionId"],additionalProperties:false},
+    },
+    {
+      name:"start_mock_server",
+      description:"Start local Mock Proxy for a saved collection using saved port and upstream. Does not expose a remote listener. Save UI edits first.",
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"}},required:["collectionId"],additionalProperties:false},
+    },
+    {
+      name:"stop_mock_server",
+      description:"Stop the local Mock Proxy HTTP server.",
+      inputSchema:{type:"object",properties:{},additionalProperties:false},
+    },
+    {
+      name:"select_mock_scenario",
+      description:"Select a saved named Mock scenario for the running server. Empty scenarioId selects the default rules. This is runtime-only.",
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"},scenarioId:{type:"string"}},
+        required:["collectionId","scenarioId"],additionalProperties:false},
+    },
+    {
+      name:"set_mock_scenario",
+      description:"Create or rename a named Mock scenario in a saved collection. Omit scenarioId to create; provide it to rename. Requires a clean saved workspace.",
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"},scenarioId:{type:"string"},name:{type:"string"}},
+        required:["collectionId","name"],additionalProperties:false},
+    },
+    {
+      name:"delete_mock_scenario",
+      description:"Delete a saved Mock scenario, its scoped rules and Course bindings. Requires no unsaved UI changes.",
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"},scenarioId:{type:"string"}},
+        required:["collectionId","scenarioId"],additionalProperties:false},
+    },
+    {
+      name:"delete_mock_rule",
+      description:"Delete a Mock rule by zero-based index. Requires no unsaved UI changes.",
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"},index:{type:"integer",minimum:0}},
+        required:["collectionId","index"],additionalProperties:false},
+    },
+    {
+      name:"set_mock_rule",
+      description:"Create or replace one Mock rule in a saved collection. Pass zero-based index to replace; omit index to append. Validate rules and save UI edits first.",
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"},index:{type:"integer",minimum:0},
+        rule:{type:"object"}},required:["collectionId","rule"],additionalProperties:false},
+    },
+    {
       name: "list_network_history",
       description:
         "List recent Free Rider Network-tab history as compact summaries. Supports collection/request/method/status/time/text filters. Use get_network_entry for redacted details.",
@@ -635,6 +690,13 @@ function createMcpServer(options) {
     loadNetworkHistory,
     saveCollectionInterceptors,
     saveWorkspace,
+    mockState,
+    mockStart,
+    mockStop,
+    mockSelectScenario,
+    mockAcquireScenario,
+    mockReleaseScenario,
+    mockUpdate,
     hasUnsavedChanges,
     reloadWorkspace,
   } = options;
@@ -785,6 +847,7 @@ function createMcpServer(options) {
         name: course.name,
         stepCount: course.steps.length,
         stopOnFailure: course.stopOnFailure !== false,
+        mockScenarioId: course.mockScenarioId||"",
       }));
     }
 
@@ -843,6 +906,12 @@ function createMcpServer(options) {
         if (typeof args.name !== "string" || !args.name.trim())
           throw Error("name must be a non-empty string.");
         course.name = args.name.trim();
+      }
+      if(args.mockScenarioId!==undefined){
+        if(typeof args.mockScenarioId!=="string"||
+          (args.mockScenarioId && !collection.mock?.scenarios?.some(s=>s.id===args.mockScenarioId)))
+          throw Error("Unknown Mock scenario: "+args.mockScenarioId);
+        course.mockScenarioId=args.mockScenarioId;
       }
       if (args.stopOnFailure !== undefined) {
         if (typeof args.stopOnFailure !== "boolean")
@@ -904,7 +973,19 @@ function createMcpServer(options) {
         args.environmentId === undefined ? undefined : requiredString(args, "environmentId");
       const steps = [];
       let failed = 0;
-
+      let scenarioLease=null;
+      if(course.mockScenarioId){
+        if(typeof mockState!=="function"||typeof mockAcquireScenario!=="function"||
+           typeof mockReleaseScenario!=="function")
+          throw Error("Mock scenario lease bridge is unavailable.");
+        const mock=await mockState();
+        if(!mock.enabled||mock.collectionId!==collectionId)
+          throw Error("Start the Mock server for this collection before riding its scenario-bound Course.");
+        if(!collection.mock?.scenarios?.some(x=>x.id===course.mockScenarioId))
+          throw Error("Course references a missing Mock scenario.");
+        scenarioLease=await mockAcquireScenario(course.mockScenarioId);
+      }
+      try {
       for (const step of course.steps) {
         const request = requestById(collection, step.requestId);
         let result = null;
@@ -943,6 +1024,9 @@ function createMcpServer(options) {
 
         if (stepFailed && course.stopOnFailure !== false) break;
       }
+      }finally{
+        if(scenarioLease)await mockReleaseScenario(scenarioLease.token);
+      }
 
       return {
         courseId: course.id,
@@ -959,6 +1043,102 @@ function createMcpServer(options) {
         stopOnFailure: course.stopOnFailure !== false,
         steps,
       };
+    }
+
+    if(["get_mock_server","list_mock_rules","start_mock_server","select_mock_scenario","set_mock_scenario","delete_mock_scenario","set_mock_rule","delete_mock_rule","stop_mock_server"].includes(name)){
+      if(typeof mockState!=="function")throw Error("Mock server bridge is unavailable.");
+      if(name==="stop_mock_server"){
+        if(typeof mockStop!=="function")throw Error("Mock server bridge is unavailable.");
+        return mockStop();
+      }
+      const state=await workspace();
+      const collectionId=requiredString(args,"collectionId");
+      const col=collectionById(state,collectionId);
+      const status=await mockState();
+      if(name==="get_mock_server")return {
+        ...status,scenarios:(col.mock?.scenarios||[]).map(x=>({id:x.id,name:x.name})),
+        storedRuleCount:col.mock?.rules?.length||0,
+        portConfigured:state.mockServer?.port||4010,
+        upstreamConfigured:!!state.mockServer?.upstreams?.[col.id],
+      };
+      if(name==="list_mock_rules")return (col.mock?.rules||[]).map((rule,index)=>({
+        index,method:rule.method,path:rule.path,mode:rule.mode,scenarioId:rule.scenarioId||"",
+        enabled:rule.enabled!==false,hasConditions:!!rule.when&&Object.keys(rule.when).length>0,
+        status:rule.status||200,responseMode:rule.responseMode||"",
+        delayMs:rule.delayMs||0,fault:rule.fault||"none",
+      }));
+      if(name==="start_mock_server"){
+        if(typeof mockStart!=="function")throw Error("Mock start bridge is unavailable.");
+        if(hasUnsavedChanges?.())throw Error("Save Free Rider workspace before starting Mock via MCP.");
+        const config={port:state.mockServer?.port||4010,
+          upstream:state.mockServer?.upstreams?.[col.id]||"",collection:col};
+        requireConfig(config);
+        return mockStart(config);
+      }
+      if(name==="select_mock_scenario"){
+        if(typeof mockSelectScenario!=="function")throw Error("Mock scenario bridge is unavailable.");
+        if(!status.enabled||status.collectionId!==collectionId)
+          throw Error("Start the Mock server for this collection first.");
+        if(typeof args.scenarioId!=="string")throw Error("scenarioId must be a string.");
+        return mockSelectScenario(args.scenarioId);
+      }
+      if(typeof saveWorkspace!=="function")throw Error("Mock persistence is unavailable.");
+      if(status.enabled&&status.collectionId===collectionId&&status.scenarioLocked)
+        throw Error("Cannot edit Mock rules or profiles during a scenario-bound Course.");
+      if(hasUnsavedChanges?.())throw Error("Save the Free Rider workspace before editing Mock through MCP.");
+      col.mock ||= {rules:[],scenarios:[]};
+      col.mock.rules ||= [];
+      col.mock.scenarios ||= [];
+      let result;
+      if(name==="delete_mock_scenario"){
+        const id=requiredString(args,"scenarioId");
+        const index=col.mock.scenarios.findIndex(x=>x.id===id);
+        if(index<0)throw Error("Mock scenario not found: "+id);
+        const [removed]=col.mock.scenarios.splice(index,1);
+        col.mock.rules=col.mock.rules.filter(x=>x.scenarioId!==id);
+        for(const course of col.rides||[])
+          if(course.mockScenarioId===id)course.mockScenarioId="";
+        result={deleted:true,scenarioId:removed.id};
+      }else if(name==="delete_mock_rule"){
+        const index=args.index;
+        if(!Number.isInteger(index)||index<0||index>=col.mock.rules.length)
+          throw Error("Invalid Mock rule index.");
+        const [removed]=col.mock.rules.splice(index,1);
+        result={deleted:true,index,method:removed.method,path:removed.path};
+      }else if(name==="set_mock_scenario"){
+        if(typeof args.name!=="string"||!args.name.trim()||args.name.length>100)
+          throw Error("name must be 1-100 characters.");
+        if(args.scenarioId===undefined){
+          const item={id:randomUUID(),name:args.name.trim()};
+          col.mock.scenarios.push(item);
+          result=item;
+        }else{
+          const id=requiredString(args,"scenarioId");
+          const item=col.mock.scenarios.find(x=>x.id===id);
+          if(!item)throw Error("Mock scenario not found: "+id);
+          item.name=args.name.trim();
+          result=item;
+        }
+      }else{
+        if(!args.rule||typeof args.rule!=="object"||Array.isArray(args.rule))
+          throw Error("rule must be a Mock rule object.");
+        const index=args.index;
+        if(index!==undefined && (!Number.isInteger(index)||index<0||index>=col.mock.rules.length))
+          throw Error("Invalid Mock rule index.");
+        const rule=structuredClone(args.rule);
+        if(index===undefined)col.mock.rules.push(rule);
+        else col.mock.rules[index]=rule;
+        result={index:index??col.mock.rules.length-1,method:rule.method,path:rule.path,scenarioId:rule.scenarioId||""};
+      }
+      const config={port:state.mockServer?.port||4010,
+        upstream:state.mockServer?.upstreams?.[col.id]||"",collection:col};
+      requireConfig(config);
+      if(hasUnsavedChanges?.())throw Error("Workspace changed while editing Mock.");
+      await saveWorkspace(state);
+      if(status.enabled&&status.collectionId===col.id&&typeof mockUpdate==="function")
+        await mockUpdate(config);
+      if(typeof reloadWorkspace==="function")await reloadWorkspace();
+      return result;
     }
 
     if (name === "list_network_history") {

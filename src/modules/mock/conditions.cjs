@@ -81,11 +81,13 @@ function matchWhen(when,context) {
 function ruleWeight(rule){
   return rule.path.split("/").filter(x=>x&&!x.startsWith(":")&&!x.startsWith("{")).length;
 }
-function pickRule(rules,method,path,context={},matchesPath) {
+function pickRule(rules,method,path,context={},matchesPath,scenarioId="") {
   return (rules||[]).map((rule,index)=>({rule,index}))
-    .filter(({rule})=>rule.enabled!==false&&rule.method===method&&matchesPath(rule.path,path)&&matchWhen(rule.when,context))
+    .filter(({rule})=>rule.enabled!==false&&rule.method===method&&
+      (!rule.scenarioId||rule.scenarioId===scenarioId)&&matchesPath(rule.path,path)&&matchWhen(rule.when,context))
     .sort((a,b)=>ruleWeight(b.rule)-ruleWeight(a.rule) ||
       b.rule.path.length-a.rule.path.length ||
+      Number(b.rule.scenarioId===scenarioId && !!scenarioId)-Number(a.rule.scenarioId===scenarioId && !!scenarioId) ||
       conditionCount(b.rule.when)-conditionCount(a.rule.when) ||
       a.index-b.index)[0]?.rule||null;
 }

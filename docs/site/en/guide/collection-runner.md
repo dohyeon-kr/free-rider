@@ -67,3 +67,10 @@ ctx.vars.set('accessToken', body.accessToken)
 ```text
 Authorization: Bearer {{accessToken}}
 ```
+
+
+## Course-bound Mock scenarios
+
+A Course can bind a named Mock profile through **Course Mock Scenario**. Riding it temporarily activates the profile on the local Mock Proxy and restores the previous selection when execution completes. The Mock server must already be running for the same collection. Concurrent scenario changes are blocked while the Course executes.
+
+MCP `set_course` also accepts `mockScenarioId`. Use an empty string to leave the current Mock profile unchanged.

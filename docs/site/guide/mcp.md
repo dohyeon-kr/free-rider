@@ -219,3 +219,12 @@ Free Rider MCP는 `127.0.0.1`에만 열립니다. AI 에이전트나 IDE가 별�
 ## 프로토콜
 
 2026-07-28 MCP 요청과 initialize 기반의 이전 MCP 클라이언트를 함께 처리합니다. HTTP endpoint는 JSON 응답을 사용하는 stateless Streamable HTTP 방식입니다.
+
+
+## Mock Proxy 시나리오 및 서버 관리
+
+P2 Mock MCP 도구는 `get_mock_server`, `list_mock_rules`, `start_mock_server`, `stop_mock_server`, `select_mock_scenario`, `set_mock_scenario`, `set_mock_rule`, `delete_mock_scenario`, `delete_mock_rule`입니다.
+
+`start_mock_server`는 저장된 컬렉션 ID만 받고 워크스페이스의 포트·Upstream 설정으로 서버를 시작합니다. `set_mock_rule`은 `rule` 객체를 필수로 받고 `index` 없이 호출하면 추가, 기존 index를 지정하면 교체합니다. 시나리오 생성·규칙 수정은 미저장 UI 변경이 없을 때만 허용하며, 서버 실행 중인 컬렉션이라면 활성 설정에도 반영합니다.
+
+`set_course`는 선택적으로 `mockScenarioId`를 받습니다. `ride_course` 실행 시 서버가 같은 컬렉션으로 실행 중인지 확인하고 프로필을 잠급니다. 종료 후 원래 프로필로 돌아옵니다. 자세한 설정은 [Mock Server](/guide/mock-server)를 참고하세요.

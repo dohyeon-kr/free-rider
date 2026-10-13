@@ -67,3 +67,10 @@ ctx.vars.set('accessToken', body.accessToken)
 ```text
 Authorization: Bearer {{accessToken}}
 ```
+
+
+## 코스의 Mock 시나리오
+
+코스마다 `이 코스의 Mock 시나리오`를 지정할 수 있습니다. 시나리오가 지정된 코스를 Ride하면 로컬 Mock Proxy가 해당 프로필로 전환되고, Ride가 끝나면 기존 프로필로 돌아갑니다. 동일 컬렉션의 Mock 서버가 미리 실행 중이어야 하며 실행 중 다른 코스가 프로필을 바꾸는 것은 차단합니다.
+
+MCP `set_course`의 `mockScenarioId`로도 같은 설정을 할 수 있습니다. 빈 문자열을 지정하면 코스가 Mock 서버의 현재 상태를 변경하지 않습니다.

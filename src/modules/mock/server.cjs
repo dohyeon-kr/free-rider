@@ -48,12 +48,12 @@ function routePattern(path) {
   });
   return new RegExp("^"+escaped.join("/")+"/?$");
 }
-function matchRule(rules,method,path,context={}) {
+function matchRule(rules,method,path,context={},scenarioId="") {
   return pickRule(rules,method,path,{
     url:context.url||path,
     headers:context.headers||{},
     body:context.body||Buffer.alloc(0),
-  },(pattern,candidate)=>routePattern(pattern).test(candidate));
+  },(pattern,candidate)=>routePattern(pattern).test(candidate),scenarioId);
 }
 function requireConfig(value) {
   const port=Number(value.port??DEFAULT_PORT);
@@ -69,11 +69,22 @@ function requireConfig(value) {
       throw Error("Upstream cannot point to Mock or MCP server");
     upstream=url.href.replace(/\/$/,"");
   }
+  const scenarios=collection.mock?.scenarios||[];
+  if(!Array.isArray(scenarios)||scenarios.length>100)throw Error("Invalid Mock scenarios");
+  const scenarioIds=new Set();
+  for(const item of scenarios){
+    if(!item||typeof item.id!=="string"||!/^[A-Za-z0-9_-]{1,64}$/.test(item.id)||
+       typeof item.name!=="string"||!item.name.trim()||item.name.length>100||scenarioIds.has(item.id))
+      throw Error("Invalid or duplicate Mock scenario");
+    scenarioIds.add(item.id);
+  }
   const rules=collection.mock?.rules||[];
   if (!Array.isArray(rules)||rules.length>500) throw Error("Too many Mock rules");
   for(const r of rules) {
     if(!["mock","proxy"].includes(r.mode)||!/^[A-Z]+$/.test(r.method||"")) throw Error("Invalid rule");
     routePattern(r.path);
+    if(r.scenarioId!==undefined && r.scenarioId!=="" && !scenarioIds.has(r.scenarioId))
+      throw Error("Mock rule references unknown scenario");
     validateBehavior(r);
     if(r.mode==="mock"&&(Number(r.status??200)<200||Number(r.status??200)>599||!Number.isInteger(Number(r.status??200))))
       throw Error("Invalid Mock status");
@@ -131,13 +142,41 @@ function findRequest(collection,method,path,rule) {
       (r.url||"").replace(/^\{\{baseUrl\}\}/,"")===rule?.path));
 }
 function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
-  let config=null,server=null,activePort=null;
+  let config=null,server=null,activePort=null,scenarioId="",scenarioLease=null;
   function status(){return {enabled:!!server,host:HOST,port:activePort??config?.port??DEFAULT_PORT,
-    url:server?"http://"+HOST+":"+activePort:"",collectionId:config?.collection.id||""};}
+    url:server?"http://"+HOST+":"+activePort:"",collectionId:config?.collection.id||"",scenarioId,scenarioLocked:!!scenarioLease};}
   function configure(next) {
+    if(scenarioLease)throw Error("Cannot edit Mock configuration during a scenario-bound Ride");
     const value=requireConfig(next);
     if(server&&value.port!==activePort)throw Error("Stop the Mock server before changing its port");
-    config=value;return status();
+    config=value;
+    if(scenarioId && !value.collection.mock?.scenarios?.some(item=>item.id===scenarioId))scenarioId="";
+    return status();
+  }
+  function selectScenario(next=""){
+    if(scenarioLease)throw Error("Mock scenario is locked by an active Course");
+    if(!server||!config)throw Error("Start the Mock server before selecting a scenario");
+    if(next!=="" && (!config.collection.mock?.scenarios||!config.collection.mock.scenarios.some(x=>x.id===next)))
+      throw Error("Mock scenario not found: "+next);
+    scenarioId=next;
+    return status();
+  }
+  function acquireScenario(next){
+    if(scenarioLease)throw Error("Another scenario-bound Course is running");
+    if(!server||!config)throw Error("Start the Mock server before riding a scenario-bound Course");
+    if(typeof next!=="string"||!config.collection.mock?.scenarios?.some(x=>x.id===next))
+      throw Error("Mock scenario not found: "+next);
+    const token=randomUUID();
+    scenarioLease={token,previous:scenarioId};
+    scenarioId=next;
+    return {...status(),token};
+  }
+  function releaseScenario(token){
+    if(!scenarioLease||scenarioLease.token!==token)
+      throw Error("Mock scenario lease is invalid or expired");
+    scenarioId=scenarioLease.previous;
+    scenarioLease=null;
+    return status();
   }
   async function handle(req,res) {
     const started=Date.now(), current=config, method=String(req.method||"GET").toUpperCase();
@@ -152,7 +191,8 @@ function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
     }
     try {
       requestBody=await limitedBody(req);
-      const rule=matchRule(current.collection.mock?.rules,method,path,{url:req.url,headers:req.headers,body:requestBody});
+      const selectedScenario=scenarioId;
+      const rule=matchRule(current.collection.mock?.rules,method,path,{url:req.url,headers:req.headers,body:requestBody},selectedScenario);
       mode=rule?.mode||"proxy";
       if(mode==="mock") {
         if(rule.delayMs)await wait(rule.delayMs);
@@ -207,7 +247,7 @@ function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
       responseHeaders={...res.getHeaders()};
     }finally {
       try {
-        onEntry({id:randomUUID(),at:started,source:"mock-proxy",mode,
+        onEntry({id:randomUUID(),at:started,source:"mock-proxy",mode,scenarioId,
           collectionId:current.collection.id,collectionTitle:current.collection.title||"",
           name:method+" "+path,replayable:false,
           request:{method,url:safeUrl(req.url||"/",activePort),
@@ -235,15 +275,15 @@ function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
     });});
     try{await new Promise((resolve,reject)=>{next.once("error",reject);next.listen(config.port,HOST,resolve);});}
     catch(err){next.close();throw err;}
-    server=next;activePort=config.port;return status();
+    server=next;activePort=config.port;scenarioId="";scenarioLease=null;return status();
   }
   async function stop() {
     if(!server)return status();
-    const previous=server;server=null;activePort=null;
+    const previous=server;server=null;activePort=null;scenarioId="";scenarioLease=null;
     previous.closeAllConnections?.();
     await new Promise((resolve,reject)=>previous.close(err=>err?reject(err):resolve()));
     return status();
   }
-  return {start,stop,configure,status};
+  return {start,stop,configure,status,selectScenario,acquireScenario,releaseScenario};
 }
 module.exports={createMockServer,matchRule,upstreamUrl,safeHeaders,safeBody,safeUrl,requireConfig};

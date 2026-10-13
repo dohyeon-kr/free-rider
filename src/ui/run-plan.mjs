@@ -13,6 +13,7 @@ function newRide(name) {
     name,
     steps: [],
     stopOnFailure: true,
+    mockScenarioId: "",
   };
 }
 
@@ -44,6 +45,7 @@ export function rides(col) {
     usedRideIds.add(ride.id);
     ride.name = String(ride.name || `Course ${index + 1}`);
     ride.stopOnFailure = ride.stopOnFailure !== false;
+    ride.mockScenarioId ||= "";
     if (!Array.isArray(ride.steps)) ride.steps = [];
 
     const usedStepIds = new Set();
