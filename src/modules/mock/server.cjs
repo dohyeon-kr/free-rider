@@ -144,7 +144,7 @@ function findRequest(collection,method,path,rule) {
 function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
   let config=null,server=null,activePort=null,scenarioId="",scenarioLease=null;
   function status(){return {enabled:!!server,host:HOST,port:activePort??config?.port??DEFAULT_PORT,
-    url:server?"http://"+HOST+":"+activePort:"",collectionId:config?.collection.id||"",scenarioId};}
+    url:server?"http://"+HOST+":"+activePort:"",collectionId:config?.collection.id||"",scenarioId,scenarioLocked:!!scenarioLease};}
   function configure(next) {
     if(scenarioLease)throw Error("Cannot edit Mock configuration during a scenario-bound Ride");
     const value=requireConfig(next);
