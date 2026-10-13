@@ -121,3 +121,21 @@ test("MCP mutation does not persist during a scenario-bound Course",async()=>{
    rule:{method:"GET",path:"/users",mode:"proxy"}}),/during a scenario-bound Course/);
  assert.equal(m.stored,null);
 });
+
+test("MCP deletes a scenario with scoped rules and unbinds its Courses",async()=>{
+ const m=harness();
+ await m.call("set_mock_rule",{collectionId:"col",rule:{method:"GET",path:"/users",
+   mode:"mock",scenarioId:"error",status:500,responseMode:"custom",body:'{"error":"no"}'}});
+ const result=await m.call("delete_mock_scenario",{collectionId:"col",scenarioId:"error"});
+ assert.equal(result.deleted,true);
+ assert.equal(m.stored.collections[0].mock.scenarios.length,0);
+ assert.equal(m.stored.collections[0].mock.rules.length,1);
+ assert.equal(m.stored.collections[0].rides[0].mockScenarioId,"");
+});
+test("MCP deletes only the requested Mock rule index",async()=>{
+ const m=harness();
+ const removed=await m.call("delete_mock_rule",{collectionId:"col",index:0});
+ assert.equal(removed.deleted,true);
+ assert.equal(m.stored.collections[0].mock.rules.length,0);
+ await assert.rejects(m.call("delete_mock_rule",{collectionId:"col",index:5}),/Invalid Mock rule index/);
+});
