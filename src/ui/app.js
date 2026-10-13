@@ -6,6 +6,7 @@ import { reviewView } from "./sync-review.js";
 const syncReviews = new Map();
 import { specAuthEditor } from "./spec-auth.js";
 import { mockServerView } from "./mock-server.js";
+import { prepareCapturedRule, applyCapturedRule } from "./mock-capture.mjs";
 import { SpecAuthSession } from "./spec-auth-state.mjs";
 const specAuths = new SpecAuthSession();
 import {
@@ -3230,6 +3231,103 @@ resize.onkeydown = (e) => {
     );
   }
 };
+// Network panel is a separate module: pass only the entry ID over this event.
+// Actual response capture and secret scrubbing happen in the Electron main process.
+async function captureNetworkResponse(entryId) {
+  if(!state.collections?.length)throw Error("Mock 규칙을 저장할 컬렉션이 없습니다.");
+  const candidate=await api["mock-candidate"](entryId);
+  let chosenId=state.collections.some(col=>col.id===candidate.collectionId)
+    ? candidate.collectionId : c().id;
+  let editedBody=candidate.body;
+  let overwriteApproved=false;
+  const error=el("p",{class:"mock-message",role:"alert"});
+  const summary=el("div",{class:"mock-capture-summary"});
+  const overwrite=el("label",{class:"mock-capture-overwrite",
+    hidden:true},
+    el("input",{type:"checkbox",onChange:event=>{overwriteApproved=event.target.checked;}}),
+    el("span",{text:"동일 경로의 기존 Mock 규칙을 덮어쓰겠습니다."})
+  );
+  const source=el("p",{class:"muted",text:
+    candidate.method+" "+candidate.path+" — HTTP "+candidate.status+
+    " ("+candidate.contentType+")"});
+  const responseEditor=textarea(editedBody,v=>{editedBody=v;error.textContent="";},
+    {rows:12,class:"mock-capture-editor",spellcheck:false});
+  function selected(){
+    const col=state.collections.find(item=>item.id===chosenId);
+    if(!col)throw Error("대상 컬렉션을 선택하세요.");
+    return col;
+  }
+  function proposed(){
+    return prepareCapturedRule(selected(),candidate,editedBody);
+  }
+  function refresh(){
+    const {rule,overwriting}=proposed();
+    summary.textContent="등록 경로: "+rule.method+" "+rule.path+
+      (overwriting?" · 기존 규칙 존재":" · 신규 규칙");
+    overwrite.hidden=!overwriting;
+    overwriteApproved=false;
+    overwrite.querySelector("input").checked=false;
+    error.textContent="";
+  }
+  const picker=select(chosenId,state.collections.map(item=>[item.id,item.title]),value=>{
+    chosenId=value;
+    refresh();
+  },{"aria-label":"목킹할 컬렉션"});
+  const preview=button("DTO 검증",async()=>{
+    try{
+      const {request,rule}=proposed();
+      const result=await api["mock-preview"](request,rule);
+      error.textContent="검증 통과: HTTP "+result.status;
+    }catch(e){error.textContent="검증 실패: "+e.message;}
+  });
+  const content=el("div",{class:"mock-capture-dialog"},
+    el("p",{text:"Network 응답을 선택한 컬렉션의 Mock 규칙으로 등록합니다. 실제 API 요청이나 기존 응답은 변경하지 않습니다."}),
+    field("대상 컬렉션",picker),
+    source,
+    summary,
+    field("응답 JSON (저장 전 편집 가능)",responseEditor),
+    el("p",{class:"hint",text:candidate.warning}),
+    overwrite,
+    preview,
+    error
+  );
+  refresh();
+  modal("Mock this response",content,async()=>{
+    try {
+      const col=selected();
+      const {request,rule,overwriting}=proposed();
+      if(overwriting&&!overwriteApproved) {
+        error.textContent="기존 규칙을 덮어쓰려면 확인란을 선택하세요.";
+        return false;
+      }
+      await api["mock-preview"](request,rule);
+      applyCapturedRule(col,rule);
+      mark(col,{history:false});
+      const runtime=await api["mock-state"]();
+      let note="";
+      if(runtime.enabled&&runtime.collectionId===col.id) {
+        const local=state.mockServer||{};
+        try{
+          await api["mock-update"]({
+            port:Number(local.port||4010),
+            upstream:local.upstreams?.[col.id]||"",
+            collection:structuredClone(col),
+          });
+        }catch(e){note=" · 실행 중 서버 반영 실패: "+e.message;}
+      }
+      open("mock",null,col);
+      status("Mock 규칙을 추가했습니다. 워크스페이스 저장을 눌러 보관하세요."+note);
+      return true;
+    }catch(e) {
+      error.textContent="추가 실패: "+e.message;
+      return false;
+    }
+  },"Mock 규칙 추가");
+}
+window.addEventListener("free-rider:mock-from-network",event=>{
+  void action(()=>captureNetworkResponse(event.detail?.entryId));
+});
+
 window.appReady = (async () => {
     const saved = await action(() => api["workspace-load"]());
     if (saved && Array.isArray(saved.collections)) {

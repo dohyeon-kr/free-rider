@@ -501,3 +501,28 @@ body.network-cookie-resizing * {
     padding-inline: 6px;
   }
 }
+
+
+.network-context-menu {
+  position: fixed;
+  z-index: 1200;
+  display: grid;
+  min-width: 195px;
+  gap: 2px;
+  padding: 6px;
+  background: #222;
+  border: 1px solid #4b4b4b;
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+}
+.network-context-menu button {
+  border: 0;
+  border-radius: 5px;
+  padding: 8px 12px;
+  text-align: left;
+  color: #eee;
+  background: transparent;
+  cursor: pointer;
+}
+.network-context-menu button:hover:not(:disabled) { background: #333; }
+.network-context-menu button:disabled { opacity: .45; cursor: default; }

@@ -13,6 +13,7 @@ for (const name of [
   "mock-stop",
   "mock-update",
   "mock-preview",
+  "mock-candidate",
   "network-clear",
   "cookie-jar",
   "cookie-clear",

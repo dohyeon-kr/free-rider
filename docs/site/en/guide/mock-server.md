@@ -36,3 +36,14 @@ Mock and Proxy calls from external clients are logged with origin labels. Authen
 - Mock rules are shareable via Git. Do not embed real secrets or personal data in custom response bodies.
 
 Planned: Network → Mock, conditional delay/error responses, Course/MCP integration.
+
+## Promote a Network response to a Mock rule
+
+1. Send an API request or generate traffic through the local Mock Proxy.
+2. In **Network**, select a JSON response and choose **Mock this response**.
+3. Choose a target collection. Matching OpenAPI operations use their route template (for example, /users/{id}) instead of a recorded literal ID path.
+4. Review the sanitized JSON and edit it if needed. Credential-looking keys are replaced with [redacted]; inspect other personal or secret values manually.
+5. Use **Validate against DTO** before adding. Replacing an existing rule requires an explicit overwrite checkbox.
+6. Click **Add Mock Rule**, then use the application's main **Save** button to persist workspace changes. Active rules in the same collection are refreshed immediately when possible.
+
+Truncated, non-JSON, invalid or bodyless responses are not captured. The original Network entry is never modified; URL query parameters are excluded from the new rule.
