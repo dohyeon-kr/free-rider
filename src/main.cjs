@@ -353,6 +353,8 @@ handle("mock-candidate", id => {
 });
 handle("mock-state", () => mockServer.status());
 handle("mock-scenario-select", id => mockServer.selectScenario(id));
+handle("mock-scenario-acquire", id => mockServer.acquireScenario(id));
+handle("mock-scenario-release", token => mockServer.releaseScenario(token));
 handle("mock-start", config => mockServer.start(config));
 handle("mock-update", config => mockServer.configure(config));
 handle("mock-stop", () => mockServer.stop());
