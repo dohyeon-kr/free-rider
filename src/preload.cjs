@@ -9,6 +9,7 @@ for (const name of [
   "network-replay",
   "network-history",
   "mock-state",
+  "mock-scenario-select",
   "mock-start",
   "mock-stop",
   "mock-update",
