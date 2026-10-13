@@ -4,7 +4,7 @@ const { randomUUID } = require("node:crypto");
 const { responseFor } = require("./schema.cjs");
 const HOST = "127.0.0.1", DEFAULT_PORT = 4010, MAX_BODY = 8 * 1024 * 1024, MAX_CAPTURE = 512 * 1024;
 const HOP = new Set(["host","connection","keep-alive","transfer-encoding","te","trailer","upgrade","proxy-authorization","proxy-authenticate","content-length"]);
-const PRIVATE = /authorization|cookie|token|secret|password|api[-_]?key|client[-_]?secret|session|credential/i;
+const PRIVATE = /authorization|(?:^|[_-])auth(?:$|[_-])|cookie|token|secret|password|api[-_]?key|client[-_]?secret|session|credential/i;
 function scrub(value, depth=0) {
   if (depth > 10) return "[omitted]";
   if (typeof value === "string" && value.length <= MAX_CAPTURE && /^\s*[\[{]/.test(value)) {
