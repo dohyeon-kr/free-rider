@@ -202,7 +202,12 @@ function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
     }
   }
   async function start(options) {
-    if(server){if(options)configure(options);return status();}
+    if(server){
+      if(options&&options.collection?.id!==config.collection.id)
+        throw Error("Stop the active Mock server before changing collections");
+      if(options)configure(options);
+      return status();
+    }
     if(options)configure(options);
     if(!config)throw Error("Mock server is not configured");
     const next=http.createServer((req,res)=>{handle(req,res).catch(err=>{
