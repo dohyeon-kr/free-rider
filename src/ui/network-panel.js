@@ -14,6 +14,14 @@ const network = {
 };
 
 let networkMessageTimer = null;
+let networkContextMenu = null;
+function beginMockCapture(entry) {
+  window.dispatchEvent(new CustomEvent("free-rider:mock-from-network", {detail:{entryId:entry.id}}));
+}
+function dismissNetworkMenu() {
+  networkContextMenu?.remove();
+  networkContextMenu=null;
+}
 
 const COOKIE_COLUMN_WIDTHS_STORAGE_KEY = "free-rider.network.cookie-column-widths";
 const COOKIE_COLUMNS = [
@@ -114,6 +122,7 @@ function h(tag, attrs = {}, ...children) {
     if (key === "class") node.className = value;
     else if (key === "text") node.textContent = value;
     else if (key === "onClick") node.addEventListener("click", value);
+    else if (key === "onContextMenu") node.addEventListener("contextmenu", value);
     else if (key === "onInput") node.addEventListener("input", value);
     else if (key === "onChange") node.addEventListener("change", value);
     else if (key === "disabled") node.disabled = !!value;
@@ -517,11 +526,7 @@ function renderDetail(entry) {
           }
           renderPanel();
         }, { disabled: !entry.replayable }),
-        button("Mock this response", () => {
-          window.dispatchEvent(new CustomEvent("free-rider:mock-from-network", {
-            detail: { entryId: entry.id },
-          }));
-        }, { disabled: !entry.response?.status || entry.response?.bodyTruncated,
+        button("Mock this response", () => beginMockCapture(entry), { disabled: !entry.response?.status || entry.response?.bodyTruncated,
           title: "JSON 응답을 Mock 규칙으로 변환" }),
         button("Copy cURL", () => copy(curlFor(entry), "cURL을 복사했습니다.")),
       ),
@@ -558,7 +563,22 @@ function renderJar() {
   );
 }
 
+function showNetworkMenu(event,entry) {
+  dismissNetworkMenu();
+  const menu=h("div",{class:"network-context-menu",role:"menu"},
+    button("Mock this response",()=>{
+      dismissNetworkMenu();
+      beginMockCapture(entry);
+    },{disabled:!entry.response?.status||entry.response?.bodyTruncated}),
+    button("Copy cURL",()=>{dismissNetworkMenu();copy(curlFor(entry),"cURL을 복사했습니다.");})
+  );
+  menu.style.left=Math.max(8,Math.min(event.clientX,window.innerWidth-230))+"px";
+  menu.style.top=Math.max(8,Math.min(event.clientY,window.innerHeight-115))+"px";
+  document.body.append(menu);
+  networkContextMenu=menu;
+}
 function renderPanel() {
+  dismissNetworkMenu();
   updateNetworkButton();
   const root = document.getElementById("networkDrawer");
   if (!root) return;
@@ -624,6 +644,13 @@ function renderPanel() {
           return h("button", {
             class: `network-row network-entry ${network.selected === entry.id ? "selected" : ""}`,
             title: entry.request?.url || "",
+            onContextMenu: (event) => {
+              event.preventDefault();
+              network.selected = entry.id;
+              network.tab = "response";
+              renderPanel();
+              showNetworkMenu(event,entry);
+            },
             onClick: () => {
               network.selected = entry.id;
               network.tab = "response";
@@ -669,6 +696,9 @@ function install() {
     network.entries = [entry, ...network.entries.filter((item) => item.id !== entry.id)].slice(0, 200);
     if (network.open) network.selected = entry.id;
     renderPanel();
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if(networkContextMenu && !networkContextMenu.contains(event.target)) dismissNetworkMenu();
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && network.open && !document.querySelector("dialog[open]")) {
