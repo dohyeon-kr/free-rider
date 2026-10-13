@@ -2726,7 +2726,7 @@ async function runCollection(col, ride = activeRide(col)) {
   const runContext = structuredClone(col);
   const stopOnFailure = ride.stopOnFailure !== false;
   const runInterceptors = structuredClone(col.interceptors || {});
-  let previousMockScenario=null;
+  let scenarioLease=null;
   if(ride.mockScenarioId){
     try{
       const server=await api["mock-state"]();
@@ -2734,13 +2734,12 @@ async function runCollection(col, ride = activeRide(col)) {
         throw Error("이 코스를 실행하려면 같은 컬렉션의 Mock 서버를 시작하세요.");
       if(!(col.mock?.scenarios||[]).some(s=>s.id===ride.mockScenarioId))
         throw Error("코스에 연결된 Mock 시나리오가 삭제되었습니다.");
-      previousMockScenario=server.scenarioId||"";
-      await api["mock-scenario-select"](ride.mockScenarioId);
+      scenarioLease=await api["mock-scenario-acquire"](ride.mockScenarioId);
     }catch(e){status(e.message);return;}
   }
 
   if (!selected.length) {
-    if(previousMockScenario!==null)await api["mock-scenario-select"](previousMockScenario).catch(()=>{});
+    if(scenarioLease)await api["mock-scenario-release"](scenarioLease.token).catch(()=>{});
     status("코스에 실행할 엔드포인트를 삽입하세요.");
     return;
   }
@@ -2789,8 +2788,8 @@ async function runCollection(col, ride = activeRide(col)) {
       }
     }
   } finally {
-    if(previousMockScenario!==null){
-      try{await api["mock-scenario-select"](previousMockScenario);}
+    if(scenarioLease){
+      try{await api["mock-scenario-release"](scenarioLease.token);}
       catch(error){status("Mock 시나리오 복원 실패: "+error.message);}
     }
     busy = false;
