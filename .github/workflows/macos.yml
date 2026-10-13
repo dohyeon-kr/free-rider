@@ -32,9 +32,55 @@ jobs:
       - name: Validate Homebrew cask syntax
         run: ruby -c Casks/free-rider.rb
 
-  release:
+  notarization-preflight:
+    # Check the Apple account before semantic-release creates a draft release.
+    # PR builds remain unsigned and require no Apple credentials.
     if: ${{ github.event_name != 'pull_request' }}
     needs: test
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - name: Verify notarization access and Apple agreements
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          if [[ -z "$APPLE_ID" || -z "$APPLE_APP_SPECIFIC_PASSWORD" || -z "$APPLE_TEAM_ID" ]]; then
+            echo '::error::Apple notarization credentials are missing. Set APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID.'
+            exit 1
+          fi
+
+          # Lightweight credential/service check that does not upload an app.
+          log="$RUNNER_TEMP/notarytool-preflight.log"
+          if ! xcrun notarytool history \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" > "$log" 2>&1; then
+            if grep -Eiq 'required agreement|agreement is missing|agreement.*expired|agreement.*not.*signed' "$log"; then
+              echo '::error::Apple notarization is blocked by a missing or expired developer agreement. The Apple Developer Account Holder must review and accept the current terms at https://developer.apple.com/account/ before retrying this release.'
+              {
+                echo '### Release blocked: Apple developer agreement'
+                echo 'Apple notarization rejected the account because a required agreement is missing or expired.'
+                echo 'The **Account Holder** must accept the updated terms at https://developer.apple.com/account/.'
+                echo 'After acceptance, re-run the failed jobs for the original release run.'
+              } >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo '::error::Apple notarization preflight failed. Check the app-specific password, Team ID, Apple service status, and developer account access.'
+              {
+                echo '### Release blocked: Apple notarization preflight'
+                echo 'The Apple notary service did not accept the current credentials. No GitHub release was created by this run.'
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit 1
+          fi
+
+          echo '### Apple notarization credentials and agreement check passed' >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    if: ${{ github.event_name != 'pull_request' }}
+    needs: [test, notarization-preflight]
     concurrency:
       group: semantic-release-${{ github.ref }}
       cancel-in-progress: false
