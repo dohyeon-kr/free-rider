@@ -41,3 +41,23 @@ test("capture creates literal-path rule for unknown endpoint",()=>{
  applyCapturedRule(col,result.rule);
  assert.equal(col.mock.rules[0].status,404);
 });
+
+test("captured Network response replaces only the unconditional rule",()=>{
+  const col=collection();
+  col.mock.rules=[
+    {method:"GET",path:"/users/{id}",mode:"mock",when:{query:{scenario:"error"}},body:'{"id":1}',status:503},
+    {method:"GET",path:"/users/{id}",mode:"mock",body:'{"id":10}',status:200},
+  ];
+  const candidate={requestId:"users-template",method:"GET",path:"/users/42",status:200,
+    contentType:"application/json",body:'{"id":42}'};
+  assert.equal(prepareCapturedRule(col,candidate).overwriting,true);
+  applyCapturedRule(col,prepareCapturedRule(col,candidate).rule);
+  assert.equal(col.mock.rules.length,2);
+  assert.equal(col.mock.rules[0].status,503);
+  assert.equal(col.mock.rules[0].when.query.scenario,"error");
+  assert.equal(col.mock.rules[1].body,'{"id":42}');
+  col.mock.rules.splice(1);
+  assert.equal(prepareCapturedRule(col,candidate).overwriting,false);
+  applyCapturedRule(col,prepareCapturedRule(col,candidate).rule);
+  assert.equal(col.mock.rules.length,2);
+});

@@ -28,6 +28,10 @@ export function matchRequest(collection,candidate) {
   });
   return matches[0]||null;
 }
+function unconditional(rule) {
+  if(!rule.when)return true;
+  return ["query","headers","body"].every(key=>!Object.keys(rule.when[key]||{}).length);
+}
 export function prepareCapturedRule(collection,candidate,body=candidate.body) {
   if(!collection||!candidate||!candidate.path?.startsWith("/"))
     throw Error("Invalid captured endpoint");
@@ -44,13 +48,13 @@ export function prepareCapturedRule(collection,candidate,body=candidate.body) {
     body,
     headers:{},
   };
-  const old=collection.mock?.rules?.find(r=>r.method===rule.method&&r.path===rule.path);
+  const old=collection.mock?.rules?.find(r=>r.method===rule.method&&r.path===rule.path&&unconditional(r));
   return {rule,request,overwriting:!!old};
 }
 export function applyCapturedRule(collection,rule) {
   collection.mock||={rules:[]};
   collection.mock.rules||=[];
-  const index=collection.mock.rules.findIndex(r=>r.method===rule.method&&r.path===rule.path);
+  const index=collection.mock.rules.findIndex(r=>r.method===rule.method&&r.path===rule.path&&unconditional(r));
   if(index===-1)collection.mock.rules.push(structuredClone(rule));
   else collection.mock.rules.splice(index,1,structuredClone(rule));
 }

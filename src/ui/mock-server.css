@@ -25,3 +25,11 @@
 .mock-capture-summary {font-size:12px;font-weight:600;overflow-wrap:anywhere}
 .mock-capture-overwrite:not([hidden]) {display:flex;align-items:flex-start;gap:8px;line-height:1.5}
 .mock-capture-dialog [role="alert"] {min-height:20px}
+
+.mock-scenarios-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:14px;border-top:1px solid var(--border,#444);flex-wrap:wrap}
+.mock-scenarios-heading strong {font-size:13px}
+.mock-scenario {display:flex;flex-direction:column;gap:12px;margin-top:8px;padding:14px;border:1px solid var(--border,#444);border-radius:8px;background:var(--surface2,#212121)}
+.mock-scenario .field textarea {max-width:100%}
+.mock-scenario .mock-message {overflow-wrap:anywhere}
+.mock-toggle {display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer}
+.mock-toggle input {margin:0}

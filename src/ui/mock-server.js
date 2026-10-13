@@ -20,6 +20,26 @@ function endpoints(col){
   }
   return [...found.values()].sort((a,b)=>a.path.localeCompare(b.path)||a.method.localeCompare(b.method));
 }
+function verifyConditionDraft(candidate){
+  if(!candidate || typeof candidate!=="object" || Array.isArray(candidate))
+    throw Error("조건은 JSON 객체여야 합니다.");
+  if(Object.keys(candidate).some(key=>!["query","headers","body"].includes(key)))
+    throw Error("query, headers, body 키만 사용할 수 있습니다.");
+  for(const key of ["query","headers"]){
+    if(candidate[key]===undefined)continue;
+    if(!candidate[key] || typeof candidate[key]!=="object" || Array.isArray(candidate[key]))
+      throw Error(key+" 조건은 JSON 객체여야 합니다.");
+    if(Object.values(candidate[key]).some(value=>typeof value!=="string"))
+      throw Error(key+" 조건의 값은 문자열이어야 합니다.");
+  }
+  if(candidate.body!==undefined && (!candidate.body || typeof candidate.body!=="object" || Array.isArray(candidate.body)))
+    throw Error("body 조건은 JSON 객체여야 합니다.");
+  if(!Object.keys(candidate.query||{}).length &&
+     !Object.keys(candidate.headers||{}).length &&
+     !Object.keys(candidate.body||{}).length)
+    throw Error("조건을 하나 이상 지정하세요.");
+}
+
 export function mockServerView(col,{state,mark,render,status}){
   col.mock||={rules:[]};col.mock.rules||=[];
   state.mockServer||={port:4010,upstreams:{}};
@@ -90,7 +110,12 @@ export function mockServerView(col,{state,mark,render,status}){
       ),
       el("p",{class:"muted",text:"규칙이 없는 경로는 실제 API로 프록시합니다. 활성 Mock 규칙만 응답을 대체합니다."}),
       ...endpoints(col).map(({method,path,request})=>{
-        let rule=col.mock.rules.find(r=>r.method===method&&r.path===path);
+        const hasConditions=r=>!!r.when&&(
+          Object.keys(r.when.query||{}).length||
+          Object.keys(r.when.headers||{}).length||
+          Object.keys(r.when.body||{}).length);
+        let rule=col.mock.rules.find(r=>r.method===method&&r.path===path&&!hasConditions(r));
+        const variants=col.mock.rules.filter(r=>r.method===method&&r.path===path&&hasConditions(r));
         const panel=el("div",{class:"mock-rule"});
         const title=el("code",{text:method+" "+path});
         const saveRule=(name,value)=>{
@@ -112,17 +137,37 @@ export function mockServerView(col,{state,mark,render,status}){
         );
         panel.append(heading);
         if(rule?.mode==="mock"){
-          const statusOptions=request?.responses?Object.keys(request.responses).filter(x=>/^[2-5]\d\d$/.test(x)):[];
-          if(!statusOptions.includes(String(rule.status||200)))statusOptions.unshift(String(rule.status||200));
           const responseOptions=[["generated","스키마 생성"],["example","OpenAPI 예시"],["custom","직접 작성"]];
           const mediaTypes=Object.keys(request?.responses?.[String(rule.status||200)]?.content||{}).filter(x=>x.includes("json"));
           const mediaOptions=[...new Set([rule.contentType||"application/json",...mediaTypes])];
           const settings=el("div",{class:"mock-rule-settings"},
-            field("HTTP Status",select(String(rule.status||200),statusOptions.map(x=>[x,x]),v=>{saveRule("status",Number(v));render();})),
+            field("HTTP Status",input(rule.status??200,v=>{
+              const n=Number(v);
+              if(Number.isInteger(n)&&n>=200&&n<=599){
+                saveRule("status",n);
+                if(!request?.responses?.[String(n)] && rule.responseMode!=="custom" && (!rule.fault||rule.fault==="none")){
+                  saveRule("responseMode","custom");
+                  rule.body||="{}";
+                  render();
+                }
+              }
+            },{type:"number",min:200,max:599})),
             field("Response",select(rule.responseMode||"generated",responseOptions,v=>{saveRule("responseMode",v);render();})),
             field("Content-Type",select(rule.contentType||mediaTypes[0]||"application/json",mediaOptions.map(x=>[x,x]),v=>saveRule("contentType",v)))
           );
-          panel.append(settings);
+          panel.append(settings,
+            el("div",{class:"mock-rule-settings"},
+              field("Delay (ms)",input(rule.delayMs??0,v=>{
+                const n=Number(v);
+                if(Number.isInteger(n)&&n>=0&&n<=30000)saveRule("delayMs",n);
+              },{type:"number",min:0,max:30000,step:100})),
+              field("Failure simulation",select(rule.fault||"none",[
+                ["none","Normal response"],
+                ["timeout","HTTP 504 timeout"],
+                ["disconnect","Disconnect socket"],
+              ],v=>{saveRule("fault",v);render();}))
+            )
+          );
           if(!request)panel.append(field("Path",input(rule.path,v=>{rule.path=v;change();},{spellcheck:false})));
           if(!request)panel.append(field("Method",select(rule.method,["GET","POST","PUT","PATCH","DELETE","HEAD"].map(x=>[x,x]),v=>{
             saveRule("method",v);render();
@@ -137,14 +182,114 @@ export function mockServerView(col,{state,mark,render,status}){
             }catch(e){feedback.textContent="헤더 JSON 형식을 확인하세요: "+e.message;}
           },{rows:3})));
           const details=el("pre",{class:"mock-preview",hidden:true});
-          panel.append(button("응답 미리보기 · 검증",async()=>{
-            try{
-              const result=await api["mock-preview"](request,rule);
-              details.textContent="HTTP "+result.status+"\nContent-Type: "+result.mediaType+"\nHeaders: "+JSON.stringify(result.headers)+"\n\n"+
-                JSON.stringify(JSON.parse(result.body),null,2);
-            }catch(e){details.textContent="검증 실패: "+e.message;}
-            details.hidden=false;
-          }),details);
+          if(!rule.fault || rule.fault==="none"){
+            panel.append(button("응답 미리보기 · 검증",async()=>{
+              try{
+                const result=await api["mock-preview"](request,rule);
+                details.textContent="HTTP "+result.status+"\nContent-Type: "+result.mediaType+"\nHeaders: "+JSON.stringify(result.headers)+"\n\n"+
+                  JSON.stringify(JSON.parse(result.body),null,2);
+              }catch(e){details.textContent="검증 실패: "+e.message;}
+              details.hidden=false;
+            }),details);
+          }else{
+            panel.append(el("p",{class:"hint",text:"장애 시뮬레이션 모드는 일반 JSON 응답을 반환하지 않습니다."}));
+          }
+        }
+        // A route may contain several conditioned rules plus one default rule.
+        panel.append(
+          el("div",{class:"mock-scenarios-heading"},
+            el("strong",{text:"Conditional responses"}),
+            button("+ 조건 추가",()=>{
+              const serial=col.mock.rules.filter(r=>r.method===method&&r.path===path).length+1;
+              const available=Object.keys(request?.responses||{}).find(code=>/^[2-5]\d\d$/.test(code));
+              col.mock.rules.push({
+                method,path,mode:"mock",enabled:true,
+                when:{query:{scenario:"case-"+serial}},
+                status:Number(available||200),
+                responseMode:available?"generated":"custom",
+                body:"{}",delayMs:0,fault:"none"
+              });
+              change({redraw:true});
+            })
+          ),
+          variants.length
+            ? el("p",{class:"hint",text:"조건이 일치할 때만 해당 응답을 사용합니다. 여러 조건이 맞으면 더 구체적인 규칙이 우선합니다. 일치하는 조건이 없으면 위 기본 규칙(또는 Proxy)을 사용합니다."})
+            : el("p",{class:"hint",text:"쿼리, 헤더, JSON 본문 조건으로 같은 엔드포인트에 다른 응답을 지정할 수 있습니다."})
+        );
+        for(const [i,variant] of variants.entries()){
+          const scenario=el("section",{class:"mock-scenario"});
+          const update=(key,value)=>{
+            variant[key]=value;change();
+          };
+          const hint=el("p",{class:"mock-message",role:"status"});
+          const modeOptions=[["generated","스키마 생성"],["example","OpenAPI 예시"],["custom","직접 작성"]];
+          const show=()=>render();
+          scenario.append(
+            el("div",{class:"mock-rule-head"},
+              el("strong",{text:"조건 "+(i+1)}),
+              el("div",{class:"mock-actions"},
+                el("label",{class:"mock-toggle"},
+                  el("input",{type:"checkbox",checked:variant.enabled!==false,
+                    onChange:e=>update("enabled",e.target.checked)}),
+                  el("span",{text:"사용"})
+                ),
+                button("제거",()=>{
+                  col.mock.rules=col.mock.rules.filter(r=>r!==variant);
+                  change({redraw:true});
+                },{class:"danger"})
+              )
+            ),
+            field("Match JSON — query / headers / body",
+              textarea(JSON.stringify(variant.when||{query:{}},null,2),v=>{
+                try {
+                  const candidate=JSON.parse(v);
+                  verifyConditionDraft(candidate);
+                  update("when",candidate);
+                  hint.textContent="";
+                }catch(e){hint.textContent="조건 입력 중: "+e.message;}
+              },{rows:5,spellcheck:false})
+            ),
+            el("div",{class:"mock-rule-settings"},
+              field("Status",input(variant.status??200,v=>{
+                const n=Number(v);
+                if(Number.isInteger(n)&&n>=200&&n<=599){
+                  update("status",n);
+                  if(!request?.responses?.[String(n)] && variant.responseMode!=="custom" && (!variant.fault||variant.fault==="none")){
+                    variant.body||="{}";
+                    update("responseMode","custom");
+                    show();
+                  }
+                }
+              },{type:"number",min:200,max:599})),
+              field("Response",select(variant.responseMode||"generated",modeOptions,v=>{
+                update("responseMode",v);show();
+              })),
+              field("Content-Type",input(variant.contentType||"application/json",v=>update("contentType",v),
+                {spellcheck:false})),
+              field("Delay (ms)",input(variant.delayMs??0,v=>{
+                const n=Number(v);
+                if(Number.isInteger(n)&&n>=0&&n<=30000)update("delayMs",n);
+              },{type:"number",min:0,max:30000,step:100})),
+              field("Failure simulation",select(variant.fault||"none",[
+                ["none","Normal response"],["timeout","HTTP 504 timeout"],["disconnect","Disconnect socket"]
+              ],v=>{update("fault",v);show();}))
+            )
+          );
+          if((variant.responseMode||"generated")==="custom")
+            scenario.append(field("Custom JSON response",textarea(variant.body||"{}",v=>update("body",v),
+              {rows:5,spellcheck:false})));
+          if(variant.fault==="none"||!variant.fault) {
+            const result=el("pre",{class:"mock-preview",hidden:true});
+            scenario.append(button("응답 미리보기 · 검증",async()=>{
+              try{
+                const value=await api["mock-preview"](request,variant);
+                result.textContent="HTTP "+value.status+"\n\n"+JSON.stringify(JSON.parse(value.body),null,2);
+              }catch(e){result.textContent="검증 실패: "+e.message;}
+              result.hidden=false;
+            }),result);
+          }
+          scenario.append(hint);
+          panel.append(scenario);
         }
         return panel;
       })
