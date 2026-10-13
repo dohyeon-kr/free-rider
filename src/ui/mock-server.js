@@ -95,7 +95,7 @@ export function mockServerView(col,{state,mark,render,status}){
         const title=el("code",{text:method+" "+path});
         const saveRule=(name,value)=>{
           if(!rule){
-            rule={method,path,mode:"mock",status:200,responseMode:"generated"};
+            rule={method,path,mode:"mock",status:200,responseMode:request?.responses?"generated":"custom",body:"{}"};
             col.mock.rules.push(rule);
           }
           rule[name]=value;change();
@@ -115,9 +115,12 @@ export function mockServerView(col,{state,mark,render,status}){
           const statusOptions=request?.responses?Object.keys(request.responses).filter(x=>/^[2-5]\d\d$/.test(x)):[];
           if(!statusOptions.includes(String(rule.status||200)))statusOptions.unshift(String(rule.status||200));
           const responseOptions=[["generated","스키마 생성"],["example","OpenAPI 예시"],["custom","직접 작성"]];
+          const mediaTypes=Object.keys(request?.responses?.[String(rule.status||200)]?.content||{}).filter(x=>x.includes("json"));
+          const mediaOptions=[...new Set([rule.contentType||"application/json",...mediaTypes])];
           const settings=el("div",{class:"mock-rule-settings"},
             field("HTTP Status",select(String(rule.status||200),statusOptions.map(x=>[x,x]),v=>{saveRule("status",Number(v));render();})),
-            field("Response",select(rule.responseMode||"generated",responseOptions,v=>{saveRule("responseMode",v);render();}))
+            field("Response",select(rule.responseMode||"generated",responseOptions,v=>{saveRule("responseMode",v);render();})),
+            field("Content-Type",select(rule.contentType||mediaTypes[0]||"application/json",mediaOptions.map(x=>[x,x]),v=>saveRule("contentType",v)))
           );
           panel.append(settings);
           if(!request)panel.append(field("Path",input(rule.path,v=>{rule.path=v;change();},{spellcheck:false})));
@@ -125,11 +128,19 @@ export function mockServerView(col,{state,mark,render,status}){
             saveRule("method",v);render();
           })));
           if(rule.responseMode==="custom")panel.append(field("JSON Body",textarea(rule.body||"{}",v=>saveRule("body",v),{rows:6})));
+          panel.append(field("Response Headers (JSON)",textarea(JSON.stringify(rule.headers||{},null,2),v=>{
+            try{
+              const next=JSON.parse(v);
+              if(!next||typeof next!=="object"||Array.isArray(next)||Object.values(next).some(value=>typeof value!=="string"))
+                throw Error("Headers must be an object of string values");
+              saveRule("headers",next);feedback.textContent="";
+            }catch(e){feedback.textContent="헤더 JSON 형식을 확인하세요: "+e.message;}
+          },{rows:3})));
           const details=el("pre",{class:"mock-preview",hidden:true});
           panel.append(button("응답 미리보기 · 검증",async()=>{
             try{
               const result=await api["mock-preview"](request,rule);
-              details.textContent="HTTP "+result.status+"\nContent-Type: "+result.mediaType+"\n\n"+
+              details.textContent="HTTP "+result.status+"\nContent-Type: "+result.mediaType+"\nHeaders: "+JSON.stringify(result.headers)+"\n\n"+
                 JSON.stringify(JSON.parse(result.body),null,2);
             }catch(e){details.textContent="검증 실패: "+e.message;}
             details.hidden=false;
