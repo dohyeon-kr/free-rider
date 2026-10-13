@@ -2491,6 +2491,7 @@ function runnerView(col) {
   const list = rides(col);
   const ride = activeRide(col);
   const plan = ride.steps;
+  const scenarioOptions=[["","현재 Mock 서버 설정 유지"],...(col.mock?.scenarios||[]).map(x=>[x.id,x.name])];
   const summary = rideSummaries.get(rideSummaryKey(col, ride));
 
   root.append(
@@ -2565,6 +2566,12 @@ function runnerView(col) {
       ),
     ),
   );
+
+  root.append(field("이 코스의 Mock 시나리오", select(ride.mockScenarioId||"",scenarioOptions,value=>{
+    ride.mockScenarioId=value;
+    mark(col,{history:false});
+  },{disabled:busy,"aria-label":"코스 Mock 시나리오"})),
+  el("p",{class:"hint",text:"시나리오가 지정된 코스는 같은 컬렉션의 Mock 서버가 실행 중이어야 합니다. Ride 종료 후 이전 시나리오로 복원합니다."}));
 
   if (summary) {
     const label =
@@ -2719,8 +2726,21 @@ async function runCollection(col, ride = activeRide(col)) {
   const runContext = structuredClone(col);
   const stopOnFailure = ride.stopOnFailure !== false;
   const runInterceptors = structuredClone(col.interceptors || {});
+  let previousMockScenario=null;
+  if(ride.mockScenarioId){
+    try{
+      const server=await api["mock-state"]();
+      if(!server.enabled||server.collectionId!==col.id)
+        throw Error("이 코스를 실행하려면 같은 컬렉션의 Mock 서버를 시작하세요.");
+      if(!(col.mock?.scenarios||[]).some(s=>s.id===ride.mockScenarioId))
+        throw Error("코스에 연결된 Mock 시나리오가 삭제되었습니다.");
+      previousMockScenario=server.scenarioId||"";
+      await api["mock-scenario-select"](ride.mockScenarioId);
+    }catch(e){status(e.message);return;}
+  }
 
   if (!selected.length) {
+    if(previousMockScenario!==null)await api["mock-scenario-select"](previousMockScenario).catch(()=>{});
     status("코스에 실행할 엔드포인트를 삽입하세요.");
     return;
   }
@@ -2769,6 +2789,10 @@ async function runCollection(col, ride = activeRide(col)) {
       }
     }
   } finally {
+    if(previousMockScenario!==null){
+      try{await api["mock-scenario-select"](previousMockScenario);}
+      catch(error){status("Mock 시나리오 복원 실패: "+error.message);}
+    }
     busy = false;
     const state =
       rideManualStop
