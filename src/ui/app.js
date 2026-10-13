@@ -5,6 +5,7 @@ import { preview, applyReview } from "../modules/sync/review.mjs";
 import { reviewView } from "./sync-review.js";
 const syncReviews = new Map();
 import { specAuthEditor } from "./spec-auth.js";
+import { mockServerView } from "./mock-server.js";
 import { SpecAuthSession } from "./spec-auth-state.mjs";
 const specAuths = new SpecAuthSession();
 import {
@@ -284,6 +285,10 @@ function collectionMenu(col) {
       $("dialog").close();
       open("runner", null, col);
     }),
+    button("Mock Server", () => {
+      $("dialog").close();
+      open("mock", null, col);
+    }),
     button("Export Collection", () => {
       $("dialog").close();
       exportCollection(col);
@@ -467,6 +472,7 @@ function tabTitle(t) {
     environments: "▤ Environments",
     spec: "♧ API Specs",
     runner: "▷ Ride",
+    mock: "▧ Mock Server",
     git: "⑂ Git",
     scripts: "⚡ Interceptors",
     folder: "▱ " + t.id,
@@ -645,6 +651,7 @@ function render() {
       "specButton",
       "gitButton",
       "runnerButton",
+      "mockButton",
       "scriptsButton",
       "exportActiveCollection",
     ]) {
@@ -703,6 +710,7 @@ function render() {
     environments: () => environments(col),
     spec: () => specView(col),
     runner: () => runnerView(col),
+    mock: () => mockServerView(col, { state, mark, render, status }),
     git: () => gitView(col),
     scripts: () => scriptsView(col),
     folder: () => folderView(col, t.id),
@@ -3126,6 +3134,7 @@ $("envButton").onclick = () => open("environments");
 $("specButton").onclick = () => open("spec");
 $("gitButton").onclick = () => open("git");
 $("runnerButton").onclick = () => open("runner");
+$("mockButton").onclick = () => open("mock");
 $("saveWorkspace").onclick = save;
 $("toggleTreeCollapse").onclick = () => {
   if (isTreeFullyCollapsed(state.collections, collapsed)) {
