@@ -41,7 +41,7 @@ function verifyConditionDraft(candidate){
     throw Error("조건을 하나 이상 지정하세요.");
 }
 
-export function mockServerView(col,{state,mark,render,status}){
+export function mockServerView(col,{state,mark,render,status,modal}){
   col.mock||={rules:[]};col.mock.rules||=[];col.mock.scenarios||=[];
   if(editorProfiles.get(col.id) && !col.mock.scenarios.some(x=>x.id===editorProfiles.get(col.id)))editorProfiles.delete(col.id);
   const editorScenarioId=editorProfiles.get(col.id)||"";
@@ -127,11 +127,21 @@ export function mockServerView(col,{state,mark,render,status}){
           editorProfiles.set(col.id,id);change({redraw:true});
         }),
         editorScenarioId?button("시나리오 삭제",()=>{
-          col.mock.scenarios=col.mock.scenarios.filter(x=>x.id!==editorScenarioId);
-          col.mock.rules=col.mock.rules.filter(x=>x.scenarioId!==editorScenarioId);
-          for(const course of col.rides||[])if(course.mockScenarioId===editorScenarioId)course.mockScenarioId="";
-          editorProfiles.delete(col.id);
-          change({redraw:true});
+          const profile=col.mock.scenarios.find(x=>x.id===editorScenarioId);
+          modal("Mock 시나리오 삭제",
+            el("p",{text:"‘"+(profile?.name||"")+"’ 시나리오의 규칙과 코스 연결이 함께 삭제됩니다."}),
+            async()=>{
+              const now=await api["mock-state"]();
+              if(now.enabled&&now.collectionId===col.id&&now.scenarioLocked){
+                setMessage("코스 실행이 완료된 후 시나리오를 삭제하세요.");
+                return false;
+              }
+              col.mock.scenarios=col.mock.scenarios.filter(x=>x.id!==editorScenarioId);
+              col.mock.rules=col.mock.rules.filter(x=>x.scenarioId!==editorScenarioId);
+              for(const course of col.rides||[])if(course.mockScenarioId===editorScenarioId)course.mockScenarioId="";
+              editorProfiles.delete(col.id);
+              change({redraw:true});
+            },"삭제");
         },{class:"danger"}):null
       )
     ),
