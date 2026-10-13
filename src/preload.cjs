@@ -10,6 +10,8 @@ for (const name of [
   "network-history",
   "mock-state",
   "mock-scenario-select",
+  "mock-scenario-acquire",
+  "mock-scenario-release",
   "mock-start",
   "mock-stop",
   "mock-update",
