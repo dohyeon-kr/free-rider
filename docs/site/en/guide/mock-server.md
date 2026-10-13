@@ -101,5 +101,6 @@ A scenario-bound Course requires the Mock server to be running for the **same co
 | `select_mock_scenario` | Switch the active runtime profile, or empty ID for defaults |
 | `set_mock_scenario` | Create or rename a named profile |
 | `set_mock_rule` | Append or replace a saved Mock rule by index |
+| `delete_mock_scenario` / `delete_mock_rule` | Remove a saved scenario (including its Course bindings) or one indexed rule |
 
 `set_course` accepts `mockScenarioId`; `ride_course` activates that profile and restores the old one after completion. Save pending UI edits before MCP writes; the server starts only with the saved local upstream and port, not arbitrary remote targets. Do not embed secrets or private user data in shared response bodies.
