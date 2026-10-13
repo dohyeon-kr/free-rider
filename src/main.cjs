@@ -14,6 +14,7 @@ const { randomUUID } = require("node:crypto");
 const { pathToFileURL } = require("node:url");
 const { parseSpec, operations, synchronize, parseEnv } = require("./core.cjs");
 const { execute, fetchText } = require("./network.cjs");
+const { createMockServer } = require("./modules/mock/server.cjs");
 const { serverUrl } = require("./modules/sync/server.cjs");
 const { readSpecSource } = require("./modules/sync/source.cjs");
 const {
@@ -171,6 +172,7 @@ function publishNetworkEntry(entry, replay = null) {
   persistNetworkHistory();
   if (win && !win.isDestroyed()) win.webContents.send("network-entry", entry);
 }
+const mockServer = createMockServer({ onEntry: entry => publishNetworkEntry(entry) });
 async function runRequest(request, environment, collection, interceptors) {
   if (controller) throw Error("요청이 실행 중입니다.");
   controller = new AbortController();
@@ -343,6 +345,11 @@ handle("network-replay", async (id) => {
   );
 });
 handle("network-history", () => networkEntries);
+handle("mock-state", () => mockServer.status());
+handle("mock-start", config => mockServer.start(config));
+handle("mock-update", config => mockServer.configure(config));
+handle("mock-stop", () => mockServer.stop());
+handle("mock-preview", (request, rule) => require("./modules/mock/schema.cjs").responseFor(request, rule));
 handle("network-clear", async () => {
   networkEntries = [];
   replayRequests.clear();
@@ -592,6 +599,7 @@ app.whenReady().then(async () => {
   });
 });
 app.on("window-all-closed", () => {
+  mockServer.stop().catch(error => console.error("Mock server stop failed", error));
   runtime.clear();
   requestFiles.clear();
   replayRequests.clear();

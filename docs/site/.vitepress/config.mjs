@@ -53,6 +53,7 @@ export default defineConfig({
                 { text: 'Environment, Vars, Interceptors', link: '/guide/variables-and-scripts' },
                 { text: 'Ride', link: '/guide/collection-runner' },
                 { text: 'OpenAPI 동기화', link: '/guide/openapi-sync' },
+                { text: 'Mock Server', link: '/guide/mock-server' },
                 { text: 'Git 연동', link: '/guide/git' },
                 { text: 'MCP 서버', link: '/guide/mcp' }
               ]
@@ -130,6 +131,7 @@ export default defineConfig({
                 { text: 'Environment, Vars, Interceptors', link: '/en/guide/variables-and-scripts' },
                 { text: 'Ride', link: '/en/guide/collection-runner' },
                 { text: 'OpenAPI Sync', link: '/en/guide/openapi-sync' },
+                { text: 'Mock Server', link: '/en/guide/mock-server' },
                 { text: 'Git Integration', link: '/en/guide/git' },
                 { text: 'MCP Server', link: '/en/guide/mcp' }
               ]
