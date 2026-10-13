@@ -214,3 +214,12 @@ The server binds only to `127.0.0.1` and rejects requests from external web Orig
 ## Protocol
 
 The server handles MCP requests using the 2026-07-28 protocol as well as older MCP clients that negotiate through `initialize`. The HTTP endpoint uses stateless Streamable HTTP with JSON responses.
+
+
+## Mock scenario and proxy control
+
+MCP tools: `get_mock_server`, `list_mock_rules`, `start_mock_server`, `stop_mock_server`, `select_mock_scenario`, `set_mock_scenario`, and `set_mock_rule`.
+
+`start_mock_server` uses the saved port and upstream for the specified collection. `set_mock_rule` appends a validated rule, or replaces the rule at the specified zero-based `index`. Scenario and rule writes require a saved/clean workspace and refresh the running engine when possible.
+
+`set_course` accepts `mockScenarioId`. `ride_course` requires that the Mock server is running for the same collection; it locks the selected profile for the duration and restores the previous profile upon completion. See [Mock Server](/en/guide/mock-server).
