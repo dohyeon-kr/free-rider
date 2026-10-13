@@ -218,7 +218,7 @@ The server handles MCP requests using the 2026-07-28 protocol as well as older M
 
 ## Mock scenario and proxy control
 
-MCP tools: `get_mock_server`, `list_mock_rules`, `start_mock_server`, `stop_mock_server`, `select_mock_scenario`, `set_mock_scenario`, and `set_mock_rule`.
+MCP tools: `get_mock_server`, `list_mock_rules`, `start_mock_server`, `stop_mock_server`, `select_mock_scenario`, `set_mock_scenario`, `set_mock_rule`, `delete_mock_scenario` and `delete_mock_rule`.
 
 `start_mock_server` uses the saved port and upstream for the specified collection. `set_mock_rule` appends a validated rule, or replaces the rule at the specified zero-based `index`. Scenario and rule writes require a saved/clean workspace and refresh the running engine when possible.
 
