@@ -682,6 +682,8 @@ function createMcpServer(options) {
     mockStart,
     mockStop,
     mockSelectScenario,
+    mockAcquireScenario,
+    mockReleaseScenario,
     mockUpdate,
     hasUnsavedChanges,
     reloadWorkspace,
@@ -959,17 +961,17 @@ function createMcpServer(options) {
         args.environmentId === undefined ? undefined : requiredString(args, "environmentId");
       const steps = [];
       let failed = 0;
-      let previousScenario=null;
+      let scenarioLease=null;
       if(course.mockScenarioId){
-        if(typeof mockState!=="function"||typeof mockSelectScenario!=="function")
-          throw Error("Mock scenario bridge is unavailable.");
+        if(typeof mockState!=="function"||typeof mockAcquireScenario!=="function"||
+           typeof mockReleaseScenario!=="function")
+          throw Error("Mock scenario lease bridge is unavailable.");
         const mock=await mockState();
         if(!mock.enabled||mock.collectionId!==collectionId)
           throw Error("Start the Mock server for this collection before riding its scenario-bound Course.");
         if(!collection.mock?.scenarios?.some(x=>x.id===course.mockScenarioId))
           throw Error("Course references a missing Mock scenario.");
-        previousScenario=mock.scenarioId||"";
-        await mockSelectScenario(course.mockScenarioId);
+        scenarioLease=await mockAcquireScenario(course.mockScenarioId);
       }
       try {
       for (const step of course.steps) {
@@ -1011,7 +1013,7 @@ function createMcpServer(options) {
         if (stepFailed && course.stopOnFailure !== false) break;
       }
       }finally{
-        if(previousScenario!==null)await mockSelectScenario(previousScenario);
+        if(scenarioLease)await mockReleaseScenario(scenarioLease.token);
       }
 
       return {
