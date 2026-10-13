@@ -1,6 +1,7 @@
 import { el, button, input, select, textarea, field } from "./dom.js";
 const api=window.client;
 let runtime={enabled:false,collectionId:""};
+const editorProfiles=new Map();
 function endpoints(col){
   const found=new Map();
   for(const request of col.requests||[]){
@@ -41,10 +42,13 @@ function verifyConditionDraft(candidate){
 }
 
 export function mockServerView(col,{state,mark,render,status}){
-  col.mock||={rules:[]};col.mock.rules||=[];
+  col.mock||={rules:[]};col.mock.rules||=[];col.mock.scenarios||=[];
+  if(editorProfiles.get(col.id) && !col.mock.scenarios.some(x=>x.id===editorProfiles.get(col.id)))editorProfiles.delete(col.id);
+  const editorScenarioId=editorProfiles.get(col.id)||"";
   state.mockServer||={port:4010,upstreams:{}};
   state.mockServer.upstreams||={};
   const local=state.mockServer;
+  let newScenarioName="";
   const upstream=()=>local.upstreams[col.id]||"";
   const config=()=>({port:Number(local.port||4010),upstream:upstream(),collection:structuredClone(col)});
   const root=el("div",{class:"view-inner mock-server-view","data-view":"mock"},
@@ -99,12 +103,45 @@ export function mockServerView(col,{state,mark,render,status}){
       feedback
     ),
     el("section",{class:"mock-card"},
-      el("div",{class:"mock-server-head"},el("h2",{text:"Endpoint Rules"}),
+      el("div",{class:"mock-server-head"},el("h2",{text:"Scenario Profiles"}),
+        el("div",{class:"mock-actions"},
+          select(editorScenarioId,[["","기본 규칙"],...col.mock.scenarios.map(x=>[x.id,x.name])],id=>{
+            editorProfiles.set(col.id,id);render();
+          },{"aria-label":"Mock 시나리오 편집"}),
+          button("실행 서버에 적용",async()=>{
+            try{
+              const value=await api["mock-scenario-select"](editorScenarioId);
+              runtime=value;setMessage("활성 Mock 시나리오: "+(col.mock.scenarios.find(x=>x.id===value.scenarioId)?.name||"기본 규칙"));
+            }catch(e){setMessage(e.message);}
+          })
+        )
+      ),
+      el("p",{class:"hint",text:"기본 규칙은 항상 사용됩니다. 선택한 시나리오의 규칙은 같은 경로의 기본 규칙보다 우선합니다. 편집 중인 프로필을 서버에 적용하려면 '실행 서버에 적용'을 누르세요."}),
+      field("새 시나리오 이름",input("",v=>{newScenarioName=v;},{placeholder:"예: 로그인 실패, 느린 서버"})),
+      el("div",{class:"mock-actions"},
+        button("+ 시나리오 생성",()=>{
+          const name=newScenarioName.trim();
+          if(!name||name.length>100){setMessage("시나리오 이름은 1~100자여야 합니다.");return;}
+          const id=crypto.randomUUID();
+          col.mock.scenarios.push({id,name});
+          editorProfiles.set(col.id,id);change({redraw:true});
+        }),
+        editorScenarioId?button("시나리오 삭제",()=>{
+          col.mock.scenarios=col.mock.scenarios.filter(x=>x.id!==editorScenarioId);
+          col.mock.rules=col.mock.rules.filter(x=>x.scenarioId!==editorScenarioId);
+          for(const course of col.rides||[])if(course.mockScenarioId===editorScenarioId)course.mockScenarioId="";
+          editorProfiles.delete(col.id);
+          change({redraw:true});
+        },{class:"danger"}):null
+      )
+    ),
+    el("section",{class:"mock-card"},
+      el("div",{class:"mock-server-head"},el("h2",{text:editorScenarioId?"Scenario Rules":"Endpoint Rules"}),
         button("+ 사용자 정의 경로",()=>{
           const existing=new Set(col.mock.rules.map(r=>r.method+" "+r.path));
           let path="/new-endpoint",n=1;
           while(existing.has("GET "+path))path="/new-endpoint-"+(++n);
-          col.mock.rules.push({method:"GET",path,mode:"mock",status:200,responseMode:"custom",body:"{}"});
+          col.mock.rules.push({method:"GET",path,mode:"mock",scenarioId:editorScenarioId||undefined,status:200,responseMode:"custom",body:"{}"});
           change({redraw:true});
         })
       ),
@@ -114,19 +151,25 @@ export function mockServerView(col,{state,mark,render,status}){
           Object.keys(r.when.query||{}).length||
           Object.keys(r.when.headers||{}).length||
           Object.keys(r.when.body||{}).length);
-        let rule=col.mock.rules.find(r=>r.method===method&&r.path===path&&!hasConditions(r));
-        const variants=col.mock.rules.filter(r=>r.method===method&&r.path===path&&hasConditions(r));
+        let rule=col.mock.rules.find(r=>r.method===method&&r.path===path&&(r.scenarioId||"")===editorScenarioId&&!hasConditions(r));
+        const variants=col.mock.rules.filter(r=>r.method===method&&r.path===path&&(r.scenarioId||"")===editorScenarioId&&hasConditions(r));
         const panel=el("div",{class:"mock-rule"});
         const title=el("code",{text:method+" "+path});
         const saveRule=(name,value)=>{
           if(!rule){
-            rule={method,path,mode:"mock",status:200,responseMode:request?.responses?"generated":"custom",body:"{}"};
+            rule={method,path,mode:"mock",scenarioId:editorScenarioId||undefined,status:200,responseMode:request?.responses?"generated":"custom",body:"{}"};
             col.mock.rules.push(rule);
           }
           rule[name]=value;change();
         };
-        const chooser=select(rule?.mode||"proxy",[["proxy","Proxy"],["mock","Mock"]],v=>{
-          saveRule("mode",v);render();
+        const chooser=select(rule?.mode||(editorScenarioId?"inherit":"proxy"),
+          editorScenarioId?[["inherit","상속"],["proxy","Proxy"],["mock","Mock"]]:[["proxy","Proxy"],["mock","Mock"]],v=>{
+          if(v==="inherit"&&editorScenarioId){
+            col.mock.rules=col.mock.rules.filter(x=>x!==rule);
+            rule=null;change({redraw:true});
+          }else{
+            saveRule("mode",v);render();
+          }
         },{"aria-label":method+" "+path+" mode"});
         const heading=el("div",{class:"mock-rule-head"},
           title,el("div",{class:"mock-actions"},chooser,
@@ -200,10 +243,10 @@ export function mockServerView(col,{state,mark,render,status}){
           el("div",{class:"mock-scenarios-heading"},
             el("strong",{text:"Conditional responses"}),
             button("+ 조건 추가",()=>{
-              const serial=col.mock.rules.filter(r=>r.method===method&&r.path===path).length+1;
+              const serial=col.mock.rules.filter(r=>r.method===method&&r.path===path&&(r.scenarioId||"")===editorScenarioId).length+1;
               const available=Object.keys(request?.responses||{}).find(code=>/^[2-5]\d\d$/.test(code));
               col.mock.rules.push({
-                method,path,mode:"mock",enabled:true,
+                method,path,mode:"mock",scenarioId:editorScenarioId||undefined,enabled:true,
                 when:{query:{scenario:"case-"+serial}},
                 status:Number(available||200),
                 responseMode:available?"generated":"custom",
