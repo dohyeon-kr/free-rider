@@ -107,6 +107,7 @@ Mock 화면의 **Scenario Profiles**에서 프로필을 만들고 이름을 지�
 | `select_mock_scenario` | 실행 중인 서버의 활성 프로필 변경 (빈 ID는 기본 규칙) |
 | `set_mock_scenario` | 새 프로필 생성 또는 이름 변경 |
 | `set_mock_rule` | 새 규칙 추가 또는 index를 지정한 기존 규칙 교체 |
+| `delete_mock_scenario` / `delete_mock_rule` | 시나리오와 연결된 코스 바인딩 또는 개별 규칙 삭제 |
 
 코스의 `set_course`는 `mockScenarioId`를 받습니다. `ride_course`는 프로필을 자동 선택하며 종료 후 복원합니다.
 
