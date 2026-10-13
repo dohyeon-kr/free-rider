@@ -345,6 +345,12 @@ handle("network-replay", async (id) => {
   );
 });
 handle("network-history", () => networkEntries);
+handle("mock-candidate", id => {
+  if(typeof id !== "string"||id.length>128)throw Error("Invalid Network entry ID");
+  const entry=networkEntries.find(item=>item.id===id);
+  if(!entry)throw Error("Network entry not found");
+  return require("./modules/mock/capture.cjs").captureCandidate(entry);
+});
 handle("mock-state", () => mockServer.status());
 handle("mock-start", config => mockServer.start(config));
 handle("mock-update", config => mockServer.configure(config));
