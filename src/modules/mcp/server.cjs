@@ -601,7 +601,7 @@ function toolDefinitions() {
     {
       name:"get_mock_server",
       description:"Inspect local Mock server status and the saved collection's named scenario profiles without exposing upstream credentials or response bodies.",
-      inputSchema:{type:"object",properties:{collectionId:{type:"string"}},additionalProperties:false},
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"}},required:["collectionId"],additionalProperties:false},
     },
     {
       name:"list_mock_rules",
