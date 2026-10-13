@@ -20,6 +20,21 @@ function safeBody(buffer,type) {
 function safeHeaders(headers) {
   return Object.fromEntries(Object.entries(headers||{}).map(([name,value])=>[name,PRIVATE.test(name)?"[redacted]":String(value)]));
 }
+function safeUrl(raw,port) {
+  const url=new URL(raw,"http://"+HOST+":"+port);
+  for(const key of [...url.searchParams.keys()]) if(PRIVATE.test(key))url.searchParams.set(key,"[redacted]");
+  return url.href;
+}
+function trustedClient(req) {
+  try{
+    const authority=new URL("http://"+(req.headers.host||""));
+    if(!["localhost","127.0.0.1","[::1]"].includes(authority.hostname))return false;
+    if(!req.headers.origin)return true;
+    const origin=new URL(req.headers.origin);
+    return ["http:","https:"].includes(origin.protocol)&&
+      ["localhost","127.0.0.1","[::1]"].includes(origin.hostname);
+  }catch{return false;}
+}
 function routePattern(path) {
   if (typeof path!=="string"||!path.startsWith("/")||path.length>1024) throw Error("Invalid Mock path");
   const escaped=path.split("/").map(piece=>{
@@ -122,6 +137,7 @@ function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
     const started=Date.now(), current=config, method=String(req.method||"GET").toUpperCase();
     const path=new URL(req.url||"/","http://127.0.0.1").pathname;
     let mode="proxy",responseBody=Buffer.alloc(0),requestBody=Buffer.alloc(0),statusCode=0,mediaType="",responseHeaders={};
+    if(!trustedClient(req)) {res.writeHead(403);res.end("Forbidden origin or host");return;}
     allowCors(req,res);
     if(method==="OPTIONS"&&req.headers["access-control-request-method"]) {
       res.writeHead(204,{"Access-Control-Allow-Methods":"GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
@@ -171,7 +187,7 @@ function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
         onEntry({id:randomUUID(),at:started,source:"mock-proxy",mode,
           collectionId:current.collection.id,collectionTitle:current.collection.title||"",
           name:method+" "+path,replayable:false,
-          request:{method,url:"http://"+HOST+":"+activePort+(req.url||"/"),
+          request:{method,url:safeUrl(req.url||"/",activePort),
             headers:safeHeaders(req.headers),body:safeBody(requestBody,req.headers["content-type"])},
           response:{status:statusCode,statusText:http.STATUS_CODES[statusCode]||"",
             headers:safeHeaders(responseHeaders),body:safeBody(responseBody,mediaType),
@@ -202,4 +218,4 @@ function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
   }
   return {start,stop,configure,status};
 }
-module.exports={createMockServer,matchRule,upstreamUrl,safeHeaders,safeBody,requireConfig};
+module.exports={createMockServer,matchRule,upstreamUrl,safeHeaders,safeBody,safeUrl,requireConfig};
