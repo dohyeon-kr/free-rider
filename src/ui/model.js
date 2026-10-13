@@ -15,6 +15,7 @@ export function collection(title = "Untitled Collection") {
     source: "",
     description: "",
     requests: [],
+    mock: { rules: [] },
     folders: [],
     vars: [],
     headers: [],
@@ -56,6 +57,8 @@ export function normalize(c) {
   c.version = 3;
   c.id ||= crypto.randomUUID();
   c.folders ||= [];
+  c.mock ||= { rules: [] };
+  c.mock.rules ||= [];
   c.vars ||= [];
   c.headers ||= [];
   c.authConfig ||= { type: "none" };
