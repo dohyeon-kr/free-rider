@@ -1,4 +1,4 @@
-function endpointPath(request) {
+export function endpointPath(request) {
   if(request?.openapi?.path) return request.openapi.path;
   let raw=String(request?.url||"").replace(/^\{\{baseUrl\}\}/,"");
   try {raw=new URL(raw).pathname;} catch {raw=raw.split("?")[0];}
