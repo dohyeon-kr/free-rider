@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      resume_tag:
+        description: "Existing draft release tag to rebuild and publish (e.g. v0.30.0)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -128,14 +133,34 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Run semantic-release
+      - name: Run semantic-release or resume draft
         id: semantic
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ github.token }}
+          RESUME_TAG: ${{ inputs.resume_tag || '' }}
         shell: bash
         run: |
           rm -f .semantic-release-tag
+          if [[ -n "$RESUME_TAG" ]]; then
+            if [[ ! "$RESUME_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::resume_tag must look like v0.30.0"
+              exit 1
+            fi
+            if ! git rev-parse --verify --quiet "refs/tags/$RESUME_TAG" >/dev/null; then
+              echo "::error::Release tag $RESUME_TAG does not exist"
+              exit 1
+            fi
+            draft=$(gh release view "$RESUME_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
+            if [[ "$draft" != "true" ]]; then
+              echo "::error::Release $RESUME_TAG is not a draft. Refusing to overwrite a published release."
+              exit 1
+            fi
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$RESUME_TAG" >> "$GITHUB_OUTPUT"
+            echo "### Resuming signed build and publication for draft $RESUME_TAG" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           npx --yes \
             --package=semantic-release@25.0.9 \
             --package=@semantic-release/commit-analyzer@13.0.1 \
@@ -241,7 +266,23 @@ jobs:
           fi
 
           if [[ "$SIGNING_MODE" == 'developer-id' ]]; then
-            xcrun stapler validate "$APP_PATH"
+            # Apple CloudKit can drop ticket lookups despite successful notarization.
+            # Retry only known network failures and never bypass ticket validation.
+            ticket_log="$RUNNER_TEMP/stapler-validation.log"
+            for attempt in 1 2 3 4; do
+              if xcrun stapler validate "$APP_PATH" > "$ticket_log" 2>&1; then
+                cat "$ticket_log"
+                break
+              fi
+              cat "$ticket_log" >&2
+              if (( attempt == 4 )) || ! grep -Eiq \
+                'NSURLErrorDomain Code=-1005|NSURLErrorDomain Code=-1001|network connection was lost' "$ticket_log"; then
+                echo "::error::Notarization ticket validation failed (attempt ${attempt})."
+                exit 1
+              fi
+              echo "::warning::Apple CloudKit ticket lookup failed transiently; retrying (${attempt}/4)."
+              sleep 10
+            done
             spctl --assess --type execute --verbose=2 "$APP_PATH"
           fi
 
