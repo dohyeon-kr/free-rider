@@ -1071,6 +1071,8 @@ function createMcpServer(options) {
         return mockSelectScenario(args.scenarioId);
       }
       if(typeof saveWorkspace!=="function")throw Error("Mock persistence is unavailable.");
+      if(status.enabled&&status.collectionId===collectionId&&status.scenarioLocked)
+        throw Error("Cannot edit Mock rules or profiles during a scenario-bound Course.");
       if(hasUnsavedChanges?.())throw Error("Save the Free Rider workspace before editing Mock through MCP.");
       col.mock ||= {rules:[],scenarios:[]};
       col.mock.rules ||= [];
