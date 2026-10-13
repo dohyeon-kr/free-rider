@@ -177,9 +177,253 @@ jobs:
             echo "tag=$TAG" >> "$GITHUB_OUTPUT"
             echo "### Semantic release $TAG prepared" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "released=false" >> "$GITHUB_OUTPUT"
-            echo "tag=" >> "$GITHUB_OUTPUT"
-            echo "### No release-worthy commits" >> "$GITHUB_STEP_SUMMARY"
+            # semantic-release tracks Git tags, not the state of GitHub Release
+            # drafts. A failed notarization can leave the latest tag as an
+            # incomplete draft with no new commits to trigger a new release.
+            latest_tag=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+
+
+  build:
+    # Run a validation build even when semantic-release makes no new release.
+    # Only a successfully prepared release can be signed/published.
+    if: ${{ always() && needs.test.result == 'success' }}
+    needs: [test, release]
+    concurrency:
+      group: macos-build-${{ matrix.arch }}-${{ github.event_name == 'pull_request' && github.ref || needs.release.outputs.tag }}
+      cancel-in-progress: true
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            os: macos-15
+          - arch: x64
+            os: macos-15-intel
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.released == 'true' && needs.release.outputs.tag || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+
+      - name: Test native Electron window and IPC
+        run: npm run test:electron
+        timeout-minutes: 2
+
+      - name: Choose signing mode
+        id: signing
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASED: ${{ needs.release.outputs.released }}
+          CERTIFICATE: ${{ secrets.CSC_LINK }}
+          CERT_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            echo 'mode=pr-unsigned' >> "$GITHUB_OUTPUT"
+            echo '### Unsigned PR build — package validation only' >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$RELEASED" != "true" ]]; then
+            echo 'mode=ci-unsigned' >> "$GITHUB_OUTPUT"
+            echo '### Unsigned main build — no new release to publish' >> "$GITHUB_STEP_SUMMARY"
+          elif [[ -n "$CERTIFICATE" && -n "$CERT_PASSWORD" && -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$TEAM_ID" ]]; then
+            echo 'mode=developer-id' >> "$GITHUB_OUTPUT"
+          else
+            echo 'Apple signing secrets are required for release builds.' >&2
+            exit 1
+          fi
+
+      - name: Developer ID signed and notarized build
+        if: steps.signing.outputs.mode == 'developer-id'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run dist:mac -- --${{ matrix.arch }} -c.forceCodeSigning=true -c.mac.notarize=true
+
+      - name: Unsigned validation build
+        if: steps.signing.outputs.mode == 'pr-unsigned' || steps.signing.outputs.mode == 'ci-unsigned'
+        run: npm run dist:mac -- --${{ matrix.arch }} -c.mac.identity=null -c.mac.notarize=false
+
+      - name: Verify packaged application
+        timeout-minutes: 2
+        env:
+          SIGNING_MODE: ${{ steps.signing.outputs.mode }}
+        shell: bash
+        run: |
+          APP_PATH=$(find dist -maxdepth 2 -name '*.app' -type d -print -quit)
+          test -n "$APP_PATH"
+          test -x "$APP_PATH/Contents/MacOS/Free Rider"
+          test -f "$APP_PATH/Contents/Info.plist"
+          test -f "$APP_PATH/Contents/Resources/app.asar"
+
+          if [[ "$SIGNING_MODE" == 'developer-id' ]]; then
+            codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+            codesign --display --verbose=4 "$APP_PATH"
+          fi
+
+          if [[ "$SIGNING_MODE" == 'developer-id' ]]; then
+            # Apple CloudKit can drop ticket lookups despite successful notarization.
+            # Retry only known network failures and never bypass ticket validation.
+            ticket_log="$RUNNER_TEMP/stapler-validation.log"
+            for attempt in 1 2 3 4; do
+              if xcrun stapler validate "$APP_PATH" > "$ticket_log" 2>&1; then
+                cat "$ticket_log"
+                break
+              fi
+              cat "$ticket_log" >&2
+              if (( attempt == 4 )) || ! grep -Eiq \
+                'NSURLErrorDomain Code=-1005|NSURLErrorDomain Code=-1001|network connection was lost' "$ticket_log"; then
+                echo "::error::Notarization ticket validation failed (attempt ${attempt})."
+                exit 1
+              fi
+              echo "::warning::Apple CloudKit ticket lookup failed transiently; retrying (${attempt}/4)."
+              sleep 10
+            done
+            spctl --assess --type execute --verbose=2 "$APP_PATH"
+          fi
+
+          shasum -a 256 dist/*.dmg dist/*.zip > "dist/SHA256SUMS-${{ matrix.arch }}.txt"
+
+      - name: Upload unsigned main validation artifacts
+        if: ${{ github.event_name != 'pull_request' && steps.signing.outputs.mode == 'ci-unsigned' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-rider-unsigned-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/SHA256SUMS-${{ matrix.arch }}.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload draft release assets
+        if: ${{ github.event_name != 'pull_request' && needs.release.outputs.released == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        shell: bash
+        run: |
+          VERSIONED_DMG=$(find dist -maxdepth 1 -name 'Free-Rider-*-mac-${{ matrix.arch }}.dmg' -print -quit)
+          test -n "$VERSIONED_DMG"
+          cp "$VERSIONED_DMG" "dist/Free-Rider-mac-${{ matrix.arch }}.dmg"
+
+          gh release upload "$RELEASE_TAG" \
+            dist/*.dmg \
+            dist/*.zip \
+            "dist/SHA256SUMS-${{ matrix.arch }}.txt" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
+
+  publish-release:
+    needs: [release, build]
+    if: ${{ needs.release.outputs.released == 'true' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        shell: bash
+        run: |
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          echo "### Published $RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+  update-homebrew-cask:
+    needs: [release, publish-release]
+    if: ${{ needs.release.outputs.released == 'true' && needs.publish-release.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Render cask from published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        shell: bash
+        run: |
+          rm -rf .homebrew-release
+          mkdir -p .homebrew-release
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'SHA256SUMS-*.txt' \
+            --dir .homebrew-release
+
+          VERSION="${RELEASE_TAG#v}"
+          ARM_SHA=$(awk '$2 ~ /mac-arm64\.dmg$/ { print $1 }' .homebrew-release/SHA256SUMS-arm64.txt)
+          INTEL_SHA=$(awk '$2 ~ /mac-x64\.dmg$/ { print $1 }' .homebrew-release/SHA256SUMS-x64.txt)
+
+          [[ "$ARM_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "Invalid arm64 checksum: $ARM_SHA" >&2; exit 1; }
+          [[ "$INTEL_SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "Invalid x64 checksum: $INTEL_SHA" >&2; exit 1; }
+
+          mkdir -p Casks
+          cat > Casks/free-rider.rb <<EOF
+          cask "free-rider" do
+            arch arm: "arm64", intel: "x64"
+
+            version "$VERSION"
+            sha256 arm:   "$ARM_SHA",
+                   intel: "$INTEL_SHA"
+
+            url "https://github.com/dohyeon-kr/free-rider/releases/download/v#{version}/Free-Rider-#{version}-mac-#{arch}.dmg",
+                verified: "github.com/dohyeon-kr/free-rider/"
+            name "Free Rider"
+            desc "All-free, open-source, local-first API client"
+            homepage "https://dohyeon-kr.github.io/free-rider/"
+
+            auto_updates true
+            depends_on macos: ">= :ventura"
+
+            app "Free Rider.app"
+          end
+          EOF
+
+          ruby -c Casks/free-rider.rb
+          echo "### Homebrew cask rendered for $RELEASE_TAG" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit cask update
+        env:
+          RELEASE_TAG: ${{ needs.release.outputs.tag }}
+        shell: bash
+        run: |
+          if git diff --quiet -- Casks/free-rider.rb; then
+            echo "Cask is already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/free-rider.rb
+          git commit -m "chore(homebrew): update cask to $RELEASE_TAG [skip ci]"
+          git push origin HEAD:main
+ | sed -n '1p')
+            if [[ -n "$latest_tag" ]] &&
+               git merge-base --is-ancestor "$latest_tag" HEAD &&
+               [[ "$(gh release view "$latest_tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null || true)" == "true" ]]; then
+              echo "released=true" >> "$GITHUB_OUTPUT"
+              echo "tag=$latest_tag" >> "$GITHUB_OUTPUT"
+              echo "### Recovering incomplete draft release $latest_tag" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "released=false" >> "$GITHUB_OUTPUT"
+              echo "tag=" >> "$GITHUB_OUTPUT"
+              echo "### No new release; unsigned validation builds will still run" >> "$GITHUB_STEP_SUMMARY"
+            fi
           fi
 
   build:
