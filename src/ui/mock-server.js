@@ -1,7 +1,13 @@
 import { el, button, input, select, textarea, field } from "./dom.js";
+import { filterMockEndpoints } from "./mock-rules.mjs";
 const api=window.client;
 let runtime={enabled:false,collectionId:""};
 const editorProfiles=new Map();
+const mockSearches=new Map();
+export function focusMockEndpoint(collectionId,method,path){
+  editorProfiles.set(collectionId,"");
+  mockSearches.set(collectionId,method+" "+path);
+}
 function endpoints(col){
   const found=new Map();
   for(const request of col.requests||[]){
@@ -45,6 +51,25 @@ export function mockServerView(col,{state,mark,render,status,modal}){
   col.mock||={rules:[]};col.mock.rules||=[];col.mock.scenarios||=[];
   if(editorProfiles.get(col.id) && !col.mock.scenarios.some(x=>x.id===editorProfiles.get(col.id)))editorProfiles.delete(col.id);
   const editorScenarioId=editorProfiles.get(col.id)||"";
+  const allEndpoints=endpoints(col);
+  const panels=[];
+  const resultCount=el("span",{class:"mock-search-count",role:"status"});
+  const emptyState=el("p",{class:"hint mock-rule-empty",text:"검색 결과가 없습니다.",hidden:true});
+  const searchInput=input(mockSearches.get(col.id)||"",value=>{
+    mockSearches.set(col.id,value);
+    filterPanels(value);
+  },{type:"search",placeholder:"메서드 · 경로 · 요청 이름 검색",spellcheck:false,
+    "aria-label":"Mock 엔드포인트 검색","data-mock-search":col.id});
+  function filterPanels(value=searchInput.value){
+    const shown=new Set(filterMockEndpoints(allEndpoints,value).map(x=>x.method+"\u0000"+x.path));
+    let visible=0;
+    for(const {panel,method,path} of panels){
+      panel.hidden=!shown.has(method+"\u0000"+path);
+      if(!panel.hidden)visible++;
+    }
+    resultCount.textContent=visible+" / "+panels.length+"개 엔드포인트";
+    emptyState.hidden=visible!==0;
+  }
   state.mockServer||={port:4010,upstreams:{}};
   state.mockServer.upstreams||={};
   const local=state.mockServer;
@@ -156,7 +181,18 @@ export function mockServerView(col,{state,mark,render,status,modal}){
         })
       ),
       el("p",{class:"muted",text:"규칙이 없는 경로는 실제 API로 프록시합니다. 활성 Mock 규칙만 응답을 대체합니다."}),
-      ...endpoints(col).map(({method,path,request})=>{
+      el("div",{class:"mock-rule-search"},
+        searchInput,
+        button("지우기",()=>{
+          searchInput.value="";
+          mockSearches.delete(col.id);
+          filterPanels("");
+          searchInput.focus();
+        },{class:"text-button","aria-label":"Mock 검색 지우기"}),
+        resultCount
+      ),
+      emptyState,
+      ...allEndpoints.map(({method,path,request})=>{
         const hasConditions=r=>!!r.when&&(
           Object.keys(r.when.query||{}).length||
           Object.keys(r.when.headers||{}).length||
@@ -344,10 +380,12 @@ export function mockServerView(col,{state,mark,render,status,modal}){
           scenario.append(hint);
           panel.append(scenario);
         }
+        panels.push({panel,method,path});
         return panel;
       })
     )
   );
+  filterPanels();
   void sync();
   return root;
 }

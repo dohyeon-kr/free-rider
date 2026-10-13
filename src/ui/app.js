@@ -5,7 +5,8 @@ import { preview, applyReview } from "../modules/sync/review.mjs";
 import { reviewView } from "./sync-review.js";
 const syncReviews = new Map();
 import { specAuthEditor } from "./spec-auth.js";
-import { mockServerView } from "./mock-server.js";
+import { mockServerView, focusMockEndpoint } from "./mock-server.js";
+import { ensureEndpointMockRule } from "./mock-rules.mjs";
 import { prepareCapturedRule, applyCapturedRule } from "./mock-capture.mjs";
 import { SpecAuthSession } from "./spec-auth-state.mjs";
 const specAuths = new SpecAuthSession();
@@ -1554,6 +1555,35 @@ function realtimeRequestView(col, r) {
   return root;
 }
 
+async function quickMockRequest(col,requestDraft) {
+  const target=col.requests.find(item=>item.id===requestDraft.id);
+  if(!target)throw Error("Mock 대상 요청을 찾을 수 없습니다.");
+  // Keep the API operation and Mock route in sync if the user has an
+  // unsaved method or URL edit. Save the request, not unrelated tabs.
+  if(drafts.changed(col.id,target)){
+    await persist({cid:col.id,kind:"request",id:target.id});
+    drafts.discard(col.id,target.id);
+  }
+  const {method,path,created}=ensureEndpointMockRule(col,target);
+  mark(col,{history:false});
+  let note="";
+  const running=await api["mock-state"]().catch(()=>null);
+  if(running?.enabled && running.collectionId===col.id){
+    const local=state.mockServer||{};
+    try {
+      await api["mock-update"]({
+        port:Number(local.port||4010),
+        upstream:local.upstreams?.[col.id]||"",
+        collection:structuredClone(col),
+      });
+    }catch(error){note=" · 실행 서버 반영 실패: "+error.message;}
+  }
+  focusMockEndpoint(col.id,method,path);
+  open("mock",null,col);
+  status((created?"Mock 규칙을 만들었습니다.":"Mock 규칙을 열었습니다.")+
+    " 변경사항을 저장하세요."+note);
+}
+
 function requestView(col, r) {
   if (!r) return el("p", { text: "Request no longer exists." });
   r = drafts.get(col.id, r);
@@ -1575,6 +1605,11 @@ function requestView(col, r) {
       el(
         "div",
         { class: "request-heading-actions" },
+        button("Mocking",()=>action(()=>quickMockRequest(col,r)),{
+          class:"request-mock-button",
+          title:"이 엔드포인트의 Mock 규칙을 만들거나 편집",
+          "aria-label":"현재 엔드포인트 Mocking",
+        }),
         (() => {
           const saveButton = button("", () =>
             saveRequest({ cid: col.id, kind: "request", id: r.id }), {

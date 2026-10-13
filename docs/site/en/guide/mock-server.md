@@ -13,6 +13,14 @@ Free Rider runs a local HTTP server that returns OpenAPI-based mock JSON for sel
 
 Endpoints without explicit rules proxy by default.
 
+## Quick Mocking from a request
+
+Each HTTP request editor has a **Mocking** button in its header. Click it to create a default Mock rule and jump directly to that operation in the Mock Server tab. If the default rule already exists, it is reused (and switched from Proxy to Mock when necessary) without deleting conditional responses or named scenario overrides.
+
+An OpenAPI JSON schema uses **Generated** responses; endpoints without one begin in **Custom** JSON mode. Unsaved edits to that request are saved before creating the rule. Save the workspace to persist subsequent Mock changes. If the Mock server is already running for this collection, Free Rider attempts to refresh it immediately.
+
+Use the search field above **Endpoint Rules / Scenario Rules** to filter by HTTP method, path, request name or folder. The matching count updates as you type; **Clear** shows all endpoints. Searching does not modify any rules.
+
 ## Response modes
 
 - **Generated:** create and validate data from the selected OpenAPI response schema.
