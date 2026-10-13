@@ -1,0 +1,18 @@
+.mock-server-view{max-width:1080px;margin:auto;padding-bottom:48px}
+.mock-server-view h1{margin-bottom:8px}
+.mock-card{border:1px solid var(--border, #3a3a3a);border-radius:12px;padding:20px;margin-top:18px;display:flex;flex-direction:column;gap:14px}
+.mock-card h2{font-size:17px;margin:0}
+.mock-server-head,.mock-rule-head{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.mock-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mock-actions button{white-space:nowrap}
+.mock-settings{display:grid;grid-template-columns:minmax(100px,160px) minmax(200px,1fr);gap:12px}
+.mock-settings .field:last-child{grid-column:1/-1}
+.mock-settings code{display:block;overflow-wrap:anywhere;padding:11px;border-radius:6px;background:var(--surface2,#242424)}
+.mock-rule{padding:14px;border:1px solid var(--border, #444);border-radius:8px;display:flex;flex-direction:column;gap:10px}
+.mock-rule-head>code{font-size:13px;overflow-wrap:anywhere}
+.mock-rule-settings{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.mock-rule .field{min-width:0}
+.mock-rule textarea{font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;min-height:110px}
+.mock-preview{max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid var(--border,#444);padding:10px;border-radius:7px;font-size:12px}
+.mock-message{font-size:12px;min-height:1em;margin:0}
+@media(max-width:760px){.mock-settings{grid-template-columns:1fr}.mock-settings .field:last-child{grid-column:auto}}
