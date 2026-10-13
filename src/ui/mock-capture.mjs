@@ -16,7 +16,7 @@ export function matchRequest(collection,candidate) {
   const eligible=(collection.requests||[]).filter(r=>
     String(r.method||"GET").toUpperCase()===method &&
     (!r.type||r.type==="http"));
-  const exact=eligible.find(r=>r.id===candidate.requestId);
+  const exact=eligible.find(r=>r.id===candidate.requestId && endpointPath(r).startsWith("/") && routeRegex(endpointPath(r)).test(candidate.path));
   if(exact) return exact;
   const matches=eligible.filter(r=>{
     const path=endpointPath(r);
