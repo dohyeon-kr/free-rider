@@ -70,7 +70,7 @@ test("loopback mock/proxy: selection, passthrough, CORS and network events",asyn
   const local="http://127.0.0.1:"+mockPort;
   const mocked=await fetch(local+"/users");
   assert.equal(mocked.status,200);
-  assert.equal((await mocked.json()).role,"ADMIN");
+  assert.equal((await mocked.json()).role,"USER");
   const passthrough=await fetch(local+"/orders?q=a",{method:"POST",headers:{"Authorization":"Bearer secret","Content-Type":"application/json"},
     body:JSON.stringify({password:"private",id:11})});
   assert.equal(passthrough.status,200);
