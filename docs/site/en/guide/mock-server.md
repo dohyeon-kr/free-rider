@@ -1,0 +1,38 @@
+# Mock Server (Selective Proxy)
+
+Free Rider runs a local HTTP server that returns OpenAPI-based mock JSON for selected endpoints while forwarding other requests to an upstream API.
+
+## Getting started
+
+1. Open a collection and select **Mock** in the toolbar.
+2. Enter the real **Upstream URL** (e.g. https://api.example.com/v1).
+3. Switch endpoints to **Mock** or keep them as **Proxy**.
+4. Select Generated, OpenAPI Example or Custom response mode; preview and validate the response.
+5. Start the server and point your frontend base URL to http://127.0.0.1:4010 (or the displayed local URL).
+6. Save the workspace to persist rules and local configuration.
+
+Endpoints without explicit rules proxy by default.
+
+## Response modes
+
+- **Generated:** create and validate data from the selected OpenAPI response schema.
+- **Example:** use response-level OpenAPI example values.
+- **Custom:** return your own JSON, status and headers with schema validation when available.
+- **Custom path:** manually register a mock path even without OpenAPI.
+- Unsupported or impossible schema constraints cause errors, not invalid successful responses.
+
+## Network history and security
+
+Mock and Proxy calls from external clients are logged with origin labels. Authentication and cookie headers as well as sensitive-looking JSON fields are redacted.
+
+- The server starts disabled and never auto-starts; it listens only on 127.0.0.1.
+- Default port: 4010. Stop before changing the port or active collection.
+- Only explicit HTTP(S) upstreams are allowed; self/MCP proxy loops are blocked.
+- Request and response bodies: maximum 8MB. Logged bodies: maximum 512KB.
+- No SSE/WebSocket proxy, HTTPS interception, system proxy or stateful mock database.
+- Browser CORS allows local development origins, not arbitrary remote websites.
+- Cookie Domain/Secure/SameSite restrictions may differ from the real API host.
+- Compressed responses may be decoded before forwarding; not intended for large binary/streaming responses.
+- Mock rules are shareable via Git. Do not embed real secrets or personal data in custom response bodies.
+
+Planned: Network → Mock, conditional delay/error responses, Course/MCP integration.
