@@ -20,6 +20,26 @@ function endpoints(col){
   }
   return [...found.values()].sort((a,b)=>a.path.localeCompare(b.path)||a.method.localeCompare(b.method));
 }
+function verifyConditionDraft(candidate){
+  if(!candidate || typeof candidate!=="object" || Array.isArray(candidate))
+    throw Error("조건은 JSON 객체여야 합니다.");
+  if(Object.keys(candidate).some(key=>!["query","headers","body"].includes(key)))
+    throw Error("query, headers, body 키만 사용할 수 있습니다.");
+  for(const key of ["query","headers"]){
+    if(candidate[key]===undefined)continue;
+    if(!candidate[key] || typeof candidate[key]!=="object" || Array.isArray(candidate[key]))
+      throw Error(key+" 조건은 JSON 객체여야 합니다.");
+    if(Object.values(candidate[key]).some(value=>typeof value!=="string"))
+      throw Error(key+" 조건의 값은 문자열이어야 합니다.");
+  }
+  if(candidate.body!==undefined && (!candidate.body || typeof candidate.body!=="object" || Array.isArray(candidate.body)))
+    throw Error("body 조건은 JSON 객체여야 합니다.");
+  if(!Object.keys(candidate.query||{}).length &&
+     !Object.keys(candidate.headers||{}).length &&
+     !Object.keys(candidate.body||{}).length)
+    throw Error("조건을 하나 이상 지정하세요.");
+}
+
 export function mockServerView(col,{state,mark,render,status}){
   col.mock||={rules:[]};col.mock.rules||=[];
   state.mockServer||={port:4010,upstreams:{}};
@@ -152,14 +172,18 @@ export function mockServerView(col,{state,mark,render,status}){
             }catch(e){feedback.textContent="헤더 JSON 형식을 확인하세요: "+e.message;}
           },{rows:3})));
           const details=el("pre",{class:"mock-preview",hidden:true});
-          panel.append(button("응답 미리보기 · 검증",async()=>{
-            try{
-              const result=await api["mock-preview"](request,rule);
-              details.textContent="HTTP "+result.status+"\nContent-Type: "+result.mediaType+"\nHeaders: "+JSON.stringify(result.headers)+"\n\n"+
-                JSON.stringify(JSON.parse(result.body),null,2);
-            }catch(e){details.textContent="검증 실패: "+e.message;}
-            details.hidden=false;
-          }),details);
+          if(!rule.fault || rule.fault==="none"){
+            panel.append(button("응답 미리보기 · 검증",async()=>{
+              try{
+                const result=await api["mock-preview"](request,rule);
+                details.textContent="HTTP "+result.status+"\nContent-Type: "+result.mediaType+"\nHeaders: "+JSON.stringify(result.headers)+"\n\n"+
+                  JSON.stringify(JSON.parse(result.body),null,2);
+              }catch(e){details.textContent="검증 실패: "+e.message;}
+              details.hidden=false;
+            }),details);
+          }else{
+            panel.append(el("p",{class:"hint",text:"장애 시뮬레이션 모드는 일반 JSON 응답을 반환하지 않습니다."}));
+          }
         }
         // A route may contain several conditioned rules plus one default rule.
         panel.append(
@@ -208,12 +232,7 @@ export function mockServerView(col,{state,mark,render,status}){
               textarea(JSON.stringify(variant.when||{query:{}},null,2),v=>{
                 try {
                   const candidate=JSON.parse(v);
-                  if(!candidate||typeof candidate!=="object"||Array.isArray(candidate))
-                    throw Error("조건은 JSON 객체여야 합니다.");
-                  if(!Object.keys(candidate.query||{}).length &&
-                    !Object.keys(candidate.headers||{}).length &&
-                    !Object.keys(candidate.body||{}).length)
-                    throw Error("조건을 하나 이상 지정하세요.");
+                  verifyConditionDraft(candidate);
                   update("when",candidate);
                   hint.textContent="";
                 }catch(e){hint.textContent="조건 입력 중: "+e.message;}
