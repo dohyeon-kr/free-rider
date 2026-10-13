@@ -341,6 +341,7 @@ test("course tools expose the saved ordered sequence", async () => {
       name: "Smoke course",
       stepCount: 1,
       stopOnFailure: true,
+      mockScenarioId: "",
     },
   ]);
 
