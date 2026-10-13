@@ -35,7 +35,7 @@ Mock and Proxy calls from external clients are logged with origin labels. Authen
 - Compressed responses may be decoded before forwarding; not intended for large binary/streaming responses.
 - Mock rules are shareable via Git. Do not embed real secrets or personal data in custom response bodies.
 
-Planned: Network → Mock, conditional delay/error responses, Course/MCP integration.
+Course/MCP scenario integration remains planned.
 
 ## Promote a Network response to a Mock rule
 
@@ -47,3 +47,33 @@ Planned: Network → Mock, conditional delay/error responses, Course/MCP integra
 6. Click **Add Mock Rule**, then use the application's main **Save** button to persist workspace changes. Active rules in the same collection are refreshed immediately when possible.
 
 Truncated, non-JSON, invalid or bodyless responses are not captured. The original Network entry is never modified; URL query parameters are excluded from the new rule.
+
+
+## Conditional responses and failure simulation
+
+Choose **+ Add condition** on an endpoint to configure additional responses for the same method and path. Enter JSON under **Match JSON**, for example:
+
+```json
+{
+  "query": { "scenario": "unavailable" },
+  "headers": { "X-Debug": "yes" },
+  "body": { "user": { "type": "test" } }
+}
+```
+
+- Query values use exact matching. Repeated query parameters match when any occurrence matches.
+- Header names are case insensitive; header values are exact.
+- JSON body conditions match **subsets of object fields**, recursively. Arrays must match exactly.
+- Multiple conditions are ANDed. More specific rules win within the same route. Static paths take precedence over parameterized routes, with stable saved order for ties.
+- Unmatched conditions fall back to the endpoint's default Mock/Proxy rule, or upstream Proxy if no default exists.
+- Existing rules without conditions keep their prior behavior. Network → Mock only creates or replaces an unconditional default rule.
+
+Configure **Delay (ms)** from 0 to 30,000 for each Mock response. **Failure simulation** supports:
+
+| Mode | Result |
+|---|---|
+| Normal response | Return the configured status/body, including 4xx/5xx JSON errors |
+| HTTP 504 timeout | After the configured delay, return a simulated HTTP 504 JSON error. This is not a real socket timeout |
+| Disconnect socket | After the delay, destroy the connection without an HTTP response to test client network-error handling |
+
+Disconnects are recorded as failures in Network history. OpenAPI schema validation applies to normal JSON responses; synthetic timeout/disconnect modes do not return DTO responses.
