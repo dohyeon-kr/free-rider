@@ -2,6 +2,8 @@
 const http = require("node:http");
 const { randomUUID } = require("node:crypto");
 const { responseFor } = require("./schema.cjs");
+const { pickRule, validateBehavior } = require("./conditions.cjs");
+const { setTimeout: wait } = require("node:timers/promises");
 const HOST = "127.0.0.1", DEFAULT_PORT = 4010, MAX_BODY = 8 * 1024 * 1024, MAX_CAPTURE = 512 * 1024;
 const HOP = new Set(["host","connection","keep-alive","transfer-encoding","te","trailer","upgrade","proxy-authorization","proxy-authenticate","content-length"]);
 const PRIVATE = /authorization|(?:^|[_-])auth(?:$|[_-])|cookie|token|secret|password|api[-_]?key|client[-_]?secret|session|credential/i;
@@ -46,12 +48,12 @@ function routePattern(path) {
   });
   return new RegExp("^"+escaped.join("/")+"/?$");
 }
-function matchRule(rules,method,path) {
-  return (rules||[]).filter(r=>r.enabled!==false&&r.method===method&&routePattern(r.path).test(path))
-    .sort((a,b)=>{
-      const weight=r=>r.path.split("/").filter(x=>x&&!x.startsWith(":")&&!x.startsWith("{")).length;
-      return weight(b)-weight(a)||b.path.length-a.path.length;
-    })[0]||null;
+function matchRule(rules,method,path,context={}) {
+  return pickRule(rules,method,path,{
+    url:context.url||path,
+    headers:context.headers||{},
+    body:context.body||Buffer.alloc(0),
+  },(pattern,candidate)=>routePattern(pattern).test(candidate));
 }
 function requireConfig(value) {
   const port=Number(value.port??DEFAULT_PORT);
@@ -72,6 +74,7 @@ function requireConfig(value) {
   for(const r of rules) {
     if(!["mock","proxy"].includes(r.mode)||!/^[A-Z]+$/.test(r.method||"")) throw Error("Invalid rule");
     routePattern(r.path);
+    validateBehavior(r);
     if(r.mode==="mock"&&(Number(r.status??200)<200||Number(r.status??200)>599||!Number.isInteger(Number(r.status??200))))
       throw Error("Invalid Mock status");
   }
@@ -139,7 +142,7 @@ function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
   async function handle(req,res) {
     const started=Date.now(), current=config, method=String(req.method||"GET").toUpperCase();
     const path=new URL(req.url||"/","http://127.0.0.1").pathname;
-    let mode="proxy",responseBody=Buffer.alloc(0),requestBody=Buffer.alloc(0),statusCode=0,mediaType="",responseHeaders={};
+    let mode="proxy",responseBody=Buffer.alloc(0),requestBody=Buffer.alloc(0),statusCode=0,mediaType="",responseHeaders={},failureReason="";
     if(!trustedClient(req)) {res.writeHead(403);res.end("Forbidden origin or host");return;}
     allowCors(req,res);
     if(method==="OPTIONS"&&req.headers["access-control-request-method"]) {
@@ -149,17 +152,34 @@ function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
     }
     try {
       requestBody=await limitedBody(req);
-      const rule=matchRule(current.collection.mock?.rules,method,path);
+      const rule=matchRule(current.collection.mock?.rules,method,path,{url:req.url,headers:req.headers,body:requestBody});
       mode=rule?.mode||"proxy";
       if(mode==="mock") {
-        const output=responseFor(findRequest(current.collection,method,path,rule),rule);
-        responseBody=Buffer.from(output.body);
-        if(responseBody.length>MAX_BODY)throw Object.assign(Error("Mock body exceeds 8MB"),{status:502});
-        statusCode=output.status;mediaType=output.mediaType;res.statusCode=statusCode;
-        res.setHeader("Content-Type",mediaType);
-        for(const [name,value] of Object.entries(output.headers))
-          if(!/^(content-length|transfer-encoding|connection|access-control-allow-origin)$/i.test(name))
-            res.setHeader(name,String(value));
+        if(rule.delayMs)await wait(rule.delayMs);
+        if(res.destroyed)return;
+        if(rule.fault==="disconnect") {
+          statusCode=0;
+          failureReason="Simulated connection drop";
+          res.destroy();
+          return;
+        }
+        if(rule.fault==="timeout") {
+          statusCode=504;
+          failureReason="Simulated timeout";
+          mediaType="application/json";
+          responseBody=Buffer.from(JSON.stringify({error:"Simulated upstream timeout"}));
+          res.statusCode=statusCode;
+          res.setHeader("Content-Type",mediaType);
+        } else {
+          const output=responseFor(findRequest(current.collection,method,path,rule),rule);
+          responseBody=Buffer.from(output.body);
+          if(responseBody.length>MAX_BODY)throw Object.assign(Error("Mock body exceeds 8MB"),{status:502});
+          statusCode=output.status;mediaType=output.mediaType;res.statusCode=statusCode;
+          res.setHeader("Content-Type",mediaType);
+          for(const [name,value] of Object.entries(output.headers))
+            if(!/^(content-length|transfer-encoding|connection|access-control-allow-origin)$/i.test(name))
+              res.setHeader(name,String(value));
+        }
       } else {
         if(!current.upstream)throw Object.assign(Error("Upstream URL is not set"),{status:502});
         const target=upstreamUrl(current.upstream,req.url||"/");
@@ -195,7 +215,7 @@ function createMockServer({onEntry=()=>{},fetchImpl=fetch}={}) {
           response:{status:statusCode,statusText:http.STATUS_CODES[statusCode]||"",
             headers:safeHeaders(responseHeaders),body:safeBody(responseBody,mediaType),
             bodyTruncated:responseBody.length>MAX_CAPTURE,bytes:responseBody.length,
-            elapsed:Date.now()-started,error:statusCode>=500?"HTTP "+statusCode:""},
+            elapsed:Date.now()-started,error:failureReason||(statusCode>=500?"HTTP "+statusCode:"")},
           cookies:{request:[],current:[],setCookie:[]},
           timing:{total:Date.now()-started,waiting:0,download:0}});
       }catch{}
