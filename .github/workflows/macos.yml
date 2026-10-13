@@ -241,7 +241,23 @@ jobs:
           fi
 
           if [[ "$SIGNING_MODE" == 'developer-id' ]]; then
-            xcrun stapler validate "$APP_PATH"
+            # Apple CloudKit can drop ticket lookups despite successful notarization.
+            # Retry only known network failures and never bypass ticket validation.
+            ticket_log="$RUNNER_TEMP/stapler-validation.log"
+            for attempt in 1 2 3 4; do
+              if xcrun stapler validate "$APP_PATH" > "$ticket_log" 2>&1; then
+                cat "$ticket_log"
+                break
+              fi
+              cat "$ticket_log" >&2
+              if (( attempt == 4 )) || ! grep -Eiq \
+                'NSURLErrorDomain Code=-1005|NSURLErrorDomain Code=-1001|network connection was lost' "$ticket_log"; then
+                echo "::error::Notarization ticket validation failed (attempt ${attempt})."
+                exit 1
+              fi
+              echo "::warning::Apple CloudKit ticket lookup failed transiently; retrying (${attempt}/4)."
+              sleep 10
+            done
             spctl --assess --type execute --verbose=2 "$APP_PATH"
           fi
 
