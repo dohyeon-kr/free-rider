@@ -136,6 +136,8 @@ const rpc = createMcpServer({
   mockStart: config => callApp("mock-start",config),
   mockStop: () => callApp("mock-stop"),
   mockSelectScenario: id => callApp("mock-scenario-select",id),
+  mockAcquireScenario: id => callApp("mock-scenario-acquire",id),
+  mockReleaseScenario: token => callApp("mock-scenario-release",token),
   mockUpdate: config => callApp("mock-update",config),
   saveCollectionInterceptors,
   loadGeneratedSpec,
