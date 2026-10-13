@@ -223,6 +223,7 @@ function courseList(collection) {
       id: String(course?.id || `course-${courseIndex + 1}`),
       name: String(course?.name || `Course ${courseIndex + 1}`),
       stopOnFailure: course?.stopOnFailure !== false,
+      mockScenarioId: String(course?.mockScenarioId||""),
       steps: (Array.isArray(course?.steps) ? course.steps : [])
         .map((step, stepIndex) =>
           typeof step === "string"
@@ -244,6 +245,7 @@ function courseList(collection) {
       id: "legacy-course",
       name: "Course 1",
       stopOnFailure: collection.stopOnFailure !== false,
+      mockScenarioId: "",
       steps: legacy
         .filter((item) => item?.enabled && requests.has(item.id))
         .map((item, index) => ({
@@ -271,6 +273,7 @@ function courseView(collection, course) {
     id: course.id,
     name: course.name,
     stopOnFailure: course.stopOnFailure !== false,
+    mockScenarioId: course.mockScenarioId||"",
     steps: (course.steps || []).map((step) => {
       const request = (collection.requests || []).find((item) => item.id === step.requestId);
       return {
@@ -547,6 +550,7 @@ function toolDefinitions() {
             items: { type: "string" },
           },
           stopOnFailure: { type: "boolean" },
+          mockScenarioId: { type: "string" },
         },
         required: ["collectionId", "requestIds"],
         additionalProperties: false,
@@ -635,6 +639,11 @@ function createMcpServer(options) {
     loadNetworkHistory,
     saveCollectionInterceptors,
     saveWorkspace,
+    mockState,
+    mockStart,
+    mockStop,
+    mockSelectScenario,
+    mockUpdate,
     hasUnsavedChanges,
     reloadWorkspace,
   } = options;
@@ -785,6 +794,7 @@ function createMcpServer(options) {
         name: course.name,
         stepCount: course.steps.length,
         stopOnFailure: course.stopOnFailure !== false,
+        mockScenarioId: course.mockScenarioId||"",
       }));
     }
 
@@ -843,6 +853,12 @@ function createMcpServer(options) {
         if (typeof args.name !== "string" || !args.name.trim())
           throw Error("name must be a non-empty string.");
         course.name = args.name.trim();
+      }
+      if(args.mockScenarioId!==undefined){
+        if(typeof args.mockScenarioId!=="string"||
+          (args.mockScenarioId && !collection.mock?.scenarios?.some(s=>s.id===args.mockScenarioId)))
+          throw Error("Unknown Mock scenario: "+args.mockScenarioId);
+        course.mockScenarioId=args.mockScenarioId;
       }
       if (args.stopOnFailure !== undefined) {
         if (typeof args.stopOnFailure !== "boolean")
