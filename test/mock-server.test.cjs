@@ -2,7 +2,7 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const http=require("node:http");
 const {generate,validate,responseFor}=require("../src/modules/mock/schema.cjs");
-const {createMockServer,matchRule,upstreamUrl,safeHeaders,safeBody,requireConfig}=require("../src/modules/mock/server.cjs");
+const {createMockServer,matchRule,upstreamUrl,safeHeaders,safeBody,safeUrl,requireConfig}=require("../src/modules/mock/server.cjs");
 
 const userSchema={type:"object",required:["id","email","role"],properties:{
   id:{type:"string",format:"uuid"},
@@ -49,6 +49,7 @@ test("routing favors static paths and keeps query in upstream URL",()=>{
 });
 test("secret fields are scrubbed from network history",()=>{
   assert.equal(safeHeaders({Authorization:"Bearer secret",Accept:"application/json"}).Authorization,"[redacted]");
+  assert.ok(!safeUrl("/orders?accessToken=abcdef&limit=2",4010).includes("abcdef"));
   assert.deepEqual(JSON.parse(safeBody(Buffer.from('{"accessToken":"abc","nested":{"password":"hi"},"id":1}'),"application/json")),
     {accessToken:"[redacted]",nested:{password:"[redacted]"},id:1});
 });
@@ -82,6 +83,10 @@ test("loopback mock/proxy: selection, passthrough, CORS and network events",asyn
     "Access-Control-Request-Method":"GET"}});
   assert.equal(preflight.status,204);
   assert.equal(preflight.headers.get("access-control-allow-origin"),"http://localhost:3000");
+  const blocked=await fetch(local+"/users",{headers:{Origin:"https://attacker.invalid"}});
+  assert.equal(blocked.status,403);
+  const spoofed=await fetch(local+"/users",{headers:{Host:"attacker.invalid"}});
+  assert.equal(spoofed.status,403);
   assert.equal(events.length,2);
   assert.deepEqual(events.map(x=>x.mode),["mock","proxy"]);
   assert.equal(events[1].request.headers.authorization,"[redacted]");
