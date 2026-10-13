@@ -77,3 +77,29 @@ Configure **Delay (ms)** from 0 to 30,000 for each Mock response. **Failure simu
 | Disconnect socket | After the delay, destroy the connection without an HTTP response to test client network-error handling |
 
 Disconnects are recorded as failures in Network history. OpenAPI schema validation applies to normal JSON responses; synthetic timeout/disconnect modes do not return DTO responses.
+
+
+## Named Mock scenarios and Courses
+
+Create a named profile in **Scenario Profiles**. The **default rules** apply to all profiles; rules edited under a named scenario override defaults for the same route while that profile is selected.
+
+1. Enter a name and click **Create scenario**.
+2. Select the profile to edit endpoint rules, conditions and delay/error settings. **Inherit** means use the default endpoint rule.
+3. Click **Apply to running server** to temporarily switch the active profile. Server restart resets it to defaults.
+4. In **Ride**, bind the profile under **Course Mock Scenario** and save.
+5. Executing the Course applies the bound profile and restores the previous profile afterward.
+
+A scenario-bound Course requires the Mock server to be running for the **same collection**. Switching profiles while a Course is running is locked to avoid concurrent mutation. Stopping the server mid-ride invalidates the active lease.
+
+### MCP tools
+
+| Tool | Purpose |
+| --- | --- |
+| `get_mock_server` | Status and saved profile summaries |
+| `list_mock_rules` | Rule summaries without raw JSON bodies or condition values |
+| `start_mock_server` / `stop_mock_server` | Start/stop the local server using saved settings |
+| `select_mock_scenario` | Switch the active runtime profile, or empty ID for defaults |
+| `set_mock_scenario` | Create or rename a named profile |
+| `set_mock_rule` | Append or replace a saved Mock rule by index |
+
+`set_course` accepts `mockScenarioId`; `ride_course` activates that profile and restores the old one after completion. Save pending UI edits before MCP writes; the server starts only with the saved local upstream and port, not arbitrary remote targets. Do not embed secrets or private user data in shared response bodies.
