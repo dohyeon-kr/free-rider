@@ -141,7 +141,17 @@ export function mockServerView(col,{state,mark,render,status}){
           const mediaTypes=Object.keys(request?.responses?.[String(rule.status||200)]?.content||{}).filter(x=>x.includes("json"));
           const mediaOptions=[...new Set([rule.contentType||"application/json",...mediaTypes])];
           const settings=el("div",{class:"mock-rule-settings"},
-            field("HTTP Status",input(rule.status??200,v=>{const n=Number(v);if(Number.isInteger(n)&&n>=200&&n<=599)saveRule("status",n);},{type:"number",min:200,max:599})),
+            field("HTTP Status",input(rule.status??200,v=>{
+              const n=Number(v);
+              if(Number.isInteger(n)&&n>=200&&n<=599){
+                saveRule("status",n);
+                if(!request?.responses?.[String(n)] && rule.responseMode!=="custom" && (!rule.fault||rule.fault==="none")){
+                  saveRule("responseMode","custom");
+                  rule.body||="{}";
+                  render();
+                }
+              }
+            },{type:"number",min:200,max:599})),
             field("Response",select(rule.responseMode||"generated",responseOptions,v=>{saveRule("responseMode",v);render();})),
             field("Content-Type",select(rule.contentType||mediaTypes[0]||"application/json",mediaOptions.map(x=>[x,x]),v=>saveRule("contentType",v)))
           );
@@ -191,11 +201,12 @@ export function mockServerView(col,{state,mark,render,status}){
             el("strong",{text:"Conditional responses"}),
             button("+ 조건 추가",()=>{
               const serial=col.mock.rules.filter(r=>r.method===method&&r.path===path).length+1;
+              const available=Object.keys(request?.responses||{}).find(code=>/^[2-5]\d\d$/.test(code));
               col.mock.rules.push({
                 method,path,mode:"mock",enabled:true,
                 when:{query:{scenario:"case-"+serial}},
-                status:200,
-                responseMode:request?.responses?"generated":"custom",
+                status:Number(available||200),
+                responseMode:available?"generated":"custom",
                 body:"{}",delayMs:0,fault:"none"
               });
               change({redraw:true});
@@ -241,7 +252,14 @@ export function mockServerView(col,{state,mark,render,status}){
             el("div",{class:"mock-rule-settings"},
               field("Status",input(variant.status??200,v=>{
                 const n=Number(v);
-                if(Number.isInteger(n)&&n>=200&&n<=599)update("status",n);
+                if(Number.isInteger(n)&&n>=200&&n<=599){
+                  update("status",n);
+                  if(!request?.responses?.[String(n)] && variant.responseMode!=="custom" && (!variant.fault||variant.fault==="none")){
+                    variant.body||="{}";
+                    update("responseMode","custom");
+                    show();
+                  }
+                }
               },{type:"number",min:200,max:599})),
               field("Response",select(variant.responseMode||"generated",modeOptions,v=>{
                 update("responseMode",v);show();
