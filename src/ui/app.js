@@ -711,7 +711,7 @@ function render() {
     environments: () => environments(col),
     spec: () => specView(col),
     runner: () => runnerView(col),
-    mock: () => mockServerView(col, { state, mark, render, status }),
+    mock: () => mockServerView(col, { state, mark, render, status, modal }),
     git: () => gitView(col),
     scripts: () => scriptsView(col),
     folder: () => folderView(col, t.id),
