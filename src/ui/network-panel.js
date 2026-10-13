@@ -517,6 +517,12 @@ function renderDetail(entry) {
           }
           renderPanel();
         }, { disabled: !entry.replayable }),
+        button("Mock this response", () => {
+          window.dispatchEvent(new CustomEvent("free-rider:mock-from-network", {
+            detail: { entryId: entry.id },
+          }));
+        }, { disabled: !entry.response?.status || entry.response?.bodyTruncated,
+          title: "JSON 응답을 Mock 규칙으로 변환" }),
         button("Copy cURL", () => copy(curlFor(entry), "cURL을 복사했습니다.")),
       ),
     ),
