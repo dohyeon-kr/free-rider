@@ -570,6 +570,20 @@ td input:focus {
   font-size: 11px;
   margin-left: 0;
 }
+.request-heading-actions .request-mock-button {
+  min-height:28px;
+  padding:4px 10px;
+  border:1px solid #426653;
+  border-radius:7px;
+  background:#172b20;
+  color:#a4e5b3;
+  white-space:nowrap;
+}
+.request-heading-actions .request-mock-button:hover,
+.request-heading-actions .request-mock-button:focus-visible {
+  background:#244331;
+  border-color:#679a78;
+}
 .request-heading-actions .request-save,
 .request-heading-actions .request-menu {
   min-height: 28px;
