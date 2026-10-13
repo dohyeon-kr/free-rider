@@ -631,6 +631,18 @@ function toolDefinitions() {
         required:["collectionId","name"],additionalProperties:false},
     },
     {
+      name:"delete_mock_scenario",
+      description:"Delete a saved Mock scenario, its scoped rules and Course bindings. Requires no unsaved UI changes.",
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"},scenarioId:{type:"string"}},
+        required:["collectionId","scenarioId"],additionalProperties:false},
+    },
+    {
+      name:"delete_mock_rule",
+      description:"Delete a Mock rule by zero-based index. Requires no unsaved UI changes.",
+      inputSchema:{type:"object",properties:{collectionId:{type:"string"},index:{type:"integer",minimum:0}},
+        required:["collectionId","index"],additionalProperties:false},
+    },
+    {
       name:"set_mock_rule",
       description:"Create or replace one Mock rule in a saved collection. Pass zero-based index to replace; omit index to append. Validate rules and save UI edits first.",
       inputSchema:{type:"object",properties:{collectionId:{type:"string"},index:{type:"integer",minimum:0},
@@ -1033,7 +1045,7 @@ function createMcpServer(options) {
       };
     }
 
-    if(["get_mock_server","list_mock_rules","start_mock_server","select_mock_scenario","set_mock_scenario","set_mock_rule","stop_mock_server"].includes(name)){
+    if(["get_mock_server","list_mock_rules","start_mock_server","select_mock_scenario","set_mock_scenario","delete_mock_scenario","set_mock_rule","delete_mock_rule","stop_mock_server"].includes(name)){
       if(typeof mockState!=="function")throw Error("Mock server bridge is unavailable.");
       if(name==="stop_mock_server"){
         if(typeof mockStop!=="function")throw Error("Mock server bridge is unavailable.");
@@ -1078,7 +1090,22 @@ function createMcpServer(options) {
       col.mock.rules ||= [];
       col.mock.scenarios ||= [];
       let result;
-      if(name==="set_mock_scenario"){
+      if(name==="delete_mock_scenario"){
+        const id=requiredString(args,"scenarioId");
+        const index=col.mock.scenarios.findIndex(x=>x.id===id);
+        if(index<0)throw Error("Mock scenario not found: "+id);
+        const [removed]=col.mock.scenarios.splice(index,1);
+        col.mock.rules=col.mock.rules.filter(x=>x.scenarioId!==id);
+        for(const course of col.rides||[])
+          if(course.mockScenarioId===id)course.mockScenarioId="";
+        result={deleted:true,scenarioId:removed.id};
+      }else if(name==="delete_mock_rule"){
+        const index=args.index;
+        if(!Number.isInteger(index)||index<0||index>=col.mock.rules.length)
+          throw Error("Invalid Mock rule index.");
+        const [removed]=col.mock.rules.splice(index,1);
+        result={deleted:true,index,method:removed.method,path:removed.path};
+      }else if(name==="set_mock_scenario"){
         if(typeof args.name!=="string"||!args.name.trim()||args.name.length>100)
           throw Error("name must be 1-100 characters.");
         if(args.scenarioId===undefined){
