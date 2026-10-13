@@ -959,7 +959,19 @@ function createMcpServer(options) {
         args.environmentId === undefined ? undefined : requiredString(args, "environmentId");
       const steps = [];
       let failed = 0;
-
+      let previousScenario=null;
+      if(course.mockScenarioId){
+        if(typeof mockState!=="function"||typeof mockSelectScenario!=="function")
+          throw Error("Mock scenario bridge is unavailable.");
+        const mock=await mockState();
+        if(!mock.enabled||mock.collectionId!==collectionId)
+          throw Error("Start the Mock server for this collection before riding its scenario-bound Course.");
+        if(!collection.mock?.scenarios?.some(x=>x.id===course.mockScenarioId))
+          throw Error("Course references a missing Mock scenario.");
+        previousScenario=mock.scenarioId||"";
+        await mockSelectScenario(course.mockScenarioId);
+      }
+      try {
       for (const step of course.steps) {
         const request = requestById(collection, step.requestId);
         let result = null;
@@ -997,6 +1009,9 @@ function createMcpServer(options) {
         });
 
         if (stepFailed && course.stopOnFailure !== false) break;
+      }
+      }finally{
+        if(previousScenario!==null)await mockSelectScenario(previousScenario);
       }
 
       return {
