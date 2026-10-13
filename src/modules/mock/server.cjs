@@ -7,7 +7,7 @@ const HOP = new Set(["host","connection","keep-alive","transfer-encoding","te","
 const PRIVATE = /authorization|cookie|token|secret|password|api[-_]?key|client[-_]?secret|session|credential/i;
 function scrub(value, depth=0) {
   if (depth > 10) return "[omitted]";
-  if (typeof value === "string" && value.length <= MAX_CAPTURE && /^[\\s]*[\\[{]/.test(value)) {
+  if (typeof value === "string" && value.length <= MAX_CAPTURE && /^\s*[\[{]/.test(value)) {
     try { return JSON.stringify(scrub(JSON.parse(value),depth+1)); } catch {}
   }
   if (Array.isArray(value)) return value.map(v=>scrub(v,depth+1));
