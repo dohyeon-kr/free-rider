@@ -161,6 +161,18 @@ jobs:
             echo "### Resuming signed build and publication for draft $RESUME_TAG" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          # Resume the newest reachable draft release before creating a new
+          # version: semantic-release sees tags even if publication failed.
+          latest_tag=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed -n '1p')
+          if [[ -n "$latest_tag" ]] &&
+             git merge-base --is-ancestor "$latest_tag" HEAD &&
+             [[ "$(gh release view "$latest_tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null || true)" == "true" ]]; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$latest_tag" >> "$GITHUB_OUTPUT"
+            echo "### Recovering incomplete draft release $latest_tag before creating new versions" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
           npx --yes \
             --package=semantic-release@25.0.9 \
             --package=@semantic-release/commit-analyzer@13.0.1 \
@@ -183,7 +195,9 @@ jobs:
           fi
 
   build:
-    if: ${{ always() && needs.test.result == 'success' && (github.event_name == 'pull_request' || needs.release.outputs.released == 'true') }}
+    # Every tested commit gets a native macOS validation build, even without
+    # a new release tag. Only tagged releases use signing and publishing.
+    if: ${{ always() && needs.test.result == 'success' }}
     needs: [test, release]
     concurrency:
       group: macos-build-${{ matrix.arch }}-${{ github.event_name == 'pull_request' && github.ref || needs.release.outputs.tag }}
@@ -202,7 +216,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request' && github.sha || needs.release.outputs.tag }}
+          ref: ${{ needs.release.outputs.released == 'true' && needs.release.outputs.tag || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -217,6 +231,7 @@ jobs:
         id: signing
         env:
           EVENT_NAME: ${{ github.event_name }}
+          RELEASED: ${{ needs.release.outputs.released }}
           CERTIFICATE: ${{ secrets.CSC_LINK }}
           CERT_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -227,6 +242,9 @@ jobs:
           if [[ "$EVENT_NAME" == "pull_request" ]]; then
             echo 'mode=pr-unsigned' >> "$GITHUB_OUTPUT"
             echo '### Unsigned PR build — package validation only' >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$RELEASED" != "true" ]]; then
+            echo 'mode=ci-unsigned' >> "$GITHUB_OUTPUT"
+            echo '### Unsigned main build — no new release to publish' >> "$GITHUB_STEP_SUMMARY"
           elif [[ -n "$CERTIFICATE" && -n "$CERT_PASSWORD" && -n "$APPLE_ID" && -n "$APPLE_PASSWORD" && -n "$TEAM_ID" ]]; then
             echo 'mode=developer-id' >> "$GITHUB_OUTPUT"
           else
@@ -244,8 +262,8 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npm run dist:mac -- --${{ matrix.arch }} -c.forceCodeSigning=true -c.mac.notarize=true
 
-      - name: Unsigned PR build
-        if: steps.signing.outputs.mode == 'pr-unsigned'
+      - name: Unsigned validation build
+        if: steps.signing.outputs.mode == 'pr-unsigned' || steps.signing.outputs.mode == 'ci-unsigned'
         run: npm run dist:mac -- --${{ matrix.arch }} -c.mac.identity=null -c.mac.notarize=false
 
       - name: Verify packaged application
@@ -260,7 +278,7 @@ jobs:
           test -f "$APP_PATH/Contents/Info.plist"
           test -f "$APP_PATH/Contents/Resources/app.asar"
 
-          if [[ "$SIGNING_MODE" != 'pr-unsigned' ]]; then
+          if [[ "$SIGNING_MODE" == 'developer-id' ]]; then
             codesign --verify --deep --strict --verbose=2 "$APP_PATH"
             codesign --display --verbose=4 "$APP_PATH"
           fi
@@ -287,6 +305,18 @@ jobs:
           fi
 
           shasum -a 256 dist/*.dmg dist/*.zip > "dist/SHA256SUMS-${{ matrix.arch }}.txt"
+
+      - name: Upload unsigned main validation artifacts
+        if: ${{ github.event_name != 'pull_request' && steps.signing.outputs.mode == 'ci-unsigned' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-rider-unsigned-${{ matrix.arch }}-${{ github.sha }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/SHA256SUMS-${{ matrix.arch }}.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload draft release assets
         if: ${{ github.event_name != 'pull_request' && needs.release.outputs.released == 'true' }}
