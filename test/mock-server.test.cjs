@@ -95,6 +95,7 @@ test("loopback mock/proxy: selection, passthrough, CORS and network events",asyn
   assert.deepEqual(events.map(x=>x.mode),["mock","proxy"]);
   assert.equal(events[1].request.headers.authorization,"[redacted]");
   assert.ok(!JSON.stringify(events).includes("private"));
+  assert.ok(!JSON.stringify(events).includes("Bearer secret"));
   assert.equal(server.status().enabled,true);
   await server.stop();
   assert.equal(server.status().enabled,false);
