@@ -113,3 +113,11 @@ test("MCP ride_course releases lease even when request execution throws",async()
  assert.equal(result.state,"failed");
  assert.deepEqual(m.selections,["error",""]);
 });
+
+test("MCP mutation does not persist during a scenario-bound Course",async()=>{
+ const m=harness({mockState:async()=>({enabled:true,collectionId:"col",scenarioId:"error",scenarioLocked:true})});
+ await assert.rejects(m.call("set_mock_scenario",{collectionId:"col",name:"Nope"}),/during a scenario-bound Course/);
+ await assert.rejects(m.call("set_mock_rule",{collectionId:"col",
+   rule:{method:"GET",path:"/users",mode:"proxy"}}),/during a scenario-bound Course/);
+ assert.equal(m.stored,null);
+});
