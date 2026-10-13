@@ -16,3 +16,12 @@
 .mock-preview{max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;border:1px solid var(--border,#444);padding:10px;border-radius:7px;font-size:12px}
 .mock-message{font-size:12px;min-height:1em;margin:0}
 @media(max-width:760px){.mock-settings{grid-template-columns:1fr}.mock-settings .field:last-child{grid-column:auto}}
+
+
+.mock-capture-dialog {display:flex; flex-direction:column; gap:12px; min-width:min(560px,78vw); max-width:calc(100vw - 70px)}
+.mock-capture-dialog p {margin:0;overflow-wrap:anywhere}
+.mock-capture-dialog .field {display:flex;flex-direction:column;gap:7px}
+.mock-capture-dialog .mock-capture-editor {width:100%;min-height:180px;max-height:36vh;resize:vertical;font:12px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+.mock-capture-summary {font-size:12px;font-weight:600;overflow-wrap:anywhere}
+.mock-capture-overwrite:not([hidden]) {display:flex;align-items:flex-start;gap:8px;line-height:1.5}
+.mock-capture-dialog [role="alert"] {min-height:20px}
