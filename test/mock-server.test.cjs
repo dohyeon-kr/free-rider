@@ -85,8 +85,12 @@ test("loopback mock/proxy: selection, passthrough, CORS and network events",asyn
   assert.equal(preflight.headers.get("access-control-allow-origin"),"http://localhost:3000");
   const blocked=await fetch(local+"/users",{headers:{Origin:"https://attacker.invalid"}});
   assert.equal(blocked.status,403);
-  const spoofed=await fetch(local+"/users",{headers:{Host:"attacker.invalid"}});
-  assert.equal(spoofed.status,403);
+  const spoofed=await new Promise((resolve,reject)=>{
+    http.get({host:"127.0.0.1",port:mockPort,path:"/users",headers:{Host:"attacker.invalid"}},res=>{
+      res.resume();res.on("end",()=>resolve(res.statusCode));
+    }).on("error",reject);
+  });
+  assert.equal(spoofed,403);
   assert.equal(events.length,2);
   assert.deepEqual(events.map(x=>x.mode),["mock","proxy"]);
   assert.equal(events[1].request.headers.authorization,"[redacted]");
