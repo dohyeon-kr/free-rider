@@ -551,6 +551,13 @@ function createWindow() {
   });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (e) => e.preventDefault());
+  const currentWindow = win;
+  currentWindow.webContents.on("did-finish-load", () => {
+    // Renderer listeners are not ready during the first updater.init() broadcast.
+    // Replay a fresh snapshot when the page (re)loads.
+    if (!currentWindow.isDestroyed() && updater)
+      currentWindow.webContents.send("update-status", updater.getState());
+  });
   win
     .loadFile(path.join(__dirname, "index.html"))
     .then(async () => {
@@ -594,7 +601,8 @@ app.whenReady().then(async () => {
     console.error("network history load failed", error);
     networkEntries = [];
   }
-  createWindow();
+  // Initialize before loading the renderer: its first update-state IPC call
+  // must never see the temporary "initializing" fallback.
   updater = createUpdateController({
     app,
     autoUpdater,
@@ -603,6 +611,7 @@ app.whenReady().then(async () => {
     smokeTest,
   });
   updater.init();
+  createWindow();
   app.on("activate", () => {
     if (!BrowserWindow.getAllWindows().length) createWindow();
   });
