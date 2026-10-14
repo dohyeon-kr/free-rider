@@ -3303,7 +3303,7 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   // Fallback for keyboard events not intercepted by Electron (also useful in smoke tests).
-  const shortcut = api.resolveShortcut({
+  const shortcut = resolveShortcut({
     type: "keyDown", key: e.key, meta: e.metaKey, control: e.ctrlKey,
     shift: e.shiftKey, alt: e.altKey,
   });
