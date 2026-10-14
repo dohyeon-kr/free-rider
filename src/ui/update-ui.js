@@ -60,5 +60,13 @@ button?.addEventListener("click", async () => {
   }
 });
 
-api.onUpdateStatus?.(render);
-api["update-state"]().then(render).catch(() => {});
+// A delayed initial IPC snapshot must not overwrite a newer updater event.
+let updateEvents = 0;
+api.onUpdateStatus?.((state) => {
+  updateEvents++;
+  render(state);
+});
+const eventsBeforeSnapshot = updateEvents;
+api["update-state"]().then((state) => {
+  if (updateEvents === eventsBeforeSnapshot) render(state);
+}).catch(() => {});
