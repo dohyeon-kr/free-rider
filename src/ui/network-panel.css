@@ -33,7 +33,7 @@
   min-width: 88px;
 }
 .network-toolbar input[type="search"] {
-  width: min(360px, 32vw);
+  width: min(260px, 25vw);
   height: 30px;
   padding: 5px 8px;
 }
@@ -42,6 +42,14 @@
   height: 30px;
   padding-top: 4px;
   padding-bottom: 4px;
+}
+.track-proxy-status {
+  color: #9ebfae;
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 195px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .network-count {
   color: #858585;
