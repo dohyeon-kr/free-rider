@@ -47,7 +47,8 @@ import {
   expandEntireTree,
   isTreeFullyCollapsed,
 } from "./tree-collapse.mjs";
-import { moveItem } from "./tab-actions.mjs";
+import { moveItem, nextTabIndex, numberedTabIndex } from "./tab-actions.mjs";
+import { resolveShortcut } from "../shortcut-keys.mjs";
 const api = window.client;
 let state = {
     collections: [collection("My API Collection")],
@@ -70,7 +71,8 @@ let state = {
   gitInfo = new Map(),
   subtabs = new Map(),
   realtimeSessions = new Map(),
-  realtimeById = new Map();
+  realtimeById = new Map(),
+  recentlyClosedTabs = [];
 const key = (t) => `${t.cid}|${t.kind}|${t.id || ""}`;
 const c = () =>
   state.collections.find((c) => c.id === state.activeCollection) ||
@@ -148,8 +150,11 @@ function closeTab(t) {
   finishCloseTab(t);
 }
 function finishCloseTab(t) {
-  if (t.kind === "request") requestHistory.discard(t.cid, t.id);
   const i = state.tabs.findIndex((x) => key(x) === key(t));
+  if (i < 0) return;
+  if (t.kind === "request") requestHistory.discard(t.cid, t.id);
+  recentlyClosedTabs.push({ tab: { ...t }, index: i });
+  if (recentlyClosedTabs.length > 20) recentlyClosedTabs.shift();
   state.tabs.splice(i, 1);
   if (state.activeTab === key(t)) {
     const next = state.tabs[Math.min(i, state.tabs.length - 1)];
@@ -161,6 +166,32 @@ function finishCloseTab(t) {
     }
   }
   render();
+}
+function activateTab(tab) {
+  if (!tab) return;
+  state.activeTab = key(tab);
+  state.activeCollection = tab.cid;
+  render();
+}
+function selectTab(index) {
+  if (index >= 0 && index < state.tabs.length) activateTab(state.tabs[index]);
+}
+function cycleTab(direction) {
+  const currentIndex = state.tabs.findIndex((tab) => key(tab) === state.activeTab);
+  selectTab(nextTabIndex(state.tabs.length, currentIndex, direction));
+}
+function reopenClosedTab() {
+  while (recentlyClosedTabs.length) {
+    const { tab, index } = recentlyClosedTabs.pop();
+    const col = state.collections.find((item) => item.id === tab.cid);
+    if (!col || (tab.kind === "request" && !col.requests.some((request) => request.id === tab.id)))
+      continue;
+    if (state.tabs.some((item) => key(item) === key(tab))) continue;
+    state.tabs.splice(Math.min(index, state.tabs.length), 0, tab);
+    activateTab(tab);
+    return;
+  }
+  status("다시 열 탭이 없습니다.");
 }
 function modal(title, content, confirm, label = "Save") {
   const d = $("dialog");
@@ -3229,14 +3260,24 @@ $("shortcuts").onclick = () =>
         "⌘ / Ctrl + Enter",
         "Save current request",
         "⌘ / Ctrl + S",
+        "Save workspace",
+        "⇧ + ⌘ / Ctrl + S",
         "Undo request edit",
         "⌘ / Ctrl + Z",
         "Redo request edit",
         "⇧ + ⌘ / Ctrl + Z",
-        "New request",
-        "⌘ / Ctrl + N",
+        "New request / tab",
+        "⌘ / Ctrl + N / T",
         "Close tab",
         "⌘ / Ctrl + W",
+        "Reopen closed tab",
+        "⇧ + ⌘ / Ctrl + T",
+        "Next / previous tab",
+        "Ctrl + Tab / Ctrl + ⇧ + Tab",
+        "Next / previous tab (Mac)",
+        "⌘ + ⌥ + → / ←",
+        "Jump to tab (9 = last)",
+        "⌘ / Ctrl + 1–9",
         "Search requests",
         "⌘ / Ctrl + K",
       ].map((text) => el("span", { text })),
@@ -3244,36 +3285,40 @@ $("shortcuts").onclick = () =>
     () => true,
     "Close",
   );
-api.onShortcut((key) => {
+function handleAppShortcut(shortcut) {
   if ($("dialog").open) return;
-  if (key === "s") saveRequest();
-  if (key === "n") newRequest();
-  if (key === "w" && active()) closeTab(active());
-  if (key === "k") $("search").focus();
-  if (key === "enter" && active()?.kind === "request")
+  if (shortcut === "save-request") void saveRequest();
+  else if (shortcut === "save-workspace") void save();
+  else if (shortcut === "new-request" || shortcut === "new-tab") newRequest();
+  else if (shortcut === "close-tab" && active()) closeTab(active());
+  else if (shortcut === "restore-tab") reopenClosedTab();
+  else if (shortcut === "tab-next") cycleTab(1);
+  else if (shortcut === "tab-previous") cycleTab(-1);
+  else if (shortcut.startsWith("select-tab-"))
+    selectTab(numberedTabIndex(state.tabs.length, Number(shortcut.slice(-1))));
+  else if (shortcut === "search") $("search").focus();
+  else if (shortcut === "send-request" && active()?.kind === "request")
     sendRequest(
       c(),
       c().requests.find((r) => r.id === active().id),
     );
-});
+}
+api.onShortcut(handleAppShortcut);
 document.addEventListener("keydown", (e) => {
-  if (!(e.metaKey || e.ctrlKey) || $("dialog").open) return;
-  const k = e.key.toLowerCase();
-  if (k === "z" && active()?.kind === "request") {
+  if ($("dialog").open) return;
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "z" && active()?.kind === "request") {
     e.preventDefault();
     applyRequestHistory(e.shiftKey ? "redo" : "undo");
     return;
   }
-  if (["s", "n", "w", "k", "enter"].includes(k)) e.preventDefault();
-  if (k === "s") saveRequest();
-  if (k === "n") newRequest();
-  if (k === "w" && active()) closeTab(active());
-  if (k === "k") $("search").focus();
-  if (k === "enter" && active()?.kind === "request")
-    sendRequest(
-      c(),
-      c().requests.find((r) => r.id === active().id),
-    );
+  // Fallback for keyboard events not intercepted by Electron (also useful in smoke tests).
+  const shortcut = resolveShortcut({
+    type: "keyDown", key: e.key, meta: e.metaKey, control: e.ctrlKey,
+    shift: e.shiftKey, alt: e.altKey,
+  });
+  if (!shortcut) return;
+  e.preventDefault();
+  handleAppShortcut(shortcut);
 });
 const resize = $("sidebarResizer");
 resize.onpointerdown = (e) => {
