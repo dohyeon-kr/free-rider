@@ -1,5 +1,6 @@
 import { el, button, input, select, textarea, field } from "./dom.js";
 import { filterMockEndpoints } from "./mock-rules.mjs";
+import { mockServerConfig, mockUpstreamSetting } from "./mock-upstream.mjs";
 const api=window.client;
 let runtime={enabled:false,collectionId:""};
 const editorProfiles=new Map();
@@ -74,8 +75,8 @@ export function mockServerView(col,{state,mark,render,status,modal}){
   state.mockServer.upstreams||={};
   const local=state.mockServer;
   let newScenarioName="";
-  const upstream=()=>local.upstreams[col.id]||"";
-  const config=()=>({port:Number(local.port||4010),upstream:upstream(),collection:structuredClone(col)});
+  const upstream=()=>mockUpstreamSetting(state,col);
+  const config=()=>mockServerConfig(state,col);
   const root=el("div",{class:"view-inner mock-server-view","data-view":"mock"},
     el("h1",{text:"Mock Server"}),
     el("p",{class:"muted",text:"OpenAPI 응답 스키마를 기준으로 선택한 엔드포인트만 목킹합니다. 나머지 요청은 지정된 Upstream으로 전달합니다."})
@@ -121,10 +122,10 @@ export function mockServerView(col,{state,mark,render,status,modal}){
           local.port=Number(v);address.textContent="http://127.0.0.1:"+v;change();
         },{type:"number",min:"1024",max:"65535"})),
         field("Upstream URL",input(upstream(),v=>{local.upstreams[col.id]=v;change();},
-          {placeholder:"https://api.example.com",spellcheck:false})),
+          {placeholder:"{{baseUrl}} 또는 https://api.example.com",spellcheck:false})),
         field("Local URL",address)
       ),
-      el("p",{class:"hint",text:"서버는 로컬(127.0.0.1)에서만 실행됩니다. 앱 재시작 후에는 수동으로 시작해야 합니다. 포트를 변경하려면 먼저 중지하세요."}),
+      el("p",{class:"hint",text:"Upstream 기본값은 {{baseUrl}}이며, 현재 선택된 환경의 값을 사용합니다. 빈 값은 프록시를 사용하지 않습니다. 서버는 127.0.0.1에서만 실행되며 앱 재시작 후에는 수동으로 시작해야 합니다. 포트를 변경하려면 먼저 중지하세요."}),
       feedback
     ),
     el("section",{class:"mock-card"},
