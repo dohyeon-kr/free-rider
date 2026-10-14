@@ -1,5 +1,5 @@
 const { contextBridge, ipcRenderer } = require("electron");
-const api = { resolveShortcut };
+const api = {};
 for (const name of [
   "import-spec",
   "sync-spec",
