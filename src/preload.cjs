@@ -1,5 +1,4 @@
 const { contextBridge, ipcRenderer } = require("electron");
-const { resolveShortcut } = require("./shortcut-keys.cjs");
 const api = { resolveShortcut };
 for (const name of [
   "import-spec",
