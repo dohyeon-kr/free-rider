@@ -47,6 +47,7 @@ import {
   isTreeFullyCollapsed,
 } from "./tree-collapse.mjs";
 import { moveItem, nextTabIndex, numberedTabIndex } from "./tab-actions.mjs";
+import { resolveShortcut } from "../shortcut-keys.mjs";
 const api = window.client;
 let state = {
     collections: [collection("My API Collection")],
