@@ -2138,6 +2138,7 @@ function environments(col) {
             state.selectedEnvironments[col.id] = e.id;
             mark(col);
             render();
+            void syncRunningMockEnvironment(col);
           }),
         ),
       ),
@@ -2184,6 +2185,7 @@ function environments(col) {
           state.selectedEnvironments[col.id] = copy.id;
           mark(col);
           render();
+          void syncRunningMockEnvironment(col);
         }),
         button(
           "Delete",
@@ -3211,8 +3213,10 @@ $("toggleTreeCollapse").onclick = () => {
 $("search").oninput = renderTree;
 $("searchButton").onclick = () => $("search").focus();
 $("environmentSelect").onchange = (e) => {
-  state.selectedEnvironments[c().id] = e.target.value;
+  const collection=c();
+  state.selectedEnvironments[collection.id] = e.target.value;
   render();
+  void syncRunningMockEnvironment(collection);
 };
 $("shortcuts").onclick = () =>
   modal(
