@@ -5,13 +5,13 @@ Free Rider runs a local HTTP server that returns OpenAPI-based mock JSON for sel
 ## Getting started
 
 1. Open a collection and select **Mock** in the toolbar.
-2. Enter the real **Upstream URL** (e.g. https://api.example.com/v1).
+2. **Upstream URL** defaults to `{{baseUrl}}`, resolved from the currently selected environment. You may enter a custom HTTP(S) URL to override it, or clear it to disable Proxy forwarding.
 3. Switch endpoints to **Mock** or keep them as **Proxy**.
 4. Select Generated, OpenAPI Example or Custom response mode; preview and validate the response.
 5. Start the server and point your frontend base URL to http://127.0.0.1:4010 (or the displayed local URL).
 6. Save the workspace to persist rules and local configuration.
 
-Endpoints without explicit rules proxy by default.
+Endpoints without explicit rules proxy by default. Changing the active environment also reconfigures the running Mock server's Upstream; existing explicit overrides remain unchanged. If `baseUrl` is missing or points back to the Mock/MCP server, starting or updating the proxy fails with a configuration error.
 
 ## Quick Mocking from a request
 

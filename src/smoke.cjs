@@ -227,9 +227,10 @@ async function run(win) {
     throw Error("Discard retained draft changes");
   await js(`const url = document.querySelector('#requestUrl'); url.value = 'http://localhost:3456/saved'; url.dispatchEvent(new Event('input',{bubbles:true})); document.querySelector('.work-tab.active .close').click(); document.querySelector('#dialogConfirm').click()`);
   await poll(() => js(`!document.querySelector('#dialog').open`));
-  await js(`[...document.querySelectorAll('#tree .tree-label')].find(e=>e.textContent.includes('Unsaved request')).click()`);
+  await js(`document.dispatchEvent(new KeyboardEvent('keydown', {key: 'T', metaKey: true, shiftKey: true, bubbles: true, cancelable: true}))`);
+  await poll(() => js(`!!document.querySelector('#requestUrl')`));
   if ((await js(`document.querySelector('#requestUrl').value`)) !== 'http://localhost:3456/saved')
-    throw Error("Save did not commit draft");
+    throw Error("Reopen closed tab did not restore the saved request");
 
   await js(`(() => { const url = document.querySelector('#requestUrl'); url.value = 'http://localhost:3456/edited'; url.dispatchEvent(new Event('input',{bubbles:true})); })()`);
   win.webContents.sendInputEvent({
@@ -269,7 +270,7 @@ async function run(win) {
   if (await js(`document.querySelector('#tree').textContent.includes('Review fixture')`)) throw Error("Preview modified collection");
   await js(`document.querySelector('.sync-change summary').click(); document.querySelector('#applySyncSelection').click()`);
   await poll(() => js(`document.querySelector('#tree').textContent.includes('Review fixture')`));
-  await js(`document.querySelector('#saveWorkspace').click()`);
+  await js(`document.dispatchEvent(new KeyboardEvent('keydown', {key: 'S', metaKey: true, shiftKey: true, bubbles: true, cancelable: true}))`);
   await poll(() => js(`document.querySelector('#status').textContent.includes('워크스페이스를 저장')`));
   await js(`document.querySelector('#undoSync').click();document.querySelector('#dialogConfirm').click()`);
   await poll(() => js(`!document.querySelector('#dialog').open`));

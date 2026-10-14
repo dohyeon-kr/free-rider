@@ -13,8 +13,10 @@ function fixture(){
   }]
  };
 }
-function harness(overrides={}){
+function harness(overrides={},setup=()=>{}){
  let state=fixture(),stored=null,reloads=0,unsaved=false,runtime={enabled:false,collectionId:"",scenarioId:""};
+ setup(state);
+ let lastMockConfig=null;
  let lease=null;const selections=[];
  const bridge={
   loadWorkspace:async()=>structuredClone(state),
@@ -25,7 +27,7 @@ function harness(overrides={}){
   loadNetworkHistory:async()=>[],
   saveCollectionInterceptors:async({interceptors})=>interceptors,
   mockState:async()=>structuredClone(runtime),
-  mockStart:async config=>{runtime={enabled:true,collectionId:config.collection.id,scenarioId:""};return runtime;},
+  mockStart:async config=>{lastMockConfig=config;runtime={enabled:true,collectionId:config.collection.id,scenarioId:""};return runtime;},
   mockStop:async()=>{runtime={enabled:false,collectionId:"",scenarioId:""};return runtime;},
   mockSelectScenario:async id=>{if(!runtime.enabled)throw Error("Not running");runtime.scenarioId=id;selections.push(id);return runtime;},
   mockUpdate:async()=>runtime,
@@ -49,6 +51,7 @@ function harness(overrides={}){
   return JSON.parse(reply.result.content[0].text);
  }
  return {call,setUnsaved:v=>{unsaved=v;},start:async()=>bridge.mockStart({collection:state.collections[0]}),
+   get lastMockConfig(){return lastMockConfig;},
    get stored(){return stored;},get runtime(){return runtime;},get selections(){return selections;},get reloads(){return reloads;}};
 }
 test("MCP tools list Mock server status and rules without exposing response body",async()=>{
@@ -138,4 +141,25 @@ test("MCP deletes only the requested Mock rule index",async()=>{
  assert.equal(removed.deleted,true);
  assert.equal(m.stored.collections[0].mock.rules.length,0);
  await assert.rejects(m.call("delete_mock_rule",{collectionId:"col",index:5}),/Invalid Mock rule index/);
+});
+
+test("MCP default Mock upstream follows saved selected environment",async()=>{
+ const m=harness({},state=>{
+   state.selectedEnvironments={col:"stage"};
+   state.collections[0].environments.push({id:"stage",name:"Staging",values:{baseUrl:"https://staging.example.com/v1"}});
+   delete state.mockServer.upstreams.col;
+ });
+ const info=await m.call("get_mock_server",{collectionId:"col"});
+ assert.equal(info.upstreamConfigured,true);
+ await m.call("start_mock_server",{collectionId:"col"});
+ assert.equal(m.lastMockConfig.upstream,"{{baseUrl}}");
+ assert.equal(m.lastMockConfig.environmentId,"stage");
+});
+
+test("MCP Mock supports explicitly disabling Upstream",async()=>{
+ const m=harness({},state=>{state.mockServer.upstreams.col="";});
+ const info=await m.call("get_mock_server",{collectionId:"col"});
+ assert.equal(info.upstreamConfigured,false);
+ await m.call("start_mock_server",{collectionId:"col"});
+ assert.equal(m.lastMockConfig.upstream,"");
 });

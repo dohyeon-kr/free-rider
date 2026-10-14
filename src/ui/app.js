@@ -7,8 +7,9 @@ const syncReviews = new Map();
 import { specAuthEditor } from "./spec-auth.js";
 import { mockServerView, focusMockEndpoint } from "./mock-server.js";
 import { ensureEndpointMockRule } from "./mock-rules.mjs";
+import { mockServerConfig, mockUpstreamSetting } from "./mock-upstream.mjs";
 import { prepareCapturedRule, applyCapturedRule, matchRequest } from "./mock-capture.mjs";
-import { routeRideThroughMockProxy } from "./ride-proxy.mjs";
+import { routeRideThroughMockProxy, resolveRideUpstream } from "./ride-proxy.mjs";
 import { SpecAuthSession } from "./spec-auth-state.mjs";
 const specAuths = new SpecAuthSession();
 import {
@@ -47,7 +48,8 @@ import {
   expandEntireTree,
   isTreeFullyCollapsed,
 } from "./tree-collapse.mjs";
-import { moveItem } from "./tab-actions.mjs";
+import { moveItem, nextTabIndex, numberedTabIndex } from "./tab-actions.mjs";
+import { resolveShortcut } from "../shortcut-keys.mjs";
 const api = window.client;
 let state = {
     collections: [collection("My API Collection")],
@@ -70,7 +72,8 @@ let state = {
   gitInfo = new Map(),
   subtabs = new Map(),
   realtimeSessions = new Map(),
-  realtimeById = new Map();
+  realtimeById = new Map(),
+  recentlyClosedTabs = [];
 const key = (t) => `${t.cid}|${t.kind}|${t.id || ""}`;
 const c = () =>
   state.collections.find((c) => c.id === state.activeCollection) ||
@@ -148,8 +151,11 @@ function closeTab(t) {
   finishCloseTab(t);
 }
 function finishCloseTab(t) {
-  if (t.kind === "request") requestHistory.discard(t.cid, t.id);
   const i = state.tabs.findIndex((x) => key(x) === key(t));
+  if (i < 0) return;
+  if (t.kind === "request") requestHistory.discard(t.cid, t.id);
+  recentlyClosedTabs.push({ tab: { ...t }, index: i });
+  if (recentlyClosedTabs.length > 20) recentlyClosedTabs.shift();
   state.tabs.splice(i, 1);
   if (state.activeTab === key(t)) {
     const next = state.tabs[Math.min(i, state.tabs.length - 1)];
@@ -161,6 +167,32 @@ function finishCloseTab(t) {
     }
   }
   render();
+}
+function activateTab(tab) {
+  if (!tab) return;
+  state.activeTab = key(tab);
+  state.activeCollection = tab.cid;
+  render();
+}
+function selectTab(index) {
+  if (index >= 0 && index < state.tabs.length) activateTab(state.tabs[index]);
+}
+function cycleTab(direction) {
+  const currentIndex = state.tabs.findIndex((tab) => key(tab) === state.activeTab);
+  selectTab(nextTabIndex(state.tabs.length, currentIndex, direction));
+}
+function reopenClosedTab() {
+  while (recentlyClosedTabs.length) {
+    const { tab, index } = recentlyClosedTabs.pop();
+    const col = state.collections.find((item) => item.id === tab.cid);
+    if (!col || (tab.kind === "request" && !col.requests.some((request) => request.id === tab.id)))
+      continue;
+    if (state.tabs.some((item) => key(item) === key(tab))) continue;
+    state.tabs.splice(Math.min(index, state.tabs.length), 0, tab);
+    activateTab(tab);
+    return;
+  }
+  status("다시 열 탭이 없습니다.");
 }
 function modal(title, content, confirm, label = "Save") {
   const d = $("dialog");
@@ -1570,13 +1602,8 @@ async function quickMockRequest(col,requestDraft) {
   let note="";
   const running=await api["mock-state"]().catch(()=>null);
   if(running?.enabled && running.collectionId===col.id){
-    const local=state.mockServer||{};
     try {
-      await api["mock-update"]({
-        port:Number(local.port||4010),
-        upstream:local.upstreams?.[col.id]||"",
-        collection:structuredClone(col),
-      });
+      await api["mock-update"](mockServerConfig(state,col));
     }catch(error){note=" · 실행 서버 반영 실패: "+error.message;}
   }
   focusMockEndpoint(col.id,method,path);
@@ -2098,6 +2125,14 @@ ctx.log("실행 로그")`}),
     el("p",{class:"hint",text:"Interceptor 로그는 요청의 콘솔에서 확인합니다. 파일·셸·직접 네트워크 API는 제공하지 않습니다."}));
   return root;
 }
+// Keep an active Mock Proxy aligned with the selected collection environment.
+async function syncRunningMockEnvironment(col){
+  try{
+    const runtime=await api["mock-state"]();
+    if(runtime.enabled && runtime.collectionId===col.id)
+      await api["mock-update"](mockServerConfig(state,col));
+  }catch(error){status("Mock Upstream 갱신 실패: "+error.message);}
+}
 function environments(col) {
   const root = el("div", { class: "view-inner", "data-view": "environments" }),
     current = env(col);
@@ -2113,7 +2148,7 @@ function environments(col) {
           linked={id:crypto.randomUUID(),name:file.name,values:file.values,file};
           col.environments.push(linked);
         }
-        state.selectedEnvironments[col.id]=linked.id; mark(col); render();
+        state.selectedEnvironments[col.id]=linked.id; mark(col); render(); void syncRunningMockEnvironment(col);
       }),{id:"connectEnvFile"}),
       el(
         "div",
@@ -2135,6 +2170,7 @@ function environments(col) {
             state.selectedEnvironments[col.id] = e.id;
             mark(col);
             render();
+            void syncRunningMockEnvironment(col);
           }),
         ),
       ),
@@ -2150,6 +2186,7 @@ function environments(col) {
           () => {
             state.selectedEnvironments[col.id] = e.id;
             render();
+            void syncRunningMockEnvironment(col);
           },
           { class: e === current ? "active" : "" },
         ),
@@ -2180,6 +2217,7 @@ function environments(col) {
           state.selectedEnvironments[col.id] = copy.id;
           mark(col);
           render();
+          void syncRunningMockEnvironment(col);
         }),
         button(
           "Delete",
@@ -2776,7 +2814,7 @@ async function runCollection(col, ride = activeRide(col)) {
       const server=await api["mock-state"]();
       if(!server.enabled||server.collectionId!==col.id)
         throw Error("Ride를 실행하려면 같은 컬렉션의 Mock Proxy를 먼저 연결하세요.");
-      const upstream=state.mockServer?.upstreams?.[col.id]||"";
+      const upstream=resolveRideUpstream(mockUpstreamSetting(state,col),runEnvironment.values||{});
       selected=selected.map(step=>({
         ...step,request:routeRideThroughMockProxy(step.request,{url:server.url,upstream})
       }));
@@ -3221,8 +3259,10 @@ $("toggleTreeCollapse").onclick = () => {
 $("search").oninput = renderTree;
 $("searchButton").onclick = () => $("search").focus();
 $("environmentSelect").onchange = (e) => {
-  state.selectedEnvironments[c().id] = e.target.value;
+  const collection=c();
+  state.selectedEnvironments[collection.id] = e.target.value;
   render();
+  void syncRunningMockEnvironment(collection);
 };
 $("shortcuts").onclick = () =>
   modal(
@@ -3235,14 +3275,24 @@ $("shortcuts").onclick = () =>
         "⌘ / Ctrl + Enter",
         "Save current request",
         "⌘ / Ctrl + S",
+        "Save workspace",
+        "⇧ + ⌘ / Ctrl + S",
         "Undo request edit",
         "⌘ / Ctrl + Z",
         "Redo request edit",
         "⇧ + ⌘ / Ctrl + Z",
-        "New request",
-        "⌘ / Ctrl + N",
+        "New request / tab",
+        "⌘ / Ctrl + N / T",
         "Close tab",
         "⌘ / Ctrl + W",
+        "Reopen closed tab",
+        "⇧ + ⌘ / Ctrl + T",
+        "Next / previous tab",
+        "Ctrl + Tab / Ctrl + ⇧ + Tab",
+        "Next / previous tab (Mac)",
+        "⌘ + ⌥ + → / ←",
+        "Jump to tab (9 = last)",
+        "⌘ / Ctrl + 1–9",
         "Search requests",
         "⌘ / Ctrl + K",
       ].map((text) => el("span", { text })),
@@ -3250,36 +3300,40 @@ $("shortcuts").onclick = () =>
     () => true,
     "Close",
   );
-api.onShortcut((key) => {
+function handleAppShortcut(shortcut) {
   if ($("dialog").open) return;
-  if (key === "s") saveRequest();
-  if (key === "n") newRequest();
-  if (key === "w" && active()) closeTab(active());
-  if (key === "k") $("search").focus();
-  if (key === "enter" && active()?.kind === "request")
+  if (shortcut === "save-request") void saveRequest();
+  else if (shortcut === "save-workspace") void save();
+  else if (shortcut === "new-request" || shortcut === "new-tab") newRequest();
+  else if (shortcut === "close-tab" && active()) closeTab(active());
+  else if (shortcut === "restore-tab") reopenClosedTab();
+  else if (shortcut === "tab-next") cycleTab(1);
+  else if (shortcut === "tab-previous") cycleTab(-1);
+  else if (shortcut.startsWith("select-tab-"))
+    selectTab(numberedTabIndex(state.tabs.length, Number(shortcut.slice(-1))));
+  else if (shortcut === "search") $("search").focus();
+  else if (shortcut === "send-request" && active()?.kind === "request")
     sendRequest(
       c(),
       c().requests.find((r) => r.id === active().id),
     );
-});
+}
+api.onShortcut(handleAppShortcut);
 document.addEventListener("keydown", (e) => {
-  if (!(e.metaKey || e.ctrlKey) || $("dialog").open) return;
-  const k = e.key.toLowerCase();
-  if (k === "z" && active()?.kind === "request") {
+  if ($("dialog").open) return;
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === "z" && active()?.kind === "request") {
     e.preventDefault();
     applyRequestHistory(e.shiftKey ? "redo" : "undo");
     return;
   }
-  if (["s", "n", "w", "k", "enter"].includes(k)) e.preventDefault();
-  if (k === "s") saveRequest();
-  if (k === "n") newRequest();
-  if (k === "w" && active()) closeTab(active());
-  if (k === "k") $("search").focus();
-  if (k === "enter" && active()?.kind === "request")
-    sendRequest(
-      c(),
-      c().requests.find((r) => r.id === active().id),
-    );
+  // Fallback for keyboard events not intercepted by Electron (also useful in smoke tests).
+  const shortcut = resolveShortcut({
+    type: "keyDown", key: e.key, meta: e.metaKey, control: e.ctrlKey,
+    shift: e.shiftKey, alt: e.altKey,
+  });
+  if (!shortcut) return;
+  e.preventDefault();
+  handleAppShortcut(shortcut);
 });
 const resize = $("sidebarResizer");
 resize.onpointerdown = (e) => {
@@ -3379,13 +3433,8 @@ async function captureNetworkResponse(entryId) {
       const runtime=await api["mock-state"]();
       let note="";
       if(runtime.enabled&&runtime.collectionId===col.id) {
-        const local=state.mockServer||{};
         try{
-          await api["mock-update"]({
-            port:Number(local.port||4010),
-            upstream:local.upstreams?.[col.id]||"",
-            collection:structuredClone(col),
-          });
+          await api["mock-update"](mockServerConfig(state,col));
         }catch(e){note=" · 실행 중 서버 반영 실패: "+e.message;}
       }
       open("mock",null,col);
@@ -3403,13 +3452,13 @@ async function manageTrackProxy(){
   state.mockServer.upstreams||={};
   let collectionId=(runtime.enabled&&runtime.collectionId)||c().id;
   let port=runtime.enabled?runtime.port:Number(state.mockServer.port||4010);
-  let upstream=state.mockServer.upstreams[collectionId]||"";
+  let upstream=mockUpstreamSetting(state,state.collections.find(col=>col.id===collectionId));
   const feedback=el("p",{class:"mock-message",role:"alert"});
   const address=el("code",{text:"http://127.0.0.1:"+port});
   const upstreamInput=input(upstream,value=>{upstream=value;},{placeholder:"https://api.example.com",spellcheck:false});
   const picker=select(collectionId,state.collections.map(col=>[col.id,col.title]),id=>{
     collectionId=id;
-    upstream=state.mockServer.upstreams[id]||"";
+    upstream=mockUpstreamSetting(state,state.collections.find(col=>col.id===id));
     upstreamInput.value=upstream;
   },{"aria-label":"Track 프록시 컬렉션"});
   const content=el("div",{class:"track-proxy-dialog"},
@@ -3419,7 +3468,7 @@ async function manageTrackProxy(){
       port=Number(value);
       address.textContent="http://127.0.0.1:"+value;
     },{type:"number",min:1024,max:65535})),
-    field("Upstream URL",upstreamInput),
+    field("Upstream URL (기본 {{baseUrl}})",upstreamInput),
     field("Track 연결 주소",address),
     el("div",{class:"actions"},
       button("주소 복사",()=>action(async()=>{
@@ -3439,7 +3488,7 @@ async function manageTrackProxy(){
     try{
       const col=state.collections.find(item=>item.id===collectionId);
       if(!col)throw Error("컬렉션을 선택하세요.");
-      const next=await api["mock-start"]({port,upstream,collection:structuredClone(col)});
+      const next=await api["mock-start"]({...mockServerConfig(state,col),port,upstream});
       state.mockServer.port=port;
       state.mockServer.upstreams[col.id]=upstream;
       mark(col,{history:false});

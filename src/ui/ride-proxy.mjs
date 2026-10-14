@@ -1,5 +1,15 @@
 // Redirect a Course to the local Mock Proxy without mutating its saved requests.
 // Fail closed for URLs that cannot be safely mapped to the configured upstream.
+// Match the same environment variable rules as the Mock Server for absolute URLs.
+export function resolveRideUpstream(template, values = {}) {
+  return String(template || "").replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_match, key) => {
+    const alias=key==="baseUrl"?"baseURL":key==="baseURL"?"baseUrl":null;
+    const value=Object.hasOwn(values,key)?values[key]:(alias?values[alias]:undefined);
+    if(value===undefined||value===null||value==="")throw Error("Mock Proxy Upstream 변수 "+key+"를 설정하세요.");
+    return String(value);
+  });
+}
+
 export function proxyRequestUrl(value, proxyUrl, upstreamUrl = "") {
   let proxy;
   try { proxy = new URL(proxyUrl); } catch { throw Error("Mock Proxy 주소가 올바르지 않습니다."); }
@@ -7,8 +17,8 @@ export function proxyRequestUrl(value, proxyUrl, upstreamUrl = "") {
     throw Error("Ride는 로컬 Mock Proxy에만 연결할 수 있습니다.");
 
   const source = String(value || "");
-  if (/^\{\{\s*baseUrl\s*\}\}(?=\/|\?|#|$)/.test(source))
-    return source.replace(/^\{\{\s*baseUrl\s*\}\}/, proxy.origin);
+  if (/^\{\{\s*(?:baseUrl|baseURL)\s*\}\}(?=\/|\?|#|$)/.test(source))
+    return source.replace(/^\{\{\s*(?:baseUrl|baseURL)\s*\}\}/, proxy.origin);
 
   let target;
   try { target = new URL(source); }

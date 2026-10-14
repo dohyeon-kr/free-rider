@@ -40,3 +40,18 @@ export function moveItem(items, fromIndex, toIndex) {
   next.splice(toIndex, 0, item);
   return next;
 }
+
+export function nextTabIndex(count, currentIndex, direction) {
+  if (!Number.isInteger(count) || count <= 0 || ![-1, 1].includes(direction)) return -1;
+  const index = Number.isInteger(currentIndex) && currentIndex >= 0 && currentIndex < count
+    ? currentIndex
+    : direction > 0 ? -1 : 0;
+  return (index + direction + count) % count;
+}
+
+export function numberedTabIndex(count, number) {
+  if (!Number.isInteger(count) || count <= 0 || !Number.isInteger(number) || number < 1 || number > 9)
+    return -1;
+  const index = number === 9 ? count - 1 : number - 1;
+  return index < count ? index : -1;
+}
