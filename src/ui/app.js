@@ -7,8 +7,9 @@ const syncReviews = new Map();
 import { specAuthEditor } from "./spec-auth.js";
 import { mockServerView, focusMockEndpoint } from "./mock-server.js";
 import { ensureEndpointMockRule } from "./mock-rules.mjs";
-import { mockServerConfig } from "./mock-upstream.mjs";
-import { prepareCapturedRule, applyCapturedRule } from "./mock-capture.mjs";
+import { mockServerConfig, mockUpstreamSetting } from "./mock-upstream.mjs";
+import { prepareCapturedRule, applyCapturedRule, matchRequest } from "./mock-capture.mjs";
+import { routeRideThroughMockProxy, resolveRideUpstream } from "./ride-proxy.mjs";
 import { SpecAuthSession } from "./spec-auth-state.mjs";
 const specAuths = new SpecAuthSession();
 import {
@@ -2640,11 +2641,19 @@ function runnerView(col) {
     ),
   );
 
-  root.append(field("이 코스의 Mock 시나리오", select(ride.mockScenarioId||"",scenarioOptions,value=>{
-    ride.mockScenarioId=value;
-    mark(col,{history:false});
-  },{disabled:busy,"aria-label":"코스 Mock 시나리오"})),
-  el("p",{class:"hint",text:"시나리오가 지정된 코스는 같은 컬렉션의 Mock 서버가 실행 중이어야 합니다. Ride 종료 후 이전 시나리오로 복원합니다."}));
+  root.append(
+    el("label",{class:"mock-ride-toggle"},
+      el("input",{type:"checkbox",checked:ride.useMockProxy===true,disabled:busy,
+        onChange:event=>{ride.useMockProxy=event.target.checked;mark(col,{history:false});}}),
+      " Mock Proxy를 통해 Ride 실행"
+    ),
+    el("p",{class:"hint",text:"활성 Mock Proxy로 요청을 전달합니다. 저장된 요청 URL은 변경하지 않습니다. 절대 URL은 Upstream과 일치해야 합니다."}),
+    field("이 코스의 Mock 시나리오", select(ride.mockScenarioId||"",scenarioOptions,value=>{
+      ride.mockScenarioId=value;
+      mark(col,{history:false});
+    },{disabled:busy,"aria-label":"코스 Mock 시나리오"})),
+    el("p",{class:"hint",text:"시나리오를 선택한 코스는 자동으로 Mock Proxy를 경유합니다. 서버 실행이 필요하며 Ride 종료 후 이전 시나리오로 복원합니다."})
+  );
 
   if (summary) {
     const label =
@@ -2794,20 +2803,26 @@ function runFailed(result) {
 
 async function runCollection(col, ride = activeRide(col)) {
   if (busy) return;
-  const selected = structuredClone(executionSteps(col, ride.id));
+  let selected = structuredClone(executionSteps(col, ride.id));
   const runEnvironment = structuredClone(env(col));
   const runContext = structuredClone(col);
   const stopOnFailure = ride.stopOnFailure !== false;
   const runInterceptors = structuredClone(col.interceptors || {});
   let scenarioLease=null;
-  if(ride.mockScenarioId){
+  if(ride.useMockProxy || ride.mockScenarioId){
     try{
       const server=await api["mock-state"]();
       if(!server.enabled||server.collectionId!==col.id)
-        throw Error("이 코스를 실행하려면 같은 컬렉션의 Mock 서버를 시작하세요.");
-      if(!(col.mock?.scenarios||[]).some(s=>s.id===ride.mockScenarioId))
-        throw Error("코스에 연결된 Mock 시나리오가 삭제되었습니다.");
-      scenarioLease=await api["mock-scenario-acquire"](ride.mockScenarioId);
+        throw Error("Ride를 실행하려면 같은 컬렉션의 Mock Proxy를 먼저 연결하세요.");
+      const upstream=resolveRideUpstream(mockUpstreamSetting(state,col),runEnvironment.values||{});
+      selected=selected.map(step=>({
+        ...step,request:routeRideThroughMockProxy(step.request,{url:server.url,upstream})
+      }));
+      if(ride.mockScenarioId){
+        if(!(col.mock?.scenarios||[]).some(s=>s.id===ride.mockScenarioId))
+          throw Error("코스에 연결된 Mock 시나리오가 삭제되었습니다.");
+        scenarioLease=await api["mock-scenario-acquire"](ride.mockScenarioId);
+      }
     }catch(e){status(e.message);return;}
   }
 
@@ -3431,6 +3446,92 @@ async function captureNetworkResponse(entryId) {
     }
   },"Mock 규칙 추가");
 }
+async function manageTrackProxy(){
+  const runtime=await api["mock-state"]();
+  state.mockServer||={port:4010,upstreams:{}};
+  state.mockServer.upstreams||={};
+  let collectionId=(runtime.enabled&&runtime.collectionId)||c().id;
+  let port=runtime.enabled?runtime.port:Number(state.mockServer.port||4010);
+  let upstream=mockUpstreamSetting(state,state.collections.find(col=>col.id===collectionId));
+  const feedback=el("p",{class:"mock-message",role:"alert"});
+  const address=el("code",{text:"http://127.0.0.1:"+port});
+  const upstreamInput=input(upstream,value=>{upstream=value;},{placeholder:"https://api.example.com",spellcheck:false});
+  const picker=select(collectionId,state.collections.map(col=>[col.id,col.title]),id=>{
+    collectionId=id;
+    upstream=mockUpstreamSetting(state,state.collections.find(col=>col.id===id));
+    upstreamInput.value=upstream;
+  },{"aria-label":"Track 프록시 컬렉션"});
+  const content=el("div",{class:"track-proxy-dialog"},
+    el("p",{text:runtime.enabled?"연결 중: "+runtime.url+" · "+(state.collections.find(col=>col.id===runtime.collectionId)?.title||"알 수 없는 컬렉션"):"현재 Mock Proxy가 중지되어 있습니다."}),
+    field("컬렉션",picker),
+    field("Local Port",input(port,value=>{
+      port=Number(value);
+      address.textContent="http://127.0.0.1:"+value;
+    },{type:"number",min:1024,max:65535})),
+    field("Upstream URL (기본 {{baseUrl}})",upstreamInput),
+    field("Track 연결 주소",address),
+    el("div",{class:"actions"},
+      button("주소 복사",()=>action(async()=>{
+        await api.copy("http://127.0.0.1:"+port);
+        feedback.textContent="프록시 주소를 복사했습니다.";
+      })),
+      runtime.enabled?button("연결 해제",()=>action(async()=>{
+        await api["mock-stop"]();
+        feedback.textContent="Mock Proxy 연결을 해제했습니다.";
+        window.dispatchEvent(new Event("free-rider:track-proxy-updated"));
+      }),{class:"danger"}):null
+    ),
+    el("p",{class:"hint",text:"연결 후 추적할 앱의 API Base URL을 위 로컬 주소로 설정하세요. Mock 규칙은 응답을 대체하고 나머지는 Upstream으로 전달됩니다. 기록의 인증정보는 제거되므로 Track에서 코스에 추가할 때는 저장된 원본 요청을 사용합니다."}),
+    feedback
+  );
+  modal("Track · Mock Proxy 연결",content,async()=>{
+    try{
+      const col=state.collections.find(item=>item.id===collectionId);
+      if(!col)throw Error("컬렉션을 선택하세요.");
+      const next=await api["mock-start"]({...mockServerConfig(state,col),port,upstream});
+      state.mockServer.port=port;
+      state.mockServer.upstreams[col.id]=upstream;
+      mark(col,{history:false});
+      window.dispatchEvent(new Event("free-rider:track-proxy-updated"));
+      status("Track Mock Proxy 연결: "+next.url);
+      return true;
+    }catch(e){feedback.textContent=e.message;return false;}
+  },"연결 / 설정 적용");
+}
+
+async function addTrackEntryToCourse(entryId){
+  const history=await api["network-history"]();
+  const entry=history.find(item=>item.id===entryId);
+  if(!entry)throw Error("Track 기록을 찾을 수 없습니다.");
+  const col=state.collections.find(item=>item.id===entry.collectionId)||c();
+  if(!col)throw Error("컬렉션을 찾을 수 없습니다.");
+  const target=new URL(entry.request?.url||"");
+  const matched=matchRequest(col,{
+    method:entry.request?.method,
+    path:target.pathname,
+    requestId:entry.requestId
+  });
+  if(!matched)throw Error("일치하는 저장된 HTTP 요청이 없습니다. 먼저 컬렉션에 엔드포인트를 추가하세요.");
+  const courses=rides(col);
+  let chosen=activeRide(col).id;
+  modal("Track → 코스에 추가",el("div",{},
+    el("p",{text:matched.method+" "+target.pathname+" 요청을 코스에 삽입합니다."}),
+    field("대상 코스",select(chosen,courses.map(course=>[course.id,course.name]),v=>{chosen=v;})),
+    el("p",{class:"hint",text:"Track의 마스킹된 요청을 복제하지 않고 컬렉션의 저장된 요청을 참조합니다."})
+  ),()=>{
+    insertRideStep(col,chosen,matched.id);
+    mark(col,{history:false});
+    render();
+    status("Track 요청을 코스에 추가했습니다.");
+    return true;
+  },"코스에 추가");
+}
+window.addEventListener("free-rider:track-connect-proxy",()=>{
+  void action(manageTrackProxy);
+});
+window.addEventListener("free-rider:track-add-to-ride",event=>{
+  void action(()=>addTrackEntryToCourse(event.detail?.entryId));
+});
 window.addEventListener("free-rider:mock-from-network",event=>{
   void action(()=>captureNetworkResponse(event.detail?.entryId));
 });

@@ -21,6 +21,9 @@ test("Course stores multiple ordered scenarios and allows duplicate endpoints", 
 
   const first = activeRide(col);
   assert.equal(first.name, "Course 1");
+  assert.equal(first.useMockProxy, false);
+  first.useMockProxy = true;
+  assert.equal(activeRide(col).useMockProxy, true);
   insertRideStep(col, first.id, "login");
   const firstMe = insertRideStep(col, first.id, "me");
   insertRideStep(col, first.id, "me");
