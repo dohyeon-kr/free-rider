@@ -23,6 +23,7 @@ const {
   mergeVariableScopes,
 } = require("./modules/env/index.cjs");
 const { WorkspaceStore } = require("./modules/workspace/index.cjs");
+const { resolveShortcut } = require("./shortcut-keys.cjs");
 const {
   effectiveRequest,
   rows,
@@ -539,15 +540,10 @@ function createWindow() {
     }
   });
   win.webContents.on("before-input-event", (event, input) => {
-    const shortcut = input.key.toLowerCase();
-    if (
-      input.type === "keyDown" &&
-      (input.meta || input.control) &&
-      ["s", "n", "w", "k", "enter"].includes(shortcut)
-    ) {
-      event.preventDefault();
-      win.webContents.send("ui-shortcut", shortcut);
-    }
+    const shortcut = resolveShortcut(input);
+    if (!shortcut) return;
+    event.preventDefault();
+    win.webContents.send("ui-shortcut", shortcut);
   });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (e) => e.preventDefault());
