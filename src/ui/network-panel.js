@@ -11,12 +11,24 @@ const network = {
   collapsedJson: new Set(),
   jar: null,
   message: "",
+  proxy: null,
 };
 
 let networkMessageTimer = null;
 let networkContextMenu = null;
 function beginMockCapture(entry) {
   window.dispatchEvent(new CustomEvent("free-rider:mock-from-network", {detail:{entryId:entry.id}}));
+}
+function addEntryToCourse(entry) {
+  window.dispatchEvent(new CustomEvent("free-rider:track-add-to-ride", {detail:{entryId:entry.id}}));
+}
+function connectProxy() {
+  window.dispatchEvent(new Event("free-rider:track-connect-proxy"));
+}
+async function refreshProxy() {
+  try { network.proxy = await api["mock-state"](); }
+  catch (error) { network.message = error.message; }
+  renderPanel();
 }
 function dismissNetworkMenu() {
   networkContextMenu?.remove();
@@ -204,7 +216,7 @@ function formatBytes(bytes) {
 function updateNetworkButton() {
   const control = document.getElementById("networkButton");
   if (!control) return;
-  control.textContent = `◎ Network${network.entries.length ? ` ${network.entries.length}` : ""}`;
+  control.textContent = `◎ Track${network.entries.length ? ` ${network.entries.length}` : ""}`;
   control.classList.toggle("active", network.open);
 }
 
@@ -526,6 +538,7 @@ function renderDetail(entry) {
           }
           renderPanel();
         }, { disabled: !entry.replayable }),
+        button("코스에 추가", () => addEntryToCourse(entry), { title: "저장된 엔드포인트를 선택한 코스에 삽입" }),
         button("Mock this response", () => beginMockCapture(entry), { disabled: !entry.response?.status || entry.response?.bodyTruncated,
           title: "JSON 응답을 Mock 규칙으로 변환" }),
         button("Copy cURL", () => copy(curlFor(entry), "cURL을 복사했습니다.")),
@@ -566,6 +579,7 @@ function renderJar() {
 function showNetworkMenu(event,entry) {
   dismissNetworkMenu();
   const menu=h("div",{class:"network-context-menu",role:"menu"},
+    button("코스에 추가",()=>{dismissNetworkMenu();addEntryToCourse(entry);}),
     button("Mock this response",()=>{
       dismissNetworkMenu();
       beginMockCapture(entry);
@@ -588,7 +602,7 @@ function renderPanel() {
   if (network.selected && !network.entries.some((entry) => entry.id === network.selected)) network.selected = null;
   root.replaceChildren(
     h("div", { class: "network-toolbar" },
-      h("strong", { text: "● Network" }),
+      h("strong", { text: "● Track" }),
       h("input", {
         type: "search",
         placeholder: "URL, 이름, 상태 검색",
@@ -612,6 +626,9 @@ function renderPanel() {
         ),
       ),
       h("span", { class: "network-count", text: `${entries.length}/${network.entries.length}` }),
+      h("span", { class: "track-proxy-status", text: network.proxy?.enabled
+        ? "● Proxy " + network.proxy.url : "○ Proxy 미연결" }),
+      button("Mock Proxy 연결", connectProxy, { title: "로컬 Mock Proxy 연결 및 Upstream 설정" }),
       button("Cookie Jar", async () => {
         try {
           network.jar = await api["cookie-jar"]();
@@ -627,7 +644,7 @@ function renderPanel() {
         network.message = "네트워크 히스토리를 지웠습니다.";
         renderPanel();
       }),
-      button("×", () => { network.open = false; renderPanel(); }, { class: "network-close", title: "Close Network" }),
+      button("×", () => { network.open = false; renderPanel(); }, { class: "network-close", title: "Close Track" }),
     ),
     network.message ? h("div", { class: "network-message", text: network.message }) : null,
     h("div", { class: "network-columns" },
@@ -667,7 +684,7 @@ function renderPanel() {
             h("span", { text: formatBytes(entry.response?.bytes) }),
             h("span", { text: `${entry.response?.elapsed || 0} ms` }),
           );
-        }) : h("div", { class: "network-empty-list", text: network.entries.length ? "필터와 일치하는 요청이 없습니다." : "요청을 보내면 Network 기록이 여기에 쌓입니다." }),
+        }) : h("div", { class: "network-empty-list", text: network.entries.length ? "필터와 일치하는 요청이 없습니다." : "요청을 보내거나 Mock Proxy를 연결하면 Track 기록이 쌓입니다." }),
       ),
       renderDetail(selectedEntry()),
     ),
@@ -678,20 +695,23 @@ function renderPanel() {
 function install() {
   const toolbar = document.querySelector(".toolbar-actions");
   if (toolbar && !document.getElementById("networkButton")) {
-    const control = button("◎ Network", () => {
+    const control = button("◎ Track", () => {
       network.open = !network.open;
       if (network.open && !network.selected && network.entries[0]) network.selected = network.entries[0].id;
       renderPanel();
-    }, { id: "networkButton", title: "Network history" });
+      if (network.open) void refreshProxy();
+    }, { id: "networkButton", title: "Track · 요청 추적" });
     toolbar.insertBefore(control, toolbar.firstChild);
   }
-  if (!document.getElementById("networkDrawer")) document.body.append(h("section", { id: "networkDrawer", class: "network-drawer", hidden: "hidden", "aria-label": "Network history" }));
+  if (!document.getElementById("networkDrawer")) document.body.append(h("section", { id: "networkDrawer", class: "network-drawer", hidden: "hidden", "aria-label": "Track · 요청 추적" }));
   api["network-history"]().then((entries) => {
     network.entries = Array.isArray(entries) ? entries.slice(0, 200) : [];
     updateNetworkButton();
   }).catch((error) => {
     network.message = error.message;
   });
+  window.addEventListener("free-rider:track-proxy-updated", () => { void refreshProxy(); });
+  void refreshProxy();
   api.onNetworkEntry((entry) => {
     network.entries = [entry, ...network.entries.filter((item) => item.id !== entry.id)].slice(0, 200);
     if (network.open) network.selected = entry.id;
