@@ -62,8 +62,8 @@ function requireConfig(value) {
   const collection=value.collection;
   if (!collection||typeof collection.id!=="string"||!Array.isArray(collection.requests)) throw Error("Select a collection");
   // Resolve the symbolic default against the selected collection environment.
-  // Keep an explicitly blank Upstream blank for mock-only operation.
-  const template=value.upstream==null?"{{baseUrl}}":String(value.upstream);
+  // An omitted or explicitly blank Upstream remains mock-only for legacy callers.
+  const template=value.upstream==null?"":String(value.upstream);
   const environments=collection.environments||[];
   const selected=typeof value.environmentId==="string"
     ? environments.find(item=>item.id===value.environmentId):undefined;
