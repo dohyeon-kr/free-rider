@@ -23,7 +23,7 @@ const {
   mergeVariableScopes,
 } = require("./modules/env/index.cjs");
 const { WorkspaceStore } = require("./modules/workspace/index.cjs");
-const { resolveShortcut } = require("./shortcut-keys.cjs");
+const { resolveShortcut } = require("./shortcut-keys.mjs");
 const {
   effectiveRequest,
   rows,
