@@ -3,6 +3,7 @@ const http = require("node:http");
 const { randomUUID } = require("node:crypto");
 const { responseFor } = require("./schema.cjs");
 const { pickRule, validateBehavior } = require("./conditions.cjs");
+const { interpolate } = require("../runner/request.cjs");
 const { setTimeout: wait } = require("node:timers/promises");
 const HOST = "127.0.0.1", DEFAULT_PORT = 4010, MAX_BODY = 8 * 1024 * 1024, MAX_CAPTURE = 512 * 1024;
 const HOP = new Set(["host","connection","keep-alive","transfer-encoding","te","trailer","upgrade","proxy-authorization","proxy-authenticate","content-length"]);
@@ -60,9 +61,23 @@ function requireConfig(value) {
   if (!Number.isInteger(port)||port<1024||port>65535||port===48173) throw Error("Invalid Mock port");
   const collection=value.collection;
   if (!collection||typeof collection.id!=="string"||!Array.isArray(collection.requests)) throw Error("Select a collection");
+  // Resolve the symbolic default against the selected collection environment.
+  // Keep an explicitly blank Upstream blank for mock-only operation.
+  const template=value.upstream==null?"{{baseUrl}}":String(value.upstream);
+  const environments=collection.environments||[];
+  const selected=typeof value.environmentId==="string"
+    ? environments.find(item=>item.id===value.environmentId):undefined;
+  if(value.environmentId && !selected)throw Error("Selected Mock environment no longer exists");
+  const environment=selected||environments.find(item=>item.id===collection.defaultEnvironment)||environments[0];
+  const variables={...environment?.values};
+  if(!Object.hasOwn(variables,"baseUrl") && Object.hasOwn(variables,"baseURL"))variables.baseUrl=variables.baseURL;
+  if(!Object.hasOwn(variables,"baseURL") && Object.hasOwn(variables,"baseUrl"))variables.baseURL=variables.baseUrl;
   let upstream="";
-  if (value.upstream) {
-    const url=new URL(String(value.upstream));
+  if(template.trim()){
+    const resolved=interpolate(template,variables).trim();
+    if(/\{\{[^{}]+\}\}/.test(resolved))throw Error("Unresolved Upstream environment variable");
+    let url;
+    try{url=new URL(resolved);}catch{throw Error("Upstream 환경변수는 절대 HTTP(S) URL이어야 합니다.");}
     if (!["http:","https:"].includes(url.protocol)||url.username||url.password||url.search||url.hash)
       throw Error("Upstream must be an HTTP(S) base URL with no credentials, query or fragment");
     if (["localhost","127.0.0.1","[::1]"].includes(url.hostname)&&[String(port),"48173"].includes(url.port))
