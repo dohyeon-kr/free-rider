@@ -1,7 +1,7 @@
 "use strict";
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { resolveShortcut } = require("./shortcut-keys.cjs");
+const { resolveShortcut } = require("./shortcut-keys.mjs");
 
 const shortcut = (key, modifiers = {}) => resolveShortcut({
   type: "keyDown", key, meta: true, control: false, shift: false, alt: false, ...modifiers,
