@@ -5,13 +5,13 @@ Free Rider는 로컬 HTTP 서버에서 선택한 엔드포인트만 OpenAPI 기�
 ## 시작하기
 
 1. 컬렉션에서 상단 **Mock** 버튼을 누릅니다.
-2. **Upstream URL**에 실제 백엔드 URL을 입력합니다. 예: https://api.example.com/v1
+2. **Upstream URL**은 현재 선택한 환경의 `{{baseUrl}}`이 기본값입니다. 필요하면 다른 HTTP(S) URL을 입력해 덮어쓰고, 비워두면 Proxy 전달을 끌 수 있습니다.
 3. **Endpoint Rules**에서 목킹할 요청을 **Mock**으로 전환하고 나머지는 **Proxy**로 둡니다.
 4. **스키마 생성**, **OpenAPI 예시**, **직접 작성** 중 응답 모드를 정하고 미리보기에서 검증합니다.
 5. **시작**을 누르고 프론트엔드 API base URL을 http://127.0.0.1:4010 으로 바꿉니다.
 6. 앱의 **저장** 버튼으로 Mock 규칙과 로컬 설정을 저장합니다.
 
-GET /users를 Mock으로, POST /orders를 Proxy로 지정하면 첫 번째는 가짜 JSON, 두 번째는 실제 API 응답을 돌려줍니다. 규칙이 없는 경로도 기본 Proxy입니다.
+GET /users를 Mock으로, POST /orders를 Proxy로 지정하면 첫 번째는 가짜 JSON, 두 번째는 실제 API 응답을 돌려줍니다. 규칙이 없는 경로도 기본 Proxy입니다. 선택 환경을 바꾸면 실행 중인 Mock 서버의 Upstream도 새 환경의 `baseUrl`에 맞게 갱신됩니다. 명시적으로 입력한 Upstream 주소는 유지됩니다. `baseUrl`이 없거나 Mock/MCP 서버 자신의 주소를 가리키면 설정 오류로 시작 또는 갱신이 차단됩니다.
 
 ## 엔드포인트에서 바로 Mocking
 

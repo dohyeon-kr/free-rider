@@ -7,6 +7,7 @@ const syncReviews = new Map();
 import { specAuthEditor } from "./spec-auth.js";
 import { mockServerView, focusMockEndpoint } from "./mock-server.js";
 import { ensureEndpointMockRule } from "./mock-rules.mjs";
+import { mockServerConfig } from "./mock-upstream.mjs";
 import { prepareCapturedRule, applyCapturedRule } from "./mock-capture.mjs";
 import { SpecAuthSession } from "./spec-auth-state.mjs";
 const specAuths = new SpecAuthSession();
@@ -1569,13 +1570,8 @@ async function quickMockRequest(col,requestDraft) {
   let note="";
   const running=await api["mock-state"]().catch(()=>null);
   if(running?.enabled && running.collectionId===col.id){
-    const local=state.mockServer||{};
     try {
-      await api["mock-update"]({
-        port:Number(local.port||4010),
-        upstream:local.upstreams?.[col.id]||"",
-        collection:structuredClone(col),
-      });
+      await api["mock-update"](mockServerConfig(state,col));
     }catch(error){note=" · 실행 서버 반영 실패: "+error.message;}
   }
   focusMockEndpoint(col.id,method,path);
@@ -2097,6 +2093,14 @@ ctx.log("실행 로그")`}),
     el("p",{class:"hint",text:"Interceptor 로그는 요청의 콘솔에서 확인합니다. 파일·셸·직접 네트워크 API는 제공하지 않습니다."}));
   return root;
 }
+// Keep an active Mock Proxy aligned with the selected collection environment.
+async function syncRunningMockEnvironment(col){
+  try{
+    const runtime=await api["mock-state"]();
+    if(runtime.enabled && runtime.collectionId===col.id)
+      await api["mock-update"](mockServerConfig(state,col));
+  }catch(error){status("Mock Upstream 갱신 실패: "+error.message);}
+}
 function environments(col) {
   const root = el("div", { class: "view-inner", "data-view": "environments" }),
     current = env(col);
@@ -2112,7 +2116,7 @@ function environments(col) {
           linked={id:crypto.randomUUID(),name:file.name,values:file.values,file};
           col.environments.push(linked);
         }
-        state.selectedEnvironments[col.id]=linked.id; mark(col); render();
+        state.selectedEnvironments[col.id]=linked.id; mark(col); render(); void syncRunningMockEnvironment(col);
       }),{id:"connectEnvFile"}),
       el(
         "div",
@@ -2134,6 +2138,7 @@ function environments(col) {
             state.selectedEnvironments[col.id] = e.id;
             mark(col);
             render();
+            void syncRunningMockEnvironment(col);
           }),
         ),
       ),
@@ -2149,6 +2154,7 @@ function environments(col) {
           () => {
             state.selectedEnvironments[col.id] = e.id;
             render();
+            void syncRunningMockEnvironment(col);
           },
           { class: e === current ? "active" : "" },
         ),
@@ -2179,6 +2185,7 @@ function environments(col) {
           state.selectedEnvironments[col.id] = copy.id;
           mark(col);
           render();
+          void syncRunningMockEnvironment(col);
         }),
         button(
           "Delete",
@@ -3206,8 +3213,10 @@ $("toggleTreeCollapse").onclick = () => {
 $("search").oninput = renderTree;
 $("searchButton").onclick = () => $("search").focus();
 $("environmentSelect").onchange = (e) => {
-  state.selectedEnvironments[c().id] = e.target.value;
+  const collection=c();
+  state.selectedEnvironments[collection.id] = e.target.value;
   render();
+  void syncRunningMockEnvironment(collection);
 };
 $("shortcuts").onclick = () =>
   modal(
@@ -3364,13 +3373,8 @@ async function captureNetworkResponse(entryId) {
       const runtime=await api["mock-state"]();
       let note="";
       if(runtime.enabled&&runtime.collectionId===col.id) {
-        const local=state.mockServer||{};
         try{
-          await api["mock-update"]({
-            port:Number(local.port||4010),
-            upstream:local.upstreams?.[col.id]||"",
-            collection:structuredClone(col),
-          });
+          await api["mock-update"](mockServerConfig(state,col));
         }catch(e){note=" · 실행 중 서버 반영 실패: "+e.message;}
       }
       open("mock",null,col);

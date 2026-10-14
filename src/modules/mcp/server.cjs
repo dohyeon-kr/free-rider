@@ -6,6 +6,15 @@ const {
 } = require("./openapi-review.cjs");
 const {requireConfig} = require("../mock/server.cjs");
 
+function mockConfigForWorkspace(state,col){
+  return {
+    port:state.mockServer?.port||4010,
+    upstream:state.mockServer?.upstreams?.[col.id]??"{{baseUrl}}",
+    environmentId:state.selectedEnvironments?.[col.id],
+    collection:col,
+  };
+}
+
 const MODERN_VERSION = "2026-07-28";
 const LEGACY_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const SERVER_INFO_META = "io.modelcontextprotocol/serverInfo";
@@ -1059,7 +1068,10 @@ function createMcpServer(options) {
         ...status,scenarios:(col.mock?.scenarios||[]).map(x=>({id:x.id,name:x.name})),
         storedRuleCount:col.mock?.rules?.length||0,
         portConfigured:state.mockServer?.port||4010,
-        upstreamConfigured:!!state.mockServer?.upstreams?.[col.id],
+        upstreamConfigured:(()=>{
+          try{return !!requireConfig(mockConfigForWorkspace(state,col)).upstream;}
+          catch{return false;}
+        })(),
       };
       if(name==="list_mock_rules")return (col.mock?.rules||[]).map((rule,index)=>({
         index,method:rule.method,path:rule.path,mode:rule.mode,scenarioId:rule.scenarioId||"",
@@ -1070,8 +1082,7 @@ function createMcpServer(options) {
       if(name==="start_mock_server"){
         if(typeof mockStart!=="function")throw Error("Mock start bridge is unavailable.");
         if(hasUnsavedChanges?.())throw Error("Save Free Rider workspace before starting Mock via MCP.");
-        const config={port:state.mockServer?.port||4010,
-          upstream:state.mockServer?.upstreams?.[col.id]||"",collection:col};
+        const config=mockConfigForWorkspace(state,col);
         requireConfig(config);
         return mockStart(config);
       }
@@ -1130,8 +1141,7 @@ function createMcpServer(options) {
         else col.mock.rules[index]=rule;
         result={index:index??col.mock.rules.length-1,method:rule.method,path:rule.path,scenarioId:rule.scenarioId||""};
       }
-      const config={port:state.mockServer?.port||4010,
-        upstream:state.mockServer?.upstreams?.[col.id]||"",collection:col};
+      const config=mockConfigForWorkspace(state,col);
       requireConfig(config);
       if(hasUnsavedChanges?.())throw Error("Workspace changed while editing Mock.");
       await saveWorkspace(state);

@@ -113,3 +113,37 @@ test("mock schema failure returns an explicit error without falling back to upst
   assert.equal(unknown.status,502);
   await server.stop();
 });
+
+
+test("Mock upstream defaults to the active environment baseUrl",()=>{
+  const col=collection();
+  col.environments=[
+    {id:"development",name:"Development",values:{baseUrl:"https://dev.example.com/v1"}},
+    {id:"staging",name:"Staging",values:{baseUrl:"https://staging.example.com/api"}},
+  ];
+  col.defaultEnvironment="development";
+  assert.equal(requireConfig({port:4010,collection:col,upstream:"{{baseUrl}}"}).upstream,"https://dev.example.com/v1");
+  assert.equal(requireConfig({port:4010,collection:col}).upstream,"");
+  assert.equal(requireConfig({port:4010,collection:col,upstream:"{{baseUrl}}",environmentId:"staging"}).upstream,
+    "https://staging.example.com/api");
+  assert.equal(requireConfig({port:4010,collection:col,upstream:"{{baseURL}}",environmentId:"staging"}).upstream,
+    "https://staging.example.com/api");
+  assert.equal(requireConfig({port:4010,collection:col,upstream:"https://custom.example.com"}).upstream,
+    "https://custom.example.com");
+  assert.equal(requireConfig({port:4010,collection:col,upstream:""}).upstream,"");
+});
+
+test("Mock upstream keeps URL validation after resolving variables",()=>{
+  const col=collection();
+  col.environments=[{id:"local",name:"Local",values:{baseUrl:"http://127.0.0.1:4010"}}];
+  assert.throws(()=>requireConfig({port:4010,collection:col,upstream:"{{baseUrl}}"}),/cannot point/);
+  col.environments[0].values.baseUrl="http://localhost:48173";
+  assert.throws(()=>requireConfig({port:4010,collection:col,upstream:"{{baseUrl}}"}),/cannot point/);
+  col.environments[0].values.baseUrl="https://example.com?token=abc";
+  assert.throws(()=>requireConfig({port:4010,collection:col,upstream:"{{baseUrl}}"}),/no credentials, query or fragment/);
+  col.environments[0].values={};
+  assert.throws(()=>requireConfig({port:4010,collection:col,upstream:"{{baseUrl}}"}),/환경변수 baseUrl/);
+  assert.throws(()=>requireConfig({port:4010,collection:col,environmentId:"unknown",upstream:"{{baseUrl}}"}),/no longer exists/);
+  col.environments[0].values={baseURL:"https://uppercase.example.com"};
+  assert.equal(requireConfig({port:4010,collection:col,upstream:"{{baseUrl}}"}).upstream,"https://uppercase.example.com");
+});
